@@ -146,9 +146,13 @@ export function resolveAssetFile(bundle: AssetBundle, reference: string): AssetF
   }
 
   // Last-resort basename matching is intentionally restricted to scripts so a
-  // same-named image cannot be mistaken for ActionScript.
+  // same-named image cannot be mistaken for ActionScript. JPEXS names *every*
+  // frame script DoAction.as / DoInitAction.as, so a basename match on those
+  // says nothing about which frame it belongs to (it used to attach one
+  // sprite's script to every other timeline's frame actions). Those are
+  // resolved by owner + frame in resolveActionScriptFile instead.
   const base = ref.split('/').pop();
-  if (base?.endsWith('.as')) {
+  if (base?.endsWith('.as') && base !== 'doaction.as' && base !== 'doinitaction.as') {
     const matches = bundle.files.filter((f) => f.ext === 'as' && f.name.toLowerCase() + '.as' === base);
     if (matches.length === 1) return matches[0];
   }

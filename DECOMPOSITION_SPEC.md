@@ -117,17 +117,17 @@ All extracted files go in `src/components/inspector/` (lowercase subdirectory). 
 | 2h | Add next ≤30 lines | ≤30 | ✅ DONE |
 | 2i | Add next ≤30 lines | ≤30 | ✅ DONE |
 | 2j | Add next ≤30 lines (function already closed after 2i, nothing left) | 0 | ✅ DONE |
-| 2k | Add remaining ≤30 lines (close function) | ≤30 | ⏭️ |
-| 2l | Delete CodePanel lines 1–25 from `Inspector.tsx` | ≤25 | ⏭️ |
-| 2m | Delete CodePanel lines 26–50 | ≤25 | ⏭️ |
-| 2n | Delete CodePanel lines 51–75 | ≤25 | ⏭️ |
-| 2o | Delete CodePanel lines 76–100 | ≤25 | ⏭️ |
-| 2p | Delete CodePanel lines 101–125 | ≤25 | ⏭️ |
-| 2q | Delete CodePanel lines 126–150 | ≤25 | ⏭️ |
-| 2r | Delete CodePanel lines 151–175 | ≤25 | ⏭️ |
-| 2s | Delete CodePanel lines 176–200 | ≤25 | ⏭️ |
-| 2t | Delete CodePanel lines 201–225 | ≤25 | ⏭️ |
-| 2u | Delete CodePanel lines 226–250 + add import from `./inspector/CodePanel` | ≤27 | ⏭️ |
+| 2k | Add remaining ≤30 lines (close function) | ≤30 | ✅ DONE (CodeInspector audit) |
+| 2l | Delete CodePanel lines 1–25 from `Inspector.tsx` | ≤25 | ✅ DONE (CodeInspector audit) |
+| 2m | Delete CodePanel lines 26–50 | ≤25 | ✅ DONE (CodeInspector audit) |
+| 2n | Delete CodePanel lines 51–75 | ≤25 | ✅ DONE (CodeInspector audit) |
+| 2o | Delete CodePanel lines 76–100 | ≤25 | ✅ DONE (CodeInspector audit) |
+| 2p | Delete CodePanel lines 101–125 | ≤25 | ✅ DONE (CodeInspector audit) |
+| 2q | Delete CodePanel lines 126–150 | ≤25 | ✅ DONE (CodeInspector audit) |
+| 2r | Delete CodePanel lines 151–175 | ≤25 | ✅ DONE (CodeInspector audit) |
+| 2s | Delete CodePanel lines 176–200 | ≤25 | ✅ DONE (CodeInspector audit) |
+| 2t | Delete CodePanel lines 201–225 | ≤25 | ✅ DONE (CodeInspector audit) |
+| 2u | Delete CodePanel lines 226–250 + add import from `./inspector/CodePanel` | ≤27 | ✅ DONE (CodeInspector audit) |
 
 ### Phase 3: LabelPanel + Related (~157 lines)
 

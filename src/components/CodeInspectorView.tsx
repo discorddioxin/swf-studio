@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { resolveActionScriptFile } from '../lib/assets';
-import { analyzeCodebase, type AssetDescriptor, type CodebaseAnalysis, type RefEdge } from '../lib/codeInspector';
+import { analyzeCodebase, buildAssetDescriptors, type CodebaseAnalysis, type RefEdge } from '../lib/codeInspector';
 import type { AssetBundle, AssetFile, Project, SwfDocument } from '../types';
 import { cn } from '../utils/cn';
 import { inputCls } from './ui';
+import { scriptKey, useScriptTexts } from './useScriptTexts';
+
+type SourceSummary = CodebaseAnalysis['sources'][number];
 
 interface SourceRef {
   id: string;
@@ -28,8 +31,6 @@ export function CodeInspectorView({ doc, assets, project, onSelectCharacter }: {
   const [search, setSearch] = useState('');
   const [timelineFilter, setTimelineFilter] = useState('');
   const [leftTab, setLeftTab] = useState<'sources' | 'symbols' | 'references'>('sources');
-  const [externalTexts, setExternalTexts] = useState<Record<string, string>>({});
-  const loadedRef = useRef<Set<string>>(new Set());
 
   const sourceRefs = useMemo<SourceRef[]>(() => {
     const list: SourceRef[] = [];
@@ -55,36 +56,24 @@ export function CodeInspectorView({ doc, assets, project, onSelectCharacter }: {
     return list;
   }, [doc, assets]);
 
-  useEffect(() => {
-    sourceRefs.forEach((s) => {
-      if (!s.file || loadedRef.current.has(s.file.path)) return;
-      loadedRef.current.add(s.file.path);
-      const path = s.file.path;
-      s.file.file.text().then((text: string) => setExternalTexts((prev) => ({ ...prev, [path]: text })));
-    });
-  }, [sourceRefs]);
+  // Scoped to the asset bundle: a newly opened folder never shows stale text,
+  // and all files are committed in one batch (one re-analysis, not N).
+  const scriptFiles = useMemo(() => sourceRefs.map((s) => s.file), [sourceRefs]);
+  const { texts: externalTexts } = useScriptTexts(scriptFiles, assets);
 
   const sources = useMemo(() => sourceRefs.map((s) => ({
     id: s.id, label: s.label, timelineId: s.timelineId,
-    source: (s.file ? externalTexts[s.file.path] : undefined) ?? s.detail,
+    source: (s.file ? externalTexts[scriptKey(s.file)] : undefined) ?? s.detail,
   })), [sourceRefs, externalTexts]);
 
-  const assetDescriptors = useMemo<AssetDescriptor[]>(() => {
-    const out: AssetDescriptor[] = [];
-    doc.characters.forEach((ch) => {
-      const names = new Set<string>();
-      if (ch.className) names.add(ch.className);
-      if (ch.exportName) names.add(ch.exportName);
-      const label = project.characters[ch.id]?.name;
-      if (label) names.add(label);
-      names.add(`${ch.kind}_${ch.id}`);
-      names.forEach((name) => out.push({ name, assetId: ch.id, assetKind: ch.kind }));
-    });
-    project.clips.forEach((c) => out.push({ name: c.name, assetKind: 'clip' }));
-    return out;
-  }, [doc, project]);
+  const assetDescriptors = useMemo(() => buildAssetDescriptors(doc, project), [doc, project]);
 
   const analysis = useMemo<CodebaseAnalysis>(() => analyzeCodebase(sources, assetDescriptors), [sources, assetDescriptors]);
+  const sourceById = useMemo(() => new Map(analysis.sources.map((s) => [s.id, s])), [analysis.sources]);
+  const timelineName = useCallback(
+    (id: string) => doc.timelines.get(id)?.name ?? (id === 'root' ? 'Main Timeline' : id),
+    [doc],
+  );
 
   const timelines = useMemo(() => {
     const map = new Map<string, { name: string; count: number }>();
@@ -92,12 +81,11 @@ export function CodeInspectorView({ doc, assets, project, onSelectCharacter }: {
       const existing = map.get(s.timelineId);
       if (existing) existing.count++;
       else {
-        const tl = doc.timelines.get(s.timelineId);
-        map.set(s.timelineId, { name: tl?.name ?? s.timelineId, count: 1 });
+        map.set(s.timelineId, { name: timelineName(s.timelineId), count: 1 });
       }
     });
     return [...map.entries()];
-  }, [analysis, doc]);
+  }, [analysis, timelineName]);
 
   const q = search.trim().toLowerCase();
   const filteredSymbols = useMemo(() => {
@@ -114,25 +102,37 @@ export function CodeInspectorView({ doc, assets, project, onSelectCharacter }: {
     return analysis.references.filter((r) => {
       if (q && !r.fromName.toLowerCase().includes(q) && !r.toName.toLowerCase().includes(q)) return false;
       if (timelineFilter) {
-        const fromSrc = analysis.sources.find((s) => s.id === r.fromSourceId);
+        const fromSrc = sourceById.get(r.fromSourceId);
         if (fromSrc && fromSrc.timelineId !== timelineFilter) return false;
       }
       return true;
     });
-  }, [analysis.references, analysis.sources, q, timelineFilter]);
+  }, [analysis.references, sourceById, q, timelineFilter]);
 
-  const activeSource = analysis.sources.find((s) => s.id === activeSourceId)
-    ?? analysis.sources.reduce((best, s) => (s.methodCount + s.memberCount) > (best ? best.methodCount + best.memberCount : -1) ? s : best, null as CodebaseAnalysis['sources'][number] | null)
-    ?? null;
+  const filteredSources = useMemo(
+    () => (timelineFilter ? analysis.sources.filter((s) => s.timelineId === timelineFilter) : analysis.sources),
+    [analysis.sources, timelineFilter],
+  );
 
-  const selectSymbol = (name: string) => {
-    const def = analysis.symbols.find((s) => s.name === name);
-    if (def) { setSelectedSymbol(name); setActiveSourceId(def.sourceId); }
-  };
-  const selectAsset = (name: string) => {
+  const activeSource = (activeSourceId != null ? sourceById.get(activeSourceId) : undefined)
+    ?? analysis.sources.reduce<SourceSummary | null>((best, s) => (s.methodCount + s.memberCount) > (best ? best.methodCount + best.memberCount : -1) ? s : best, null);
+  const activeId = activeSource?.id ?? null;
+
+  /** Jump to a symbol's definition, preferring `preferSourceId`, then the
+   * source currently on screen, then the first definition anywhere. */
+  const selectSymbol = useCallback((name: string, preferSourceId?: string) => {
+    const defs = analysis.symbols.filter((s) => s.name === name);
+    if (!defs.length) return;
+    const def = defs.find((s) => s.sourceId === preferSourceId)
+      ?? defs.find((s) => s.sourceId === activeId)
+      ?? defs[0];
+    setSelectedSymbol(name);
+    setActiveSourceId(def.sourceId);
+  }, [analysis.symbols, activeId]);
+  const selectAsset = useCallback((name: string) => {
     const assetId = analysis.assetIndex[name]?.assetId;
     if (assetId != null) onSelectCharacter?.(assetId);
-  };
+  }, [analysis.assetIndex, onSelectCharacter]);
 
   const refCount = (name: string) => (analysis.byName[name]?.references.length ?? 0);
 
@@ -176,9 +176,9 @@ export function CodeInspectorView({ doc, assets, project, onSelectCharacter }: {
             ))}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
-            {leftTab === 'sources' && <SourcesList analysis={analysis} activeSourceId={activeSourceId} onSelectSource={setActiveSourceId} />}
+            {leftTab === 'sources' && <SourcesList sources={filteredSources} activeSourceId={activeId} timelineName={timelineName} onSelectSource={setActiveSourceId} />}
             {leftTab === 'symbols' && <SymbolsList symbols={filteredSymbols} selected={selectedSymbol} refCount={refCount} onSelect={selectSymbol} />}
-            {leftTab === 'references' && <ReferencesList refs={filteredRefs} sources={analysis.sources} onSelectSymbol={selectSymbol} onSelectAsset={selectAsset} />}
+            {leftTab === 'references' && <ReferencesList refs={filteredRefs} sourceById={sourceById} onSelectSymbol={selectSymbol} onSelectAsset={selectAsset} />}
           </div>
         </div>
 
@@ -208,23 +208,25 @@ function Stat({ n, l }: { n: number; l: string }) {
 
 // ---------------------------------------------------------------- left lists ----
 
-function SourcesList({ analysis, activeSourceId, onSelectSource }: {
-  analysis: CodebaseAnalysis; activeSourceId?: string | null; onSelectSource: (id: string) => void;
+function SourcesList({ sources: all, activeSourceId, timelineName, onSelectSource }: {
+  sources: SourceSummary[]; activeSourceId?: string | null; timelineName: (id: string) => string; onSelectSource: (id: string) => void;
 }) {
   const groups = useMemo(() => {
-    const map = new Map<string, CodebaseAnalysis['sources']>();
-    for (const s of analysis.sources) {
+    const map = new Map<string, SourceSummary[]>();
+    for (const s of all) {
       const arr = map.get(s.timelineId) ?? [];
       arr.push(s); map.set(s.timelineId, arr);
     }
     return [...map.entries()];
-  }, [analysis]);
+  }, [all]);
+
+  if (!groups.length) return <p className="p-2 text-[11px] text-zinc-600">No sources on this timeline.</p>;
 
   return (
     <div className="space-y-3">
       {groups.map(([timelineId, sources]) => (
         <div key={timelineId}>
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">{timelineId === 'root' ? 'Main Timeline' : timelineId}</div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">{timelineName(timelineId)}</div>
           <div className="space-y-1">
             {sources.map((s) => (
               <button key={s.id} onClick={() => onSelectSource(s.id)} className={cn('w-full rounded px-2 py-1 text-left text-[11px]', s.id === activeSourceId ? 'bg-violet-600/20 text-violet-200' : 'text-zinc-400 hover:bg-zinc-900')}>
@@ -256,21 +258,21 @@ function SymbolsList({ symbols, selected, refCount, onSelect }: {
   );
 }
 
-function ReferencesList({ refs, sources, onSelectSymbol, onSelectAsset }: {
-  refs: RefEdge[]; sources: CodebaseAnalysis['sources']; onSelectSymbol: (name: string) => void; onSelectAsset: (name: string) => void;
+function ReferencesList({ refs, sourceById, onSelectSymbol, onSelectAsset }: {
+  refs: RefEdge[]; sourceById: Map<string, SourceSummary>; onSelectSymbol: (name: string, preferSourceId?: string) => void; onSelectAsset: (name: string) => void;
 }) {
   if (!refs.length) return <p className="p-2 text-[11px] text-zinc-600">No relationships match.</p>;
   return (
     <div className="space-y-0.5">
       {refs.map((r) => {
-        const fromSrc = sources.find((s) => s.id === r.fromSourceId);
+        const fromSrc = sourceById.get(r.fromSourceId);
         return (
           <div key={r.id} className="flex items-center gap-1 rounded px-2 py-1 text-[10px] hover:bg-zinc-900">
-            <button className="shrink-0 font-mono text-violet-300 hover:underline" onClick={() => onSelectSymbol(r.fromName)}>{r.fromName}</button>
+            <button className="shrink-0 font-mono text-violet-300 hover:underline" onClick={() => onSelectSymbol(r.fromName, r.fromSourceId)}>{r.fromName}</button>
             <span className="shrink-0 text-zinc-600">—{r.via}→</span>
             {r.via === 'asset'
               ? <button className="shrink-0 font-mono text-amber-300 hover:underline" onClick={() => onSelectAsset(r.toName)}>{r.toName}</button>
-              : <button className="shrink-0 truncate font-mono text-emerald-300 hover:underline" onClick={() => onSelectSymbol(r.toName)}>{r.toName}</button>}
+              : <button className="shrink-0 truncate font-mono text-emerald-300 hover:underline" onClick={() => onSelectSymbol(r.toName, r.fromSourceId)}>{r.toName}</button>}
             <span className="ml-auto shrink-0 text-[9px] text-zinc-700">{fromSrc ? shortLabel(fromSrc.label).split('·')[0].trim() : ''}:{r.fromLine}</span>
           </div>
         );
@@ -281,7 +283,8 @@ function ReferencesList({ refs, sources, onSelectSymbol, onSelectAsset }: {
 
 // ---------------------------------------------------------------- code viewer ----
 
-function CodeViewer({ source, analysis, selectedSymbol, activeSourceId, onSelectSymbol, onSelectAsset }: {
+// Memoised: typing in the search box must not re-tokenise the whole file.
+const CodeViewer = memo(function CodeViewer({ source, analysis, selectedSymbol, activeSourceId, onSelectSymbol, onSelectAsset }: {
   source: string; analysis: CodebaseAnalysis; selectedSymbol: string | null; activeSourceId: string;
   onSelectSymbol: (name: string) => void; onSelectAsset: (name: string) => void;
 }) {
@@ -293,7 +296,7 @@ function CodeViewer({ source, analysis, selectedSymbol, activeSourceId, onSelect
     return set;
   }, [analysis, selectedSymbol, activeSourceId]);
 
-  const lines = source.split('\n');
+  const lines = useMemo(() => source.split('\n'), [source]);
   return (
     <div className="min-w-fit">
       {lines.map((line, i) => (
@@ -301,7 +304,7 @@ function CodeViewer({ source, analysis, selectedSymbol, activeSourceId, onSelect
       ))}
     </div>
   );
-}
+});
 
 function TokenLine({ line, lineNo, isDef, analysis, onSelectSymbol, onSelectAsset }: {
   line: string; lineNo: number; isDef: boolean; analysis: CodebaseAnalysis;
@@ -346,8 +349,12 @@ function TokenLine({ line, lineNo, isDef, analysis, onSelectSymbol, onSelectAsse
 
 function ReferencesPanel({ analysis, selectedSymbol, onSelectSymbol, onSelectAsset }: {
   analysis: CodebaseAnalysis; selectedSymbol: string | null;
-  onSelectSymbol: (name: string) => void; onSelectAsset: (name: string) => void;
+  onSelectSymbol: (name: string, preferSourceId?: string) => void; onSelectAsset: (name: string) => void;
 }) {
+  const related = useMemo(
+    () => (selectedSymbol ? analysis.references.filter((r) => r.fromName === selectedSymbol || r.toName === selectedSymbol) : []),
+    [analysis.references, selectedSymbol],
+  );
   if (!selectedSymbol) {
     return (
       <div className="p-3 text-[11px] text-zinc-500">
@@ -356,7 +363,7 @@ function ReferencesPanel({ analysis, selectedSymbol, onSelectSymbol, onSelectAss
       </div>
     );
   }
-  const refs = analysis.references;
+  const refs = related;
   const sections: { title: string; via: RefEdge['via']; dir: 'out' | 'in'; asset?: boolean }[] = [
     { title: 'Calls', via: 'call', dir: 'out' },
     { title: 'Called by', via: 'call', dir: 'in' },
@@ -399,7 +406,7 @@ function ReferencesPanel({ analysis, selectedSymbol, onSelectSymbol, onSelectAss
                 {unique.map((r) => {
                   const target = s.dir === 'out' ? r.toName : r.fromName;
                   return (
-                    <button key={r.id} onClick={() => (s.asset ? onSelectAsset(target) : onSelectSymbol(target))} className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-[11px] hover:bg-zinc-900">
+                    <button key={r.id} onClick={() => (s.asset ? onSelectAsset(target) : onSelectSymbol(target, s.dir === 'in' ? r.fromSourceId : undefined))} className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-[11px] hover:bg-zinc-900">
                       <span className={cn('shrink-0 font-mono', s.asset ? 'text-amber-300' : 'text-emerald-300')}>{target}</span>
                       <span className="ml-auto shrink-0 text-[9px] text-zinc-600">L{r.fromLine}{s.dir === 'in' ? ` → ${selectedSymbol}` : ''}</span>
                     </button>

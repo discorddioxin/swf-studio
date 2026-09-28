@@ -19,7 +19,9 @@ export function CodeInspector({ analysis, onSelectAsset }: {
   const [search, setSearch] = useState('');
   const [expandedMethod, setExpandedMethod] = useState<string | null>(null);
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
-  const [activeSource, setActiveSource] = useState<string | null>(null);
+  // Index into analysis.sources — labels are not guaranteed to be unique.
+  const [activeSourceIdx, setActiveSourceIdx] = useState<number | null>(null);
+  const activeSource = activeSourceIdx != null ? analysis.sources[activeSourceIdx] : undefined;
 
   const q = search.trim().toLowerCase();
   const filteredMethods = useMemo(
@@ -34,6 +36,12 @@ export function CodeInspector({ analysis, onSelectAsset }: {
     if (!q) return analysis.relationships;
     return analysis.relationships.filter((r) => r.codeName.toLowerCase().includes(q) || r.assetName.toLowerCase().includes(q));
   }, [analysis.relationships, q]);
+
+  // Chips only know the asset *name*; resolve its id so selecting works.
+  const selectAssetByName = (_id?: number, name?: string) => {
+    if (!name) return;
+    onSelectAsset?.(analysis.assetIndex[name]?.assetId, name);
+  };
 
   const assetGroups = useMemo(() => Object.entries(analysis.assetIndex)
     .map(([name, usage]) => ({ name, usage }))
@@ -120,7 +128,8 @@ export function CodeInspector({ analysis, onSelectAsset }: {
               </button>
               {expandedMethod === m.id && (
                 <div className="space-y-2 border-t border-zinc-800 px-2 py-2">
-                  <RefChips refs={m.refs} onSelect={onSelectAsset} />
+                  <RefChips refs={m.refs} onSelect={selectAssetByName} />
+                  <div className="text-[10px] text-zinc-600">Source: {m.sourceLabel}</div>
                   {m.calls.length > 0 && (
                     <div className="text-[10px] text-zinc-500">Calls: <span className="font-mono text-zinc-400">{m.calls.join(', ')}</span></div>
                   )}
@@ -145,7 +154,8 @@ export function CodeInspector({ analysis, onSelectAsset }: {
               {expandedMember === m.id && (
                 <div className="space-y-2 border-t border-zinc-800 px-2 py-2">
                   <div className="truncate font-mono text-[10px] text-zinc-400">= {m.value}</div>
-                  <RefChips refs={m.refs} onSelect={onSelectAsset} />
+                  <RefChips refs={m.refs} onSelect={selectAssetByName} />
+                  <div className="text-[10px] text-zinc-600">Source: {m.sourceLabel}</div>
                 </div>
               )}
             </div>
@@ -155,26 +165,26 @@ export function CodeInspector({ analysis, onSelectAsset }: {
       )}
 
       {view === 'relationships' && (
-        <Relationships analysis={analysis} filtered={filteredRels} onSelectAsset={onSelectAsset} />
+        <Relationships analysis={analysis} filtered={filteredRels} filtering={!!q} onSelectAsset={onSelectAsset} />
       )}
 
       {view === 'source' && (
         <div className="space-y-2">
           <div className="flex max-h-32 flex-col gap-1 overflow-y-auto">
-            {analysis.sources.map((s) => (
+            {analysis.sources.map((s, i) => (
               <button
-                key={s.label}
-                onClick={() => setActiveSource(s.label)}
-                className={cn('flex items-center justify-between rounded border px-2 py-1 text-left text-[11px]', activeSource === s.label ? 'border-amber-500/40 bg-amber-500/5 text-amber-200' : 'border-zinc-800 bg-zinc-900/40 text-zinc-300 hover:border-zinc-700')}
+                key={i}
+                onClick={() => setActiveSourceIdx(i)}
+                className={cn('flex items-center justify-between rounded border px-2 py-1 text-left text-[11px]', activeSourceIdx === i ? 'border-amber-500/40 bg-amber-500/5 text-amber-200' : 'border-zinc-800 bg-zinc-900/40 text-zinc-300 hover:border-zinc-700')}
               >
                 <span className="truncate">{s.label}</span>
                 <span className="ml-2 shrink-0 text-[10px] text-zinc-600">{s.methodCount}m · {s.memberCount}v</span>
               </button>
             ))}
           </div>
-          {activeSource != null && (
+          {activeSource && (
             <pre className="max-h-64 overflow-auto rounded border border-zinc-800 bg-zinc-950/60 p-2 font-mono text-[10px] leading-relaxed text-amber-100/80 whitespace-pre">
-              {analysis.sources.find((s) => s.label === activeSource)?.source}
+              {activeSource.source}
             </pre>
           )}
         </div>
@@ -200,8 +210,8 @@ function RefChips({ refs, onSelect }: {
   );
 }
 
-function Relationships({ analysis, filtered, onSelectAsset }: {
-  analysis: CodeAnalysis; filtered: CodeAnalysis['relationships']; onSelectAsset?: (id?: number, name?: string) => void;
+function Relationships({ analysis, filtered, filtering, onSelectAsset }: {
+  analysis: CodeAnalysis; filtered: CodeAnalysis['relationships']; filtering: boolean; onSelectAsset?: (id?: number, name?: string) => void;
 }) {
   const groups = useMemo(() => {
     const map = new Map<string, { assetName: string; assetId?: number; assetKind?: string; rows: CodeAnalysis['relationships'] }>();
@@ -213,7 +223,7 @@ function Relationships({ analysis, filtered, onSelectAsset }: {
     return [...map.values()].sort((a, b) => b.rows.length - a.rows.length);
   }, [filtered]);
 
-  if (!groups.length) return <p className="text-[11px] text-zinc-600">No code→asset relationships{filtered.length ? ' match' : ''}.</p>;
+  if (!groups.length) return <p className="text-[11px] text-zinc-600">No code→asset relationships{filtering ? ' match' : ''}.</p>;
   return (
     <div className="max-h-80 space-y-2 overflow-y-auto">
       {groups.map((g) => (

@@ -1,18 +1,16 @@
 // ---------------------------------------------------------------- code panel ----
-// Extracted from Inspector.tsx (Phase 2, step 2a of 8).
+// Inspector "Code" tab: Code Inspector + ActionScript + TypeScript sub-tabs.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { normalizeAssetPath, resolveActionScriptFile, type AssetCache } from '../../lib/assets';
-import { analyzeCode, type AssetDescriptor } from '../../lib/codeInspector';
-import { buildFramesForContainer } from '../../lib/exporter';
+import { useMemo, useState } from 'react';
+import { resolveActionScriptFile } from '../../lib/assets';
+import { analyzeCode, buildAssetDescriptors } from '../../lib/codeInspector';
 import type { ProjectApi } from '../../lib/project';
-import { CodeInspector } from '../CodeInspector';
-import { defaultActorCapabilities, type ActorAction, type ActorClassification, type ActorCombatMode, type ActorFacing, type ActorLayer, type ActorMirrorSide, type ActorMovementSlot, type ActorSequence, type AssetBundle, type CharacterKind, type FlattenedSprite, type Project, type SwfDocument, type Timeline } from '../../types';
-import { TWIPS } from '../../types';
+import type { AssetBundle, SwfDocument, Timeline } from '../../types';
 import { cn } from '../../utils/cn';
-import { charName } from '../Sidebar';
-import { Button, Chip, EVENT_COLOR, Field, KIND_COLOR, TagInput, inputCls } from '../ui';
-import { Empty, fmt, Head } from './shared';
+import { CodeInspector } from '../CodeInspector';
+import { scriptKey, useScriptTexts } from '../useScriptTexts';
+
+type TimelineEvent = Timeline['frames'][number]['events'][number];
 
 export function CodePanel({
   doc, timeline, selectedId, api, assets, onSelectAsset
@@ -21,43 +19,25 @@ export function CodePanel({
   onSelectAsset?: (assetId?: number, assetName?: string) => void;
 }) {
   const [subTab, setSubTab] = useState<'inspector' | 'as' | 'ts'>('inspector');
-  const [externalTexts, setExternalTexts] = useState<Record<string, string>>({});
-  const loadingRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    // A new folder can contain a script with the same relative path as the
-    // previous folder. Never display stale source from the old project.
-    setExternalTexts({});
-    loadingRef.current.clear();
-  }, [assets]);
-
-  const scriptFileForEvent = (event: typeof timeline.frames[number]['events'][number], frameIndex: number) => {
+  const scriptFileForEvent = (event: TimelineEvent, frameIndex: number) => {
     if (!assets || event.kind !== 'action') return undefined;
     const refs = [event.externalActions, ...(event.externalActionCandidates ?? [])].filter(Boolean) as string[];
     return resolveActionScriptFile(assets, timeline, frameIndex, event.tagType, refs);
   };
 
-  useEffect(() => {
-    if (!assets) return;
-    timeline.frames.forEach((f) => {
-      f.events.forEach((e) => {
-        if (e.kind !== 'action') return;
-        const hit = scriptFileForEvent(e, f.index);
-        if (!hit) return;
-        const key = normalizeAssetPath(hit.path);
-        if (externalTexts[key] || loadingRef.current.has(key)) return;
-        loadingRef.current.add(key);
-        hit.file.text().then((text) => {
-          setExternalTexts((prev) => ({ ...prev, [key]: text }));
-        });
-      });
-    });
-  }, [assets, timeline.id]);
+  // Every external script referenced by this timeline. Loading is scoped to the
+  // asset bundle, so switching folders can never surface stale source.
+  const scriptFiles = useMemo(
+    () => timeline.frames.flatMap((f) => f.events.map((e) => scriptFileForEvent(e, f.index))),
+    [assets, timeline],
+  );
+  const { texts: externalTexts, failed: failedScripts } = useScriptTexts(scriptFiles, assets);
 
-  const sourceForEvent = (event: typeof timeline.frames[number]['events'][number], frameIndex: number) => {
+  const sourceForEvent = (event: TimelineEvent, frameIndex: number) => {
     const file = scriptFileForEvent(event, frameIndex);
     if (!file) return undefined;
-    const text = externalTexts[normalizeAssetPath(file.path)];
+    const text = externalTexts[scriptKey(file)];
     return text != null ? { file, text } : undefined;
   };
 
@@ -72,7 +52,14 @@ export function CodePanel({
             lines.push(`// Source: ${source.file.path}`);
             lines.push(source.text.trim());
           } else if (scriptFileForEvent(e, f.index)) {
-            lines.push(`// Loading ActionScript source: ${scriptFileForEvent(e, f.index)!.path}`);
+            const file = scriptFileForEvent(e, f.index)!;
+            const error = failedScripts[scriptKey(file)];
+            if (error) {
+              lines.push(`// Could not read ActionScript source ${file.path}: ${error}`);
+              lines.push(e.detail);
+            } else {
+              lines.push(`// Loading ActionScript source: ${file.path}`);
+            }
           } else {
             lines.push(e.detail);
           }
@@ -81,7 +68,7 @@ export function CodePanel({
       });
     });
     return lines.join('\n').trim();
-  }, [timeline, externalTexts, assets]);
+  }, [timeline, externalTexts, failedScripts, assets]);
 
   const charActions = useMemo(() => {
     if (selectedId == null) return '';
@@ -121,23 +108,17 @@ export function CodePanel({
       });
     });
     if (charActions) sources.unshift({ label: `Character actions · ${selectedId != null ? `#${selectedId}` : timeline.name}`, source: charActions });
-    return sources;
+    // Two actions on one frame (e.g. DoAction + DoInitAction without files)
+    // would otherwise share a label; labels are user-facing, so disambiguate.
+    const seen = new Map<string, number>();
+    return sources.map((s) => {
+      const n = (seen.get(s.label) ?? 0) + 1;
+      seen.set(s.label, n);
+      return n > 1 ? { ...s, label: `${s.label} (${n})` } : s;
+    });
   }, [timeline, externalTexts, assets, charActions, selectedId]);
 
-  const assetDescriptors = useMemo<AssetDescriptor[]>(() => {
-    const out: AssetDescriptor[] = [];
-    doc.characters.forEach((ch) => {
-      const names = new Set<string>();
-      if (ch.className) names.add(ch.className);
-      if (ch.exportName) names.add(ch.exportName);
-      const label = api.project.characters[ch.id]?.name;
-      if (label) names.add(label);
-      names.add(`${ch.kind}_${ch.id}`);
-      names.forEach((name) => out.push({ name, assetId: ch.id, assetKind: ch.kind }));
-    });
-    api.project.clips.forEach((c) => out.push({ name: c.name, assetKind: 'clip' }));
-    return out;
-  }, [doc, api.project]);
+  const assetDescriptors = useMemo(() => buildAssetDescriptors(doc, api.project), [doc, api.project]);
 
   const codeAnalysis = useMemo(() => analyzeCode(codeSources, assetDescriptors), [codeSources, assetDescriptors]);
 

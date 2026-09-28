@@ -5,7 +5,13 @@
 // between code and assets (attachMovie / string / identifier references).
 // It is intentionally a fast, heuristic parser: the goal is an inspectable
 // index, not a full compiler.
+//
+// Structure (braces, definitions, calls, member reads/writes) is always
+// detected on a *masked* copy of the source in which comments and string
+// contents are blanked, so `"}"` or `// function x() {` cannot derail it.
 // ---------------------------------------------------------------------------
+
+import type { Project, SwfDocument } from '../types';
 
 export interface AssetDescriptor {
   name: string;
@@ -16,6 +22,8 @@ export interface AssetDescriptor {
 export interface CodeRef {
   name: string;
   via: 'attachMovie' | 'getMovieClip' | 'string literal' | 'identifier';
+  /** 1-based line (within the analysed source) of the first occurrence. */
+  line?: number;
 }
 
 export interface CodeMethod {
@@ -79,165 +87,351 @@ export interface CodeAnalysis {
 
 const KEYWORDS = new Set([
   'if', 'for', 'while', 'switch', 'function', 'catch', 'return', 'with', 'do', 'else', 'new',
+  'typeof', 'delete', 'void', 'in', 'instanceof', 'var', 'const', 'case', 'break', 'continue',
+  'try', 'finally', 'throw', 'default', 'true', 'false', 'null', 'undefined', 'super',
 ]);
 
-function lineAt(source: string, index: number): number {
-  let line = 1;
-  for (let i = 0; i < index && i < source.length; i++) if (source[i] === '\n') line++;
-  return line;
+const IDENT = '[A-Za-z_$][\\w$]*';
+/** Optional AS2/AS3 type annotation, e.g. `:Number`, `:void`, `:Vector.<int>`, `:*`. */
+const TYPE_ANN = '(?:\\s*:\\s*[\\w$.*<>]+)?';
+
+/** A plain object with no prototype, so symbol names such as `constructor`,
+ * `toString` or `__proto__` can be used as keys safely. */
+function dict<T>(): Record<string, T> {
+  return Object.create(null) as Record<string, T>;
 }
 
-function extractBalanced(source: string, openIdx: number): { body: string; closeIdx: number } {
+// ------------------------------------------------------------ source masking
+
+interface MaskedSource {
+  /** Comments AND string-literal contents blanked. Used for structure: braces,
+   * definitions, calls, member reads/writes. */
+  code: string;
+  /** Only comments blanked (string literals kept). Used for asset references,
+   * which are frequently string literals (`attachMovie("hero", …)`). */
+  text: string;
+}
+
+/**
+ * Blank out comments and string contents while preserving length and
+ * newlines, so every index/line computed on a masked copy maps 1:1 onto the
+ * original source. Regex literals are not recognised (rare in AS1/2).
+ */
+function maskSource(src: string): MaskedSource {
+  const n = src.length;
+  const code: string[] = new Array(n);
+  const text: string[] = new Array(n);
+  const blank = (arr: string[], from: number, to: number) => {
+    for (let k = from; k < to; k++) arr[k] = src[k] === '\n' || src[k] === '\r' ? src[k] : ' ';
+  };
+  let i = 0;
+  while (i < n) {
+    const ch = src[i];
+    if (ch === '/' && src[i + 1] === '/') {
+      let j = i;
+      while (j < n && src[j] !== '\n') j++;
+      blank(code, i, j); blank(text, i, j);
+      i = j;
+      continue;
+    }
+    if (ch === '/' && src[i + 1] === '*') {
+      const close = src.indexOf('*/', i + 2);
+      const j = close < 0 ? n : close + 2;
+      blank(code, i, j); blank(text, i, j);
+      i = j;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      while (j < n && src[j] !== ch && src[j] !== '\n') j += src[j] === '\\' ? 2 : 1;
+      j = Math.min(j, n);
+      code[i] = ch; text[i] = ch;
+      blank(code, i + 1, j);
+      for (let k = i + 1; k < j; k++) text[k] = src[k];
+      if (j < n && src[j] === ch) { code[j] = ch; text[j] = ch; i = j + 1; } else i = j;
+      continue;
+    }
+    code[i] = ch; text[i] = ch;
+    i++;
+  }
+  return { code: code.join(''), text: text.join('') };
+}
+
+/** Blank the given absolute [from, to) ranges inside `str` (which starts at
+ * absolute offset `base`), preserving newlines. */
+function blankRanges(str: string, base: number, ranges: [number, number][]): string {
+  if (!ranges.length) return str;
+  let out = '';
+  let cursor = 0;
+  for (const [from, to] of ranges) {
+    const a = Math.max(cursor, from - base);
+    const b = Math.min(str.length, to - base);
+    if (b <= a) continue;
+    out += str.slice(cursor, a) + str.slice(a, b).replace(/[^\n\r]/g, ' ');
+    cursor = b;
+  }
+  return out + str.slice(cursor);
+}
+
+// ------------------------------------------------------------ line lookup
+
+/** O(log n) index → line lookup (the previous implementation rescanned the
+ * whole source for every lookup, which made analysis quadratic). */
+class LineIndex {
+  readonly starts: number[] = [0];
+  constructor(source: string) {
+    for (let i = 0; i < source.length; i++) if (source.charCodeAt(i) === 10) this.starts.push(i + 1);
+  }
+  /** 1-based line containing `index`. */
+  lineAt(index: number): number {
+    let lo = 0;
+    let hi = this.starts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (this.starts[mid] <= index) lo = mid; else hi = mid - 1;
+    }
+    return lo + 1;
+  }
+}
+
+/** Index of the `}` matching the `{` at `openIdx`, or -1 if unterminated. */
+function extractBalanced(code: string, openIdx: number): number {
   let depth = 0;
-  for (let i = openIdx; i < source.length; i++) {
-    const ch = source[i];
+  for (let i = openIdx; i < code.length; i++) {
+    const ch = code[i];
     if (ch === '{') depth++;
     else if (ch === '}') {
       depth--;
-      if (depth === 0) return { body: source.slice(openIdx + 1, i), closeIdx: i };
+      if (depth === 0) return i;
     }
   }
-  return { body: source.slice(openIdx + 1), closeIdx: source.length - 1 };
+  return -1;
 }
 
-function findRefs(text: string, knownNames: Set<string>): CodeRef[] {
+// ------------------------------------------------------------ references
+
+const ATTACH_RE = /attachMovie\s*\(\s*["']([^"']+)["']/g;
+const GET_MOVIE_CLIP_RE = /getMovieClip\s*\(\s*[^,]+,\s*["']([^"']+)["']/g;
+const STRING_NAME_RE = /["']([A-Za-z_$][\w$]*)["']/g;
+const IDENT_RE = /(?<![\w$])[A-Za-z_$][\w$]*(?![\w$])/g;
+
+/**
+ * `text` must already have comments removed. `base` is the absolute offset of
+ * `text` in the source so first-occurrence lines can be reported.
+ */
+function findRefs(text: string, knownNames: Set<string>, base = 0, lines?: LineIndex): CodeRef[] {
   const found = new Map<string, CodeRef>();
-  const add = (name: string, via: CodeRef['via']) => {
+  if (!knownNames.size) return [];
+  const add = (name: string, via: CodeRef['via'], index: number) => {
     if (!knownNames.has(name) || found.has(name)) return;
-    found.set(name, { name, via });
+    found.set(name, lines ? { name, via, line: lines.lineAt(base + index) } : { name, via });
   };
-
-  // attachMovie("name", ...)
-  const attachRe = /attachMovie\s*\(\s*["']([^"']+)["']/g;
   let m: RegExpExecArray | null;
-  while ((m = attachRe.exec(text))) add(m[1], 'attachMovie');
-
-  // getMovieClip(this, "name") / getDefinitionName(...)
-  const gmcRe = /getMovieClip\s*\(\s*[^,]+,\s*["']([^"']+)["']/g;
-  while ((m = gmcRe.exec(text))) add(m[1], 'getMovieClip');
-
-  // string literals that name a known asset
-  const strRe = /["']([A-Za-z_$][\w$]*)["']/g;
-  while ((m = strRe.exec(text))) add(m[1], 'string literal');
-
-  // bare identifiers that name a known asset (e.g. this.heroBall, heroBall.play())
-  const idRe = /(?:\b|\.)([A-Za-z_$][\w$]*)\b/g;
-  while ((m = idRe.exec(text))) add(m[1], 'identifier');
-
+  ATTACH_RE.lastIndex = 0;
+  while ((m = ATTACH_RE.exec(text))) add(m[1], 'attachMovie', m.index);
+  GET_MOVIE_CLIP_RE.lastIndex = 0;
+  while ((m = GET_MOVIE_CLIP_RE.exec(text))) add(m[1], 'getMovieClip', m.index);
+  STRING_NAME_RE.lastIndex = 0;
+  while ((m = STRING_NAME_RE.exec(text))) add(m[1], 'string literal', m.index);
+  IDENT_RE.lastIndex = 0;
+  while ((m = IDENT_RE.exec(text))) add(m[0], 'identifier', m.index);
   return [...found.values()];
 }
 
-function findCalls(body: string): string[] {
+/** `code` must have comments and strings masked. */
+function findCalls(code: string): string[] {
   const calls = new Set<string>();
-  const re = /([A-Za-z_$][\w$]*)\s*\(/g;
+  const re = /(?<![\w$])([A-Za-z_$][\w$]*)\s*\(/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(body))) if (!KEYWORDS.has(m[1])) calls.add(m[1]);
+  while ((m = re.exec(code))) {
+    if (KEYWORDS.has(m[1])) continue;
+    // `function foo(` is a (nested) definition, not a call.
+    if (/(?:^|[^\w$])function\s+$/.test(code.slice(Math.max(0, m.index - 10), m.index))) continue;
+    calls.add(m[1]);
+  }
   return [...calls];
 }
 
 function cleanParams(raw: string): string[] {
   return raw
     .split(',')
-    .map((p) => p.trim().replace(/\s*:\s*.*$/, '').replace(/^this\s*=>?\s*/, '').replace(/=.+$/, ''))
+    .map((p) => p.trim().replace(/\s*:\s*.*$/, '').replace(/=.+$/, '').trim())
     .filter(Boolean);
 }
 
+// ------------------------------------------------------------ source parsing
+
+interface ParsedMethod extends Omit<CodeMethod, 'id' | 'sourceLabel'> {
+  /** Absolute offset of the first body character. */
+  bodyStart: number;
+  /** Masked body with nested function definitions blanked (for edge scans). */
+  scanCode: string;
+}
+
+interface ParsedMember extends Omit<CodeMember, 'id' | 'sourceLabel'> {
+  /** Masked line text (for edge scans). */
+  scanCode: string;
+}
+
 interface ParsedSource {
-  methods: Omit<CodeMethod, 'id' | 'sourceLabel'>[];
-  members: Omit<CodeMember, 'id' | 'sourceLabel'>[];
+  methods: ParsedMethod[];
+  members: ParsedMember[];
+  lines: LineIndex;
+}
+
+const FUNCTION_KEYWORD_RE = /(?<![\w$.])function(?![\w$])/g;
+// `function [get|set] [name](params)[:ReturnType] {` — sticky, applied at a keyword.
+const FUNCTION_HEAD_RE = new RegExp(
+  `function\\s*(?:(get|set)\\s+(?=${IDENT}\\s*\\())?(${IDENT})?\\s*\\(([^)]*)\\)${TYPE_ANN}\\s*\\{`,
+  'y',
+);
+// What precedes `function` when it is assigned: `[var] a.b.c[:Type] =` or `key:`.
+const ASSIGNEE_RE = new RegExp(`(?:(?<![\\w$])(var|const)\\s+)?(${IDENT}(?:\\s*\\.\\s*${IDENT})*)${TYPE_ANN}\\s*(=|:)\\s*$`);
+const MODIFIERS = '(?:(?:public|private|protected|internal|static|override|final|dynamic|native)\\s+)*';
+const VAR_DECL_RE = new RegExp(`^${MODIFIERS}(var|const)\\s+(${IDENT})${TYPE_ANN}\\s*(?:=(?!=)\\s*([\\s\\S]*?))?\\s*;?$`);
+const THIS_PROP_RE = new RegExp(`^this\\.(${IDENT})\\s*=(?!=)\\s*([\\s\\S]*?)\\s*;?$`);
+
+interface FoundFunction {
+  keywordIdx: number;
+  openIdx: number;
+  /** Matching `}` (or last index when unterminated). */
+  closeIdx: number;
+  /** Exclusive end of the body. */
+  bodyEnd: number;
+  name: string;
+  kind: CodeMethod['kind'];
+  params: string[];
+}
+
+function discoverFunctions(code: string): FoundFunction[] {
+  const out: FoundFunction[] = [];
+  let m: RegExpExecArray | null;
+  FUNCTION_KEYWORD_RE.lastIndex = 0;
+  while ((m = FUNCTION_KEYWORD_RE.exec(code))) {
+    FUNCTION_HEAD_RE.lastIndex = m.index;
+    const head = FUNCTION_HEAD_RE.exec(code);
+    if (!head) continue;
+    const [, accessor, fnName, rawParams] = head;
+    const openIdx = FUNCTION_HEAD_RE.lastIndex - 1;
+
+    const before = code.slice(Math.max(0, m.index - 200), m.index);
+    const assign = ASSIGNEE_RE.exec(before);
+    let name: string | undefined;
+    let kind: CodeMethod['kind'] = 'function';
+    if (assign) {
+      const [, decl, rawPath, op] = assign;
+      const path = rawPath.replace(/\s+/g, '');
+      const parts = path.split('.');
+      const last = parts[parts.length - 1];
+      if (op === ':') { name = last; kind = 'method'; }                          // { onLoad: function () {} }
+      else if (parts.length === 2 && parts[0] === 'this') { name = last; kind = 'method'; }
+      else if (parts.length >= 3 && parts[parts.length - 2] === 'prototype') { name = last; kind = 'method'; }
+      else if (parts.length === 1) { name = path; kind = decl ? 'function' : 'handler'; }
+      else { name = path; kind = 'handler'; }                                     // btn.onRelease = function …
+    } else if (fnName) {
+      name = fnName;
+      kind = accessor ? 'method' : 'function';
+    }
+    if (!name) continue; // anonymous callback, e.g. setInterval(function () {…})
+
+    const close = extractBalanced(code, openIdx);
+    out.push({
+      keywordIdx: m.index, openIdx,
+      closeIdx: close < 0 ? code.length - 1 : close,
+      bodyEnd: close < 0 ? code.length : close,
+      name, kind, params: cleanParams(rawParams),
+    });
+    // Do NOT skip the body: nested definitions (onEnterFrame inside onLoad…)
+    // are indexed too.
+    FUNCTION_KEYWORD_RE.lastIndex = openIdx + 1;
+  }
+  return out;
 }
 
 function analyzeSource(source: string, knownNames: Set<string>): ParsedSource {
-  const methods: ParsedSource['methods'] = [];
-  const seen = new Set<string>();
+  const { code, text } = maskSource(source);
+  const lines = new LineIndex(source);
+  const fns = discoverFunctions(code);
 
-  // First pass: named function declarations  `function name(...) {`
-  const namedRe = /function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*\{/g;
-  let m: RegExpExecArray | null;
-  while ((m = namedRe.exec(source))) {
-    const braceIdx = source.indexOf('{', m.index + m[0].length - 1);
-    const { body, closeIdx } = extractBalanced(source, braceIdx);
-    const before = source.slice(Math.max(0, m.index - 80), m.index).trim();
-    const assignee = before.match(/([\w$.]+)\s*=\s*$/)?.[1];
-    let kind: CodeMethod['kind'] = 'function';
-    let name = m[1];
-    if (assignee) {
-      if (/this\.\w+$/.test(assignee)) kind = 'method';
-      else if (/^\w+$/.test(assignee) && !/^function$/.test(assignee)) kind = 'handler';
+  const methods: ParsedMethod[] = fns.map((fn, i) => {
+    // Blank directly-nested definitions so a parent is not credited with its
+    // children's calls / references (each child is its own entry).
+    const nested: [number, number][] = [];
+    for (let j = i + 1; j < fns.length && fns[j].keywordIdx < fn.closeIdx; j++) {
+      nested.push([fns[j].keywordIdx, fns[j].closeIdx + 1]);
+      while (j + 1 < fns.length && fns[j + 1].keywordIdx < fns[j].closeIdx) j++;
     }
-    const params = cleanParams(m[2]);
-    const refs = findRefs(body, knownNames);
-    const key = `${name}:${lineAt(source, m.index)}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      methods.push({
-        name, kind, params,
-        startLine: lineAt(source, m.index),
-        endLine: lineAt(source, closeIdx),
-        body,
-        refs,
-        assetRefs: refs.map((r) => r.name),
-        calls: findCalls(body),
-      });
-    }
-    namedRe.lastIndex = closeIdx + 1;
-  }
-
-  // Second pass: function expressions `name = function(...) {` and `this.x = function(...) {`
-  const exprRe = /([\w$.]+)\s*=\s*function\s*\(([^)]*)\)\s*\{/g;
-  while ((m = exprRe.exec(source))) {
-    const assignee = m[1];
-    const braceIdx = source.indexOf('{', m.index + m[0].length - 1);
-    const { body, closeIdx } = extractBalanced(source, braceIdx);
-    const isMethod = /^this\.\w+$/.test(assignee);
-    const kind: CodeMethod['kind'] = isMethod ? 'method' : 'handler';
-    const name = isMethod ? assignee.split('.').pop()! : assignee.replace(/^var\s+/, '');
-    const params = cleanParams(m[2]);
-    const key = `${name}:${lineAt(source, m.index)}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      const refs = findRefs(body, knownNames);
-      methods.push({
-        name, kind, params,
-        startLine: lineAt(source, m.index),
-        endLine: lineAt(source, closeIdx),
-        body,
-        refs,
-        assetRefs: refs.map((r) => r.name),
-        calls: findCalls(body),
-      });
-    }
-    exprRe.lastIndex = closeIdx + 1;
-  }
-
-  // Members: `var x = ...` and `this.x = ...` (non-function)
-  const members: ParsedSource['members'] = [];
-  const memberSeen = new Set<string>();
-  const lines = source.split('\n');
-  lines.forEach((line, idx) => {
-    const trimmed = line.trim();
-    let v: RegExpMatchArray | null = trimmed.match(/^var\s+([A-Za-z_$][\w$]*)\s*=\s*(.+?);?$/);
-    if (v) {
-      const key = `var:${v[1]}:${idx + 1}`;
-      if (!memberSeen.has(key)) {
-        memberSeen.add(key);
-        const refs = findRefs(line, knownNames);
-        members.push({ name: v[1], kind: 'var', startLine: idx + 1, value: v[2].slice(0, 120), refs, assetRefs: refs.map((r) => r.name) });
-      }
-      return;
-    }
-    v = trimmed.match(/^this\.([A-Za-z_$][\w$]*)\s*=\s*(.+?);?$/);
-    if (v && !/\bfunction\b/.test(v[2]) && !/=>/.test(v[2])) {
-      const key = `prop:${v[1]}:${idx + 1}`;
-      if (!memberSeen.has(key)) {
-        memberSeen.add(key);
-        const refs = findRefs(line, knownNames);
-        members.push({ name: v[1], kind: 'property', startLine: idx + 1, value: v[2].slice(0, 120), refs, assetRefs: refs.map((r) => r.name) });
-      }
-    }
+    const bodyStart = fn.openIdx + 1;
+    const bodyEnd = fn.bodyEnd;
+    const scanText = blankRanges(text.slice(bodyStart, bodyEnd), bodyStart, nested);
+    const scanCode = blankRanges(code.slice(bodyStart, bodyEnd), bodyStart, nested);
+    const refs = findRefs(scanText, knownNames, bodyStart, lines);
+    return {
+      name: fn.name,
+      kind: fn.kind,
+      params: fn.params,
+      startLine: lines.lineAt(fn.keywordIdx),
+      endLine: lines.lineAt(fn.closeIdx),
+      body: source.slice(bodyStart, bodyEnd),
+      refs,
+      assetRefs: refs.map((r) => r.name),
+      calls: findCalls(scanCode),
+      bodyStart,
+      scanCode,
+    };
   });
 
-  return { methods, members };
+  // Lines that sit inside a function body: `var`s there are locals, not members.
+  const depthDelta = new Int32Array(lines.starts.length + 2);
+  for (const fn of fns) {
+    depthDelta[lines.lineAt(fn.openIdx) + 1]++;
+    depthDelta[lines.lineAt(fn.closeIdx) + 1]--;
+  }
+
+  const members: ParsedMember[] = [];
+  let depth = 0;
+  for (let li = 0; li < lines.starts.length; li++) {
+    const lineNo = li + 1;
+    depth += depthDelta[lineNo];
+    const from = lines.starts[li];
+    const to = li + 1 < lines.starts.length ? lines.starts[li + 1] - 1 : source.length;
+    const lineText = text.slice(from, to).trim();
+    if (!lineText) continue;
+    const lineCode = code.slice(from, to);
+
+    const decl = VAR_DECL_RE.exec(lineText);
+    if (decl) {
+      const value = decl[3] ?? '';
+      if (depth > 0) continue;                                  // local variable
+      if (/^function(?![\w$])/.test(value)) continue;          // indexed as a method
+      const refs = findRefs(text.slice(from, to), knownNames, from, lines);
+      members.push({
+        name: decl[2], kind: decl[1] === 'const' ? 'const' : 'var', startLine: lineNo,
+        value: value.slice(0, 120), refs, assetRefs: refs.map((r) => r.name), scanCode: lineCode,
+      });
+      continue;
+    }
+    const prop = THIS_PROP_RE.exec(lineText);
+    if (prop && !/(?<![\w$])function(?![\w$])/.test(lineCode) && !/=>/.test(lineCode)) {
+      const refs = findRefs(text.slice(from, to), knownNames, from, lines);
+      members.push({
+        name: prop[1], kind: 'property', startLine: lineNo,
+        value: prop[2].slice(0, 120), refs, assetRefs: refs.map((r) => r.name), scanCode: lineCode,
+      });
+    }
+  }
+
+  return { methods, members, lines };
+}
+
+function stripMethod(m: ParsedMethod): Omit<CodeMethod, 'id' | 'sourceLabel'> {
+  const { bodyStart: _b, scanCode: _s, ...rest } = m;
+  return rest;
+}
+
+function stripMember(m: ParsedMember): Omit<CodeMember, 'id' | 'sourceLabel'> {
+  const { scanCode: _s, ...rest } = m;
+  return rest;
 }
 
 export function analyzeCode(
@@ -255,26 +449,27 @@ export function analyzeCode(
   let memberSeq = 0;
 
   for (const s of sources) {
-    if (!s.source || !s.source.trim()) {
-      summaries.push({ label: s.label, source: s.source, methodCount: 0, memberCount: 0, refCount: 0 });
+    const src = s.source ?? '';
+    if (!src.trim()) {
+      summaries.push({ label: s.label, source: src, methodCount: 0, memberCount: 0, refCount: 0 });
       continue;
     }
-    const parsed = analyzeSource(s.source, knownNames);
-    for (const method of parsed.methods) methods.push({ ...method, id: `m${methodSeq++}`, sourceLabel: s.label });
-    for (const member of parsed.members) members.push({ ...member, id: `v${memberSeq++}`, sourceLabel: s.label });
+    const parsed = analyzeSource(src, knownNames);
+    for (const method of parsed.methods) methods.push({ ...stripMethod(method), id: `m${methodSeq++}`, sourceLabel: s.label });
+    for (const member of parsed.members) members.push({ ...stripMember(member), id: `v${memberSeq++}`, sourceLabel: s.label });
     const refCount = parsed.methods.reduce((n, m) => n + m.refs.length, 0) + parsed.members.reduce((n, m) => n + m.refs.length, 0);
-    summaries.push({ label: s.label, source: s.source, methodCount: parsed.methods.length, memberCount: parsed.members.length, refCount });
+    summaries.push({ label: s.label, source: src, methodCount: parsed.methods.length, memberCount: parsed.members.length, refCount });
   }
 
   const relationships: CodeRelationship[] = [];
-  const assetIndex: CodeAnalysis['assetIndex'] = {};
-  const pushRel = (codeType: 'method' | 'member', codeName: string, sourceLabel: string, line: number, ref: CodeRef) => {
+  const assetIndex = dict<AssetUsage>();
+  const pushRel = (codeType: 'method' | 'member', codeName: string, sourceLabel: string, defLine: number, ref: CodeRef) => {
     const asset = assetByName.get(ref.name);
-    const rel: CodeRelationship = {
+    const line = ref.line ?? defLine;
+    relationships.push({
       codeType, codeName, sourceLabel, line,
       assetName: ref.name, assetId: asset?.assetId, assetKind: asset?.assetKind, via: ref.via,
-    };
-    relationships.push(rel);
+    });
     const usage = (assetIndex[ref.name] ??= { assetId: asset?.assetId, assetKind: asset?.assetKind, usedBy: [] });
     usage.usedBy.push({ codeType, codeName, sourceLabel, line });
   };
@@ -289,6 +484,26 @@ export function analyzeCode(
     assetIndex,
     counts: { methods: methods.length, members: members.length, relationships: relationships.length, sources: sources.length, assets: Object.keys(assetIndex).length },
   };
+}
+
+/**
+ * Every name a character or clip can be referred to by in code. Shared by the
+ * Inspector "Code" tab and the full-screen Code Inspector so both resolve
+ * asset references identically.
+ */
+export function buildAssetDescriptors(doc: SwfDocument, project: Project): AssetDescriptor[] {
+  const out: AssetDescriptor[] = [];
+  doc.characters.forEach((ch) => {
+    const names = new Set<string>();
+    if (ch.className) names.add(ch.className);
+    if (ch.exportName) names.add(ch.exportName);
+    const label = project.characters[ch.id]?.name;
+    if (label) names.add(label);
+    names.add(`${ch.kind}_${ch.id}`);
+    names.forEach((name) => out.push({ name, assetId: ch.id, assetKind: ch.kind }));
+  });
+  project.clips.forEach((c) => out.push({ name: c.name, assetKind: 'clip' }));
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -369,40 +584,63 @@ const AS_PROPERTIES = new Set([
   '_width', '_height', '_alpha', '_visible', '_xscale', '_yscale', '_rotation', '_name', '_depth',
 ]);
 
+const EDGE_IDENT_RE = /(?<![\w$])[A-Za-z_$][\w$]*(?![\w$])/g;
+const COMPOUND_ASSIGN_RE = /^(?:[+\-*/%&|^]|<<|>>>?)=/;
+
+/**
+ * Scan masked code (comments/strings blanked) for code→code edges.
+ * `index` is the offset of the identifier inside `code`.
+ */
 function scanCodeEdges(
-  text: string,
+  code: string,
   methodNames: Set<string>,
   memberNames: Set<string>,
-  emit: (edge: Omit<RefEdge, 'id' | 'fromName' | 'fromSourceId' | 'fromLine' | 'toKind'>) => void,
+  emit: (edge: { toName: string; via: Exclude<RefVia, 'asset'>; index: number }) => void,
 ) {
   let m: RegExpExecArray | null;
-  // method calls
-  const callRe = /([A-Za-z_$][\w$]*)\s*\(/g;
-  while ((m = callRe.exec(text))) {
-    const name = m[1];
-    if (BUILTINS.has(name) || !methodNames.has(name)) continue;
-    emit({ toName: name, via: 'call' });
-  }
-  // member writes:  this.x =  or  x =  (not ==)
-  const writeRe = /(?:this\.|(?<![\w$.]))([A-Za-z_$][\w$]*)\s*=(?![=])/g;
-  while ((m = writeRe.exec(text))) {
-    const name = m[1];
-    if (BUILTINS.has(name) || AS_PROPERTIES.has(name) || !memberNames.has(name)) continue;
-    emit({ toName: name, via: 'write' });
-  }
-  // member reads:  this.x  (explicit member access)
-  const thisReadRe = /this\.([A-Za-z_$][\w$]*)\b/g;
-  while ((m = thisReadRe.exec(text))) {
-    const name = m[1];
-    if (BUILTINS.has(name) || AS_PROPERTIES.has(name) || !memberNames.has(name)) continue;
-    emit({ toName: name, via: 'read' });
-  }
-  // member reads: bare identifiers not in a call/write, not preceded by '.' or a word char
-  const bareReadRe = /(?<![\w$.])([A-Za-z_$][\w$]*)(?!\s*[\(=])/g;
-  while ((m = bareReadRe.exec(text))) {
-    const name = m[1];
-    if (BUILTINS.has(name) || KEYWORDS.has(name) || AS_PROPERTIES.has(name) || !memberNames.has(name)) continue;
-    emit({ toName: name, via: 'read' });
+  EDGE_IDENT_RE.lastIndex = 0;
+  while ((m = EDGE_IDENT_RE.exec(code))) {
+    const name = m[0];
+    const start = m.index;
+    const isMethod = methodNames.has(name);
+    const isMember = memberNames.has(name);
+    if (!isMethod && !isMember) continue;
+    if (BUILTINS.has(name) || KEYWORDS.has(name)) continue;
+
+    const lookBehind = code.slice(Math.max(0, start - 16), start);
+    // Declarations (`var x`, `function x`, `get x`) are not references.
+    if (/(?:^|[^\w$])(?:var|const|function|get|set)\s+$/.test(lookBehind)) continue;
+
+    let q = start + name.length;
+    while (q < code.length && (code[q] === ' ' || code[q] === '\t')) q++;
+    const next = code.slice(q, q + 4);
+
+    // Calls: `name(` (also `obj.name(` — methods are often invoked via _root./this.).
+    if (next[0] === '(') {
+      if (isMethod) emit({ toName: name, via: 'call', index: start });
+      continue;
+    }
+    if (!isMember || AS_PROPERTIES.has(name)) continue;
+
+    const dotted = code[start - 1] === '.';
+    const viaThis = dotted && /(?:^|[^\w$.])this\.$/.test(lookBehind);
+    if (dotted && !viaThis) continue; // property of some other object: not tracked
+
+    // Object-literal key `{ name: … }` is not a reference.
+    let p = (viaThis ? start - 5 : start) - 1;
+    while (p >= 0 && /\s/.test(code[p])) p--;
+    if (next[0] === ':' && (code[p] === '{' || code[p] === ',')) continue;
+
+    const incDec = next.startsWith('++') || next.startsWith('--')
+      || (p >= 1 && ((code[p] === '+' && code[p - 1] === '+') || (code[p] === '-' && code[p - 1] === '-')));
+    const plainAssign = next[0] === '=' && next[1] !== '=';
+    const compound = COMPOUND_ASSIGN_RE.test(next);
+
+    if (plainAssign) emit({ toName: name, via: 'write', index: start });
+    else if (compound || incDec) {
+      emit({ toName: name, via: 'read', index: start });
+      emit({ toName: name, via: 'write', index: start });
+    } else emit({ toName: name, via: 'read', index: start });
   }
 }
 
@@ -415,10 +653,10 @@ export function analyzeCodebase(
   for (const a of assets) if (!assetByName.has(a.name)) assetByName.set(a.name, a);
 
   const symbols: SymbolDef[] = [];
+  /** Parallel to `symbols`: what to scan for edges and how to map offsets to lines. */
+  const scanInfo: { code: string; base: number; lines: LineIndex | null; line: number }[] = [];
   const methodNames = new Set<string>();
   const memberNames = new Set<string>();
-  const parsedBySource = new Map<string, { methods: ParsedSource['methods']; members: ParsedSource['members'] }>();
-  const linesBySource = new Map<string, string[]>();
   let seq = 0;
   const summaries: CodebaseSource[] = [];
 
@@ -426,30 +664,27 @@ export function analyzeCodebase(
   for (const s of sources) {
     const src = s.source ?? '';
     const lines = src.split('\n');
-    linesBySource.set(s.id, lines);
-    const parsed = src.trim() ? analyzeSource(src, assetNames) : { methods: [], members: [] };
-    parsedBySource.set(s.id, parsed);
+    const parsed: ParsedSource | null = src.trim() ? analyzeSource(src, assetNames) : null;
     let methodCount = 0;
     let memberCount = 0;
-    for (const m of parsed.methods) {
-      const id = `sym${seq++}`;
-      const kind = m.kind;
+    for (const m of parsed?.methods ?? []) {
       symbols.push({
-        id, name: m.name, kind, isCode: true, sourceId: s.id, sourceLabel: s.label, timelineId: s.timelineId,
+        id: `sym${seq++}`, name: m.name, kind: m.kind, isCode: true, sourceId: s.id, sourceLabel: s.label, timelineId: s.timelineId,
         line: m.startLine, endLine: m.endLine, params: m.params, body: m.body,
         lineText: lines[m.startLine - 1] ?? '', refs: m.refs,
       });
+      scanInfo.push({ code: m.scanCode, base: m.bodyStart, lines: parsed!.lines, line: m.startLine });
       methodNames.add(m.name);
       methodCount++;
     }
-    for (const m of parsed.members) {
-      const id = `sym${seq++}`;
-      const kind = m.kind === 'const' ? 'property' : m.kind;
+    for (const m of parsed?.members ?? []) {
       symbols.push({
-        id, name: m.name, kind, isCode: false, sourceId: s.id, sourceLabel: s.label, timelineId: s.timelineId,
+        id: `sym${seq++}`, name: m.name, kind: m.kind === 'const' ? 'property' : m.kind, isCode: false,
+        sourceId: s.id, sourceLabel: s.label, timelineId: s.timelineId,
         line: m.startLine, endLine: m.startLine, params: [], body: m.value,
         lineText: lines[m.startLine - 1] ?? '', refs: m.refs,
       });
+      scanInfo.push({ code: m.scanCode, base: 0, lines: null, line: m.startLine });
       memberNames.add(m.name);
       memberCount++;
     }
@@ -460,7 +695,7 @@ export function analyzeCodebase(
   const references: RefEdge[] = [];
   const seenEdge = new Set<string>();
   let refSeq = 0;
-  const addEdge = (from: SymbolDef, edge: { toName: string; via: RefVia }) => {
+  const addEdge = (from: SymbolDef, edge: { toName: string; via: RefVia }, line: number) => {
     const toKind: RefTargetKind = edge.via === 'asset' ? 'asset' : edge.via === 'call' ? 'method' : 'member';
     const key = `${from.id}|${edge.via}|${edge.toName}`;
     if (seenEdge.has(key)) return;
@@ -468,32 +703,32 @@ export function analyzeCodebase(
     const asset = edge.via === 'asset' ? assetByName.get(edge.toName) : undefined;
     references.push({
       id: `ref${refSeq++}`,
-      fromName: from.name, fromSourceId: from.sourceId, fromLine: from.line,
+      fromName: from.name, fromSourceId: from.sourceId, fromLine: line,
       toKind, toName: edge.toName,
       assetId: asset?.assetId, assetKind: asset?.assetKind,
       via: edge.via,
     });
   };
 
-  for (const s of symbols) {
-    const text = s.isCode ? s.body : s.lineText;
-    scanCodeEdges(text, methodNames, memberNames, (edge) => {
-      // drop self-references to keep the graph clean (a def referring to itself)
-      if (edge.toName === s.name && edge.via !== 'asset') return;
-      addEdge(s, edge);
+  symbols.forEach((s, i) => {
+    const info = scanInfo[i];
+    scanCodeEdges(info.code, methodNames, memberNames, (edge) => {
+      // Drop self-references (recursion, `var x = x + 1` on its own line) to keep the graph clean.
+      if (edge.toName === s.name) return;
+      addEdge(s, edge, info.lines ? info.lines.lineAt(info.base + edge.index) : info.line);
     });
-    for (const ref of s.refs) addEdge(s, { toName: ref.name, via: 'asset' });
-  }
+    for (const ref of s.refs) addEdge(s, { toName: ref.name, via: 'asset' }, ref.line ?? s.line);
+  });
 
-  // Indexes.
-  const byName: CodebaseAnalysis['byName'] = {};
+  // Indexes (prototype-free so names like `constructor`/`toString` are safe).
+  const byName = dict<{ definitions: string[]; references: RefEdge[] }>();
   for (const s of symbols) {
     (byName[s.name] ??= { definitions: [], references: [] }).definitions.push(s.id);
   }
   for (const r of references) {
     (byName[r.toName] ??= { definitions: [], references: [] }).references.push(r);
   }
-  const assetIndex: CodebaseAnalysis['assetIndex'] = {};
+  const assetIndex = dict<CodebaseAnalysis['assetIndex'][string]>();
   for (const r of references) {
     if (r.via !== 'asset') continue;
     const usage = (assetIndex[r.toName] ??= { assetId: r.assetId, assetKind: r.assetKind, usedBy: [] });
