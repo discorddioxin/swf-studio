@@ -1,9 +1,10 @@
-// A small synthetic JPEXS-style XML dump + matching SVG assets, so the tool can
-// be tried (and the parser sanity-checked) without a real export at hand.
+// TEST FIXTURE ONLY. A small synthetic JPEXS-style XML dump with matching SVG
+// assets and one external ActionScript file, used by the component tests.
+// The application never imports this file, and it is not part of the build.
 
 function mkFile(path: string, content: string, type: string): File {
   const f = new File([content], path.split('/').pop()!, { type });
-  Object.defineProperty(f, 'webkitRelativePath', { value: 'demo_assets/' + path, configurable: true });
+  Object.defineProperty(f, 'webkitRelativePath', { value: 'fixture_dump/' + path, configurable: true });
   return f;
 }
 
@@ -28,7 +29,7 @@ const M = (a: number, b: number, c: number, d: number, tx: number, ty: number) =
 // Real decompiled ActionScript for sprite 10, frame 13 (0-based index 12), so
 // the Code Inspector has real methods, members, and code→asset relationships to
 // index. Lives at the exact path JPEXS emits for a frame-scoped script.
-const DEMO_ACTION_SCRIPT = `// Decompiled from SWF p-code (frame 13) — class HeroBall
+const FIXTURE_ACTION_SCRIPT = `// Decompiled from SWF p-code (frame 13) — class HeroBall
 var heroBall = this;
 this.velocity = 0;
 this.bouncePower = 0.5;
@@ -100,7 +101,7 @@ function rootFrames() {
 }
 
 const XML = `<?xml version="1.0" encoding="UTF-8"?>
-<swf type="SWF" _xmlExportMajor="2" _xmlExportMinor="2" _generator="Demo" version="10" frameRate="24" frameCount="48">
+<swf type="SWF" _xmlExportMajor="2" _xmlExportMinor="2" _generator="Fixture" version="10" frameRate="24" frameCount="48">
   <displayRect type="RECT" Xmax="11000" Xmin="0" Ymax="8000" Ymin="0"/>
   <tags>
     <item type="DefineShapeTag" shapeId="1">
@@ -128,12 +129,12 @@ const XML = `<?xml version="1.0" encoding="UTF-8"?>
   </tags>
 </swf>`;
 
-export function demoFiles(): File[] {
+export function fixtureFiles(): File[] {
   return [
-    mkFile('demo.xml', XML, 'text/xml'),
+    mkFile('fixture.xml', XML, 'text/xml'),
     mkFile('shapes/1.svg', circle, 'image/svg+xml'),
     mkFile('shapes/2.svg', bar, 'image/svg+xml'),
     mkFile('shapes/3.svg', star, 'image/svg+xml'),
-    mkFile('scripts/DefineSprite_10/frame_13/DoAction.as', DEMO_ACTION_SCRIPT, 'text/plain'),
+    mkFile('scripts/DefineSprite_10/frame_13/DoAction.as', FIXTURE_ACTION_SCRIPT, 'text/plain'),
   ];
 }

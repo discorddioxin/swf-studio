@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { hydrateActionScriptSources, ingestFiles } from '../../lib/assets';
 import { analyzeCode } from '../../lib/codeInspector';
-import { demoFiles } from '../../lib/demo';
+import { fixtureFiles } from './fixtures/jpexsDump';
 import { parseSwfXml } from '../../lib/parser';
 import { emptyProject } from '../../lib/project';
 import type { AssetBundle, SwfDocument } from '../../types';
@@ -27,8 +27,8 @@ beforeAll(() => {
 });
 afterEach(cleanup);
 
-async function loadDemo(scriptOverride?: string): Promise<{ bundle: AssetBundle; doc: SwfDocument }> {
-  let files = demoFiles();
+async function loadFixture(scriptOverride?: string): Promise<{ bundle: AssetBundle; doc: SwfDocument }> {
+  let files = fixtureFiles();
   if (scriptOverride != null) {
     files = files.map((f) => (f.name === 'DoAction.as'
       ? Object.defineProperty(new File([scriptOverride], f.name), 'webkitRelativePath', { value: f.webkitRelativePath })
@@ -42,12 +42,12 @@ async function loadDemo(scriptOverride?: string): Promise<{ bundle: AssetBundle;
 
 /** Buttons whose text matches (accessible-name queries are slow in jsdom). */
 const buttons = (re: RegExp) => [...document.querySelectorAll('button')].filter((b) => re.test(b.textContent ?? ''));
-const api = () => ({ project: emptyProject('demo') }) as never;
+const api = () => ({ project: emptyProject('fixture') }) as never;
 
 describe('CodeInspectorView (Code workspace)', () => {
-  it('indexes the demo script once and navigates to callers with real lines', async () => {
-    const { bundle, doc } = await loadDemo();
-    render(<CodeInspectorView doc={doc} assets={bundle} project={emptyProject('demo')} />);
+  it('indexes the fixture script once and navigates to callers with real lines', async () => {
+    const { bundle, doc } = await loadFixture();
+    render(<CodeInspectorView doc={doc} assets={bundle} project={emptyProject('fixture')} />);
     fireEvent.click(await screen.findByText('symbols'));
     await waitFor(() => expect(buttons(/^ƒbounce\d+ refs$/)).toHaveLength(1)); // CI-15: not duplicated
     fireEvent.click(buttons(/^ƒbounce\d+ refs$/)[0]);
@@ -56,11 +56,11 @@ describe('CodeInspectorView (Code workspace)', () => {
   });
 
   it('does not crash on a symbol named toString (CI-05)', async () => {
-    const { bundle, doc } = await loadDemo();
+    const { bundle, doc } = await loadFixture();
     doc.timelines.get('root')!.frames[0].events.push({
       kind: 'action', tagType: 'DoActionTag', detail: 'function toString() {\n  return "hero";\n}\nfunction a() { toString(); }',
     } as never);
-    render(<CodeInspectorView doc={doc} assets={bundle} project={emptyProject('demo')} />);
+    render(<CodeInspectorView doc={doc} assets={bundle} project={emptyProject('fixture')} />);
     fireEvent.click(await screen.findByText('symbols'));
     await waitFor(() => expect(buttons(/^ƒtoString1 refs$/)).toHaveLength(1));
     // Root frame 1 must keep its own code once external scripts have loaded
@@ -73,8 +73,8 @@ describe('CodeInspectorView (Code workspace)', () => {
 
 describe('CodePanel (Inspector › Code)', () => {
   it('never shows stale source when a new folder has a script at the same path (CI-12)', async () => {
-    const a = await loadDemo('var marker = "OLD_PROJECT";');
-    const b = await loadDemo('var marker = "NEW_PROJECT";');
+    const a = await loadFixture('var marker = "OLD_PROJECT";');
+    const b = await loadFixture('var marker = "NEW_PROJECT";');
     const { rerender, container } = render(<CodePanel doc={a.doc} timeline={a.doc.timelines.get('sprite:10')!} selectedId={null} api={api()} assets={a.bundle} />);
     fireEvent.click(screen.getByText('ActionScript'));
     await waitFor(() => expect(container.textContent).toContain('OLD_PROJECT'));
@@ -84,7 +84,7 @@ describe('CodePanel (Inspector › Code)', () => {
   });
 
   it('reports unreadable scripts instead of loading forever (CI-12)', async () => {
-    const a = await loadDemo();
+    const a = await loadFixture();
     a.bundle.files.find((f) => f.ext === 'as')!.file = { text: () => Promise.reject(new Error('permission denied')) } as never;
     const { container } = render(<CodePanel doc={a.doc} timeline={a.doc.timelines.get('sprite:10')!} selectedId={null} api={api()} assets={a.bundle} />);
     fireEvent.click(screen.getByText('ActionScript'));
@@ -93,7 +93,7 @@ describe('CodePanel (Inspector › Code)', () => {
   });
 
   it('reference chips select the asset by id (CI-17)', async () => {
-    const a = await loadDemo();
+    const a = await loadFixture();
     const onSelectAsset = vi.fn();
     render(<CodePanel doc={a.doc} timeline={a.doc.timelines.get('sprite:10')!} selectedId={null} api={api()} assets={a.bundle} onSelectAsset={onSelectAsset} />);
     fireEvent.click(buttons(/^Methods/)[0]);

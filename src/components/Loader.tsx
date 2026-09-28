@@ -23,8 +23,8 @@ async function readEntry(entry: FSEntry, prefix: string, out: File[]) {
   } while (batch.length);
 }
 
-export function Loader({ onFiles, busy, error, onDemo }: {
-  onFiles: (files: File[]) => void; busy?: string | null; error?: string | null; onDemo?: () => void;
+export function Loader({ onFiles, busy, error }: {
+  onFiles: (files: File[]) => void; busy?: string | null; error?: string | null;
 }) {
   const dirRef = useRef<HTMLInputElement>(null);
   const filesRef = useRef<HTMLInputElement>(null);
@@ -93,10 +93,9 @@ export function Loader({ onFiles, busy, error, onDemo }: {
                 [name].xml · shapes/ · morphshapes/ · images/ · buttons/ · sounds/ · texts/ · fonts/
               </p>
               <div className="mt-5 flex justify-center gap-2">
-                <Button variant="primary" onClick={() => dirRef.current?.click()}>＋ Add folder</Button>
+                <Button variant={queuedFiles.length ? 'default' : 'primary'} onClick={() => dirRef.current?.click()}>＋ Add folder</Button>
                 <Button onClick={() => filesRef.current?.click()}>＋ Add ZIPs</Button>
-                <Button variant="ghost" disabled={!queuedFiles.length} onClick={() => onFiles(queuedFiles)}>Load {queuedFiles.length ? `${queuedFiles.length} files` : 'selection'}</Button>
-                {onDemo && <Button onClick={onDemo}>Load demo dump</Button>}
+                <Button variant={queuedFiles.length ? 'primary' : 'ghost'} disabled={!queuedFiles.length} onClick={() => onFiles(queuedFiles)}>Load {queuedFiles.length ? `${queuedFiles.length} files` : 'selection'}</Button>
               </div>
             </>
           )}

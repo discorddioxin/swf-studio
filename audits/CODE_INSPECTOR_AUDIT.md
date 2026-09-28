@@ -306,6 +306,10 @@ The analyzer is still, as its header says, *"a heuristic index, not a compiler"*
 * **Client feedback.** Refusals arrive as an `error` packet and a close code. `peerNetwork.ts` shows them, and reports "connected" only after the server accepts the hello.
 * Covered by `server/engine-server.test.mjs` (8 tests against a live server on an ephemeral port). Documented in `server/README.md`.
 
+### 8.3a No mock data in the application
+
+The app used to ship a synthetic dump (`src/lib/demo.ts`: `demo.xml`, three SVG shapes and a `DoAction.as`) behind a **Load demo dump** button. That button sat next to **Load N files** on the start screen, so it was easy to replace an uploaded selection with data that was never uploaded. The module and the button are removed, and **Load N files** is now the primary action once files are queued. The dump survives only as a test fixture (`src/components/__tests__/fixtures/jpexsDump.ts`). The app never imports it, and `dist/index.html` contains none of its content. References to "the app's demo dump" earlier in this report describe the code as audited.
+
 ### 8.4 Still open
 
 * **`obj.x` for arbitrary objects.** Resolving a member on an object other than `this`/`_root`/`_global`/`_parent` needs type inference, which is beyond a heuristic index. Such accesses are still not tracked.

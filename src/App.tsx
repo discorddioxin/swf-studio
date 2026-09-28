@@ -10,7 +10,6 @@ import { TimelineView } from './components/TimelineView';
 import { GameEngine } from './components/GameEngine';
 import { Button } from './components/ui';
 import { AssetCache, expandUploadFiles, hydrateActionScriptSources, ingestFiles, patchButtonAssetIds } from './lib/assets';
-import { demoFiles } from './lib/demo';
 import { parseSwfXml } from './lib/parser';
 import { useProject } from './lib/project';
 import type { AssetBundle, FlattenedSprite, SwfDocument } from './types';
@@ -268,7 +267,7 @@ export default function App() {
   }, [doc]);
 
   if (!doc || !timeline || !cacheRef.current) {
-    return <Loader onFiles={load} busy={busy} error={error} onDemo={() => void load(demoFiles())} />;
+    return <Loader onFiles={load} busy={busy} error={error} />;
   }
 
   const cache = cacheRef.current;
