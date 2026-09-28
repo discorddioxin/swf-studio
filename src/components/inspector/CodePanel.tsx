@@ -12,6 +12,11 @@ import { scriptKey, useScriptTexts } from '../useScriptTexts';
 
 type TimelineEvent = Timeline['frames'][number]['events'][number];
 
+/** `actionBytes`-style attributes, or values that are nothing but hex bytes. */
+export function isBytecodeAttr(key: string, value: string): boolean {
+  return /bytes/i.test(key) || /^(?:[0-9a-f]{2}[\s,]*){4,}$/i.test(value.trim());
+}
+
 export function CodePanel({
   doc, timeline, selectedId, api, assets, onSelectAsset
 }: {
@@ -70,20 +75,22 @@ export function CodePanel({
     return lines.join('\n').trim();
   }, [timeline, externalTexts, failedScripts, assets]);
 
-  const charActions = useMemo(() => {
-    if (selectedId == null) return '';
+  // Character attributes that carry actions. Raw bytecode (`actionBytes`,
+  // hex dumps) is shown in the ActionScript view but is not source code, so it
+  // is kept away from the static analyzer.
+  const charActionAttrs = useMemo(() => {
+    if (selectedId == null) return [];
     const ch = doc.characters.get(selectedId);
-    if (!ch) return '';
-    const lines: string[] = [];
-    Object.entries(ch.attrs).forEach(([k, v]) => {
-      if (k.toLowerCase().includes('action') || k.toLowerCase().includes('bytes')) {
-        lines.push(`// Asset Attribute: ${k}`);
-        lines.push(v);
-        lines.push('');
-      }
-    });
-    return lines.join('\n').trim();
+    if (!ch) return [];
+    return Object.entries(ch.attrs)
+      .filter(([k]) => k.toLowerCase().includes('action') || k.toLowerCase().includes('bytes'))
+      .map(([k, v]) => ({ key: k, value: v, isBytecode: isBytecodeAttr(k, v) }));
   }, [doc, selectedId]);
+
+  const formatAttrs = (attrs: typeof charActionAttrs) =>
+    attrs.flatMap(({ key, value }) => [`// Asset Attribute: ${key}`, value, '']).join('\n').trim();
+  const charActions = useMemo(() => formatAttrs(charActionAttrs), [charActionAttrs]);
+  const charSource = useMemo(() => formatAttrs(charActionAttrs.filter((a) => !a.isBytecode)), [charActionAttrs]);
 
   const allASCode = useMemo(() => {
     const parts = [];
@@ -107,7 +114,7 @@ export function CodePanel({
         sources.push({ label: `Frame ${f.index + 1} · ${fileLabel}`, source: source?.text ?? e.detail });
       });
     });
-    if (charActions) sources.unshift({ label: `Character actions · ${selectedId != null ? `#${selectedId}` : timeline.name}`, source: charActions });
+    if (charSource) sources.unshift({ label: `Character actions · ${selectedId != null ? `#${selectedId}` : timeline.name}`, source: charSource });
     // Two actions on one frame (e.g. DoAction + DoInitAction without files)
     // would otherwise share a label; labels are user-facing, so disambiguate.
     const seen = new Map<string, number>();
@@ -116,7 +123,7 @@ export function CodePanel({
       seen.set(s.label, n);
       return n > 1 ? { ...s, label: `${s.label} (${n})` } : s;
     });
-  }, [timeline, externalTexts, assets, charActions, selectedId]);
+  }, [timeline, externalTexts, assets, charSource, selectedId]);
 
   const assetDescriptors = useMemo(() => buildAssetDescriptors(doc, api.project), [doc, api.project]);
 

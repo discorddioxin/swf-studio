@@ -7,7 +7,7 @@
 | **Branch** | `arena/01a0e624-swf-studio` |
 | **Date** | 2026-09-28 |
 | **Scope** | Everything behind the two "Code Inspector" surfaces, plus the code that feeds them |
-| **Status** | All 22 findings below are **fixed** on this branch and covered by tests. Remaining limitations are listed in §6 |
+| **Status** | All 23 findings are **fixed** and covered by tests. The §6 limitations and §7 observations were resolved in a follow-up pass (§8). What still remains is listed in §8.4 |
 
 ---
 
@@ -206,6 +206,11 @@ The same 14-line block building asset names lived in `CodePanel` and `CodeInspec
 
 ---
 
+### CI-23 · High · Frame-script resolver matched folders by substring (found in the follow-up pass)
+`resolveActionScriptFile` tested `path.includes('frame_1')`, which also matches `frame_10`–`frame_19`. `definesprite_1` likewise matched `definesprite_10`. The main timeline also accepted scripts from sprite folders. In the demo, main-timeline frame 1 was silently replaced by sprite 10's `frame_13/DoAction.as` once external scripts loaded. The documented `DoInitAction.as`-first preference for init actions was ignored too: the first file in folder order won. This was masked in the original UI check because the check ran before the file finished loading. **Fix:** match whole path segments, exclude `define*` folders for the main timeline, and rank candidates by preference. Covered by two `assets.test.ts` cases and the committed UI test.
+
+---
+
 ## 4. Changes by file
 
 | File | Change |
@@ -243,7 +248,9 @@ The same 14-line block building asset names lived in `CodePanel` and `CodeInspec
 
 ---
 
-## 6. Remaining limitations (by design / not fixed)
+## 6. Remaining limitations (as originally reported)
+
+> **All resolved. See §8.1.** Kept as written for traceability.
 
 The analyzer is still, as its header says, *"a heuristic index, not a compiler"*:
 
@@ -256,10 +263,65 @@ The analyzer is still, as its header says, *"a heuristic index, not a compiler"*
 
 ---
 
-## 7. Observations outside scope (not changed)
+## 7. Observations outside scope (as originally reported)
+
+> **All resolved. See §8.2–§8.3.** Kept as written for traceability.
+
 
 * **No React error boundary** around the workspaces: any render error (as in CI-05) unmounts the whole app. Recommend a boundary per workspace.
 * **Component tests:** the UI checks in §5 used `jsdom` + `@testing-library/react`, installed temporarily with `--no-save`. Adding them as devDependencies would let those scenarios run in CI; I left that decision to the maintainers.
 * `vitest` is listed under `dependencies` rather than `devDependencies`, and the package is still named `react-vite-tailwind`.
 * `DECOMPOSITION_SPEC.md` repeats its "Phase 1" and rules sections; phases 3–8 (Label/Frame/Actor/Clips/Export panels) are still pending.
 * `server/engine-server.mjs`: `userId` is taken from the client unchecked, so users can impersonate each other within a room. The number of rooms and clients per room is unbounded; there is no auth or rate limit (payloads are capped at 64 KB).
+
+---
+
+## 8. Follow-up: resolution of §6 and §7
+
+### 8.1 Analyzer limitations (§6)
+
+| Limitation | Resolution | Test |
+|---|---|---|
+| Regex literals not masked | The masker recognises regex literals from the previous significant token (`startsRegex`: after an operator, `(`, `,`, `=`, `return`, `typeof`, …, but not after an identifier, `)` or `]`, so division is safe). Bodies, including character classes, are blanked in the code view and kept in the text view | `former limitations (audit §6)` in `codeInspector.test.ts` |
+| `var a = 1, b = 2;` indexed only `a` | Declarations are split at top-level commas (`splitTopLevel`, bracket- and string-aware) across the statement's full extent. This also covers `this.a = 1, this.b = 2` and multi-line initialisers. Each member's refs come from its own initialiser | same |
+| Name resolution by name, not scope | Each method now carries `locals`: parameters, `var`/`let`/`const` (including `for (var …)` and `catch (e)`), plus the locals of enclosing functions. Bare names that shadow a member or method are not recorded as references. `this.x`, `_root.x`, `_global.x`, `_parent.x` and `_levelN.x` always resolve to the member | same |
+| Only the first usage line per edge | Edges keep every line (`lines`, sorted and de-duplicated; `fromLine = lines[0]`). The UI shows `L3, 9, 12 +4` in relationship rows and `line (×n)` in the Code workspace | same, plus the UI test *shows every usage line* |
+| `bytes` attributes analysed | `isBytecodeAttr` (key contains `bytes`, or the value is ≥4 hex byte pairs) keeps bytecode out of the analyzer. The attributes are still shown in the panel | UI test *keeps raw bytecode attributes out* |
+| Source index not reset on timeline change | The selection is stored with a key derived from the source ids. A different source list clears it, while re-analysis of the same list (a script finishing loading) keeps it | UI test *clears the selected source …* |
+
+### 8.2 Engineering observations (§7)
+
+* **Error boundaries.** `src/components/ErrorBoundary.tsx` wraps each workspace in `App.tsx` and each Inspector tab. It shows the error with a *Try again* button and resets automatically when the document, workspace, tab or selection changes. A failure in one panel no longer unmounts the app.
+* **Component tests committed.** `jsdom`, `@testing-library/react` and `@testing-library/dom` are devDependencies. `src/components/__tests__/codeInspector.ui.test.tsx` holds 11 tests: the six §5 scenarios, the §6 UI behaviours, CI-23 and the error boundary. The Vitest include now covers `src/**/*.test.{ts,tsx}` and `server/**/*.test.{ts,mjs}`.
+* **Packaging.** `vitest` moved to devDependencies and the package is renamed `swf-studio`. `ws` stays a runtime dependency because the server needs it.
+* **Decomposition.** `DECOMPOSITION_SPEC.md` is de-duplicated and marked complete. `Inspector.tsx` is now a 78-line tab switcher over `src/components/inspector/*` (Label, Frame, Clips, Actor, Code, Export panels plus shared helpers).
+
+### 8.3 Room server (§7)
+
+`server/engine-server.mjs` now exports `createEngineServer(options)` and still runs directly with `node`:
+
+* **Impersonation.** The user id must match `[A-Za-z0-9_.:-]{1,64}` and be unique within a room. A second claim is refused (`4009`) unless it carries the same private session key, which only the owning tab has. That case is a reconnect and replaces the stale socket (`4010`). Relayed packets always use the server-side id.
+* **Auth.** The `ROOM_TOKEN` shared secret is compared in constant time on SHA-256 digests (`4001`). The client has a token field that is stored in `sessionStorage` only.
+* **Resource limits.** `MAX_CONNECTIONS`, `MAX_ROOMS` (`1013`), `MAX_CLIENTS_PER_ROOM` (`4003`), a hello deadline (`4004`), a per-connection token-bucket rate limit with disconnect after sustained abuse (`4008`), bounded `bindings`, and a ping/pong heartbeat.
+* **Client feedback.** Refusals arrive as an `error` packet and a close code. `peerNetwork.ts` shows them, and reports "connected" only after the server accepts the hello.
+* Covered by `server/engine-server.test.mjs` (8 tests against a live server on an ephemeral port). Documented in `server/README.md`.
+
+### 8.4 Still open
+
+* **`obj.x` for arbitrary objects.** Resolving a member on an object other than `this`/`_root`/`_global`/`_parent` needs type inference, which is beyond a heuristic index. Such accesses are still not tracked.
+* **`TokenLine` highlighting** in the viewers tokenises each line independently. Keywords inside multi-line comments or strings may be highlighted. This is cosmetic; the analysis itself uses the masked code.
+* The token-based room auth is a shared secret, not per-user accounts, and needs TLS (`wss://`) to be meaningful over the internet.
+
+### 8.5 Verification
+
+`npx tsc --noEmit`: clean. `npm test`: **68 tests in 5 files**, all passing:
+
+| File | Tests |
+|---|---|
+| `codeInspector.test.ts` | 31 |
+| `codeInspector.ui.test.tsx` | 11 |
+| `engine-server.test.mjs` | 8 |
+| `clock.test.ts` | 13 |
+| `assets.test.ts` | 5 |
+
+`npm run build`: succeeds.

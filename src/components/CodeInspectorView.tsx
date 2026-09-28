@@ -3,6 +3,7 @@ import { resolveActionScriptFile } from '../lib/assets';
 import { analyzeCodebase, buildAssetDescriptors, type CodebaseAnalysis, type RefEdge } from '../lib/codeInspector';
 import type { AssetBundle, AssetFile, Project, SwfDocument } from '../types';
 import { cn } from '../utils/cn';
+import { formatLines } from './CodeInspector';
 import { inputCls } from './ui';
 import { scriptKey, useScriptTexts } from './useScriptTexts';
 
@@ -273,7 +274,7 @@ function ReferencesList({ refs, sourceById, onSelectSymbol, onSelectAsset }: {
             {r.via === 'asset'
               ? <button className="shrink-0 font-mono text-amber-300 hover:underline" onClick={() => onSelectAsset(r.toName)}>{r.toName}</button>
               : <button className="shrink-0 truncate font-mono text-emerald-300 hover:underline" onClick={() => onSelectSymbol(r.toName, r.fromSourceId)}>{r.toName}</button>}
-            <span className="ml-auto shrink-0 text-[9px] text-zinc-700">{fromSrc ? shortLabel(fromSrc.label).split('·')[0].trim() : ''}:{r.fromLine}</span>
+            <span className="ml-auto shrink-0 text-[9px] text-zinc-700">{fromSrc ? shortLabel(fromSrc.label).split('·')[0].trim() : ''}:{r.lines.length > 1 ? `${r.fromLine} (×${r.lines.length})` : r.fromLine}</span>
           </div>
         );
       })}
@@ -408,7 +409,7 @@ function ReferencesPanel({ analysis, selectedSymbol, onSelectSymbol, onSelectAss
                   return (
                     <button key={r.id} onClick={() => (s.asset ? onSelectAsset(target) : onSelectSymbol(target, s.dir === 'in' ? r.fromSourceId : undefined))} className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-[11px] hover:bg-zinc-900">
                       <span className={cn('shrink-0 font-mono', s.asset ? 'text-amber-300' : 'text-emerald-300')}>{target}</span>
-                      <span className="ml-auto shrink-0 text-[9px] text-zinc-600">L{r.fromLine}{s.dir === 'in' ? ` → ${selectedSymbol}` : ''}</span>
+                      <span className="ml-auto shrink-0 text-[9px] text-zinc-600" title={`Lines ${r.lines.join(', ')}`}>{formatLines(r.lines)}{s.dir === 'in' ? ` → ${selectedSymbol}` : ''}</span>
                     </button>
                   );
                 })}

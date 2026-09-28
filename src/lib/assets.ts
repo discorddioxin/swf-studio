@@ -184,21 +184,28 @@ export function resolveActionScriptFile(
 
   const frame = frameIndex + 1;
   const initFirst = /InitAction/i.test(tagType);
-  const names = initFirst
-    ? new Set(['doinitaction.as', 'doaction.as'])
-    : new Set(['doaction.as', 'doinitaction.as']);
+  const preference = initFirst ? ['doinitaction.as', 'doaction.as'] : ['doaction.as', 'doinitaction.as'];
   const spriteTokens = timeline.characterId == null
     ? []
     : [`definesprite_${timeline.characterId}`, `definespritetag_${timeline.characterId}`];
   const frameToken = `frame_${frame}`;
 
+  // Match whole path segments: a substring test made `frame_1` match
+  // `frame_13` and `definesprite_1` match `definesprite_10`, so frame 1 of
+  // the main timeline picked up sprite 10's frame-13 script.
   const scripts = bundle.files.filter((file) => {
     const path = normalizeAssetPath(file.path);
+    const segments = path.split('/');
     const base = `${file.name}.${file.ext}`.toLowerCase();
-    if (file.ext !== 'as' || !path.includes('scripts/')) return false;
-    if (!names.has(base) || !path.includes(frameToken)) return false;
-    return timeline.characterId == null || spriteTokens.some((token) => path.includes(token));
+    if (file.ext !== 'as' || !segments.includes('scripts')) return false;
+    if (!preference.includes(base) || !segments.includes(frameToken)) return false;
+    if (timeline.characterId == null) {
+      // Main timeline: never a script that belongs to a sprite/button definition.
+      return !segments.some((segment) => /^define/.test(segment));
+    }
+    return spriteTokens.some((token) => segments.includes(token));
   });
+  scripts.sort((a, b) => preference.indexOf(`${a.name}.${a.ext}`.toLowerCase()) - preference.indexOf(`${b.name}.${b.ext}`.toLowerCase()));
 
   return scripts[0];
 }

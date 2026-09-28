@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CodeInspectorView } from './components/CodeInspectorView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { ExecuteTab } from './components/ExecuteTab';
 import { Inspector } from './components/Inspector';
 import { Loader } from './components/Loader';
@@ -15,6 +16,14 @@ import { useProject } from './lib/project';
 import type { AssetBundle, FlattenedSprite, SwfDocument } from './types';
 import { flattenSpriteToPng } from './lib/render';
 import { cn } from './utils/cn';
+
+type Workspace = 'workbench' | 'engine' | 'code' | 'execute';
+const WORKSPACE_LABEL: Record<Workspace, string> = {
+  workbench: 'Workbench',
+  engine: 'Game Engine',
+  code: 'Code Inspector',
+  execute: 'Execute',
+};
 
 function RailButton({ active, label, onClick, children }: { active: boolean; label: string; onClick: () => void; children: ReactNode }) {
   return (
@@ -62,7 +71,7 @@ export default function App() {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [audio, setAudio] = useState(false);
   const [startFrame, setStartFrame] = useState(1);
-  const [workspace, setWorkspace] = useState<'workbench' | 'engine' | 'code' | 'execute'>('workbench');
+  const [workspace, setWorkspace] = useState<Workspace>('workbench');
   const [showLibrary, setShowLibrary] = useState(true);
   const [showInspector, setShowInspector] = useState(false);
   const [showTimeline, setShowTimeline] = useState(true);
@@ -346,6 +355,7 @@ export default function App() {
         </div>
       </div>
 
+      <ErrorBoundary label={WORKSPACE_LABEL[workspace]} resetKeys={[doc, workspace]} className="flex min-h-0 flex-1 items-center justify-center p-4">
       {workspace === 'execute' ? (
         <ExecuteTab doc={doc} cache={cache} />
       ) : workspace === 'engine' ? (
@@ -468,6 +478,7 @@ export default function App() {
         </div>}
       </div>
       )}
+      </ErrorBoundary>
     </div>
   );
 }

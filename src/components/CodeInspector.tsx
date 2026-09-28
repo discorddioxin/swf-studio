@@ -19,8 +19,14 @@ export function CodeInspector({ analysis, onSelectAsset }: {
   const [search, setSearch] = useState('');
   const [expandedMethod, setExpandedMethod] = useState<string | null>(null);
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
-  // Index into analysis.sources — labels are not guaranteed to be unique.
-  const [activeSourceIdx, setActiveSourceIdx] = useState<number | null>(null);
+  // Index into analysis.sources (labels are not guaranteed to be unique). The
+  // selection is tied to the list it was made in: switching timeline/character
+  // yields a different list and clears it, while re-analysis of the same list
+  // (e.g. an external script finishing loading) keeps it.
+  const sourcesKey = analysis.sources.map((s) => s.label).join('\n');
+  const [selection, setSelection] = useState<{ key: string; idx: number } | null>(null);
+  const activeSourceIdx = selection?.key === sourcesKey ? selection.idx : null;
+  const setActiveSourceIdx = (idx: number) => setSelection({ key: sourcesKey, idx });
   const activeSource = activeSourceIdx != null ? analysis.sources[activeSourceIdx] : undefined;
 
   const q = search.trim().toLowerCase();
@@ -237,7 +243,7 @@ function Relationships({ analysis, filtered, filtering, onSelectAsset }: {
               <div key={i} className="flex items-center gap-2 rounded bg-zinc-950/40 px-1.5 py-0.5 text-[10px]">
                 <span className="shrink-0 rounded border border-violet-500/30 bg-violet-500/10 px-1 text-[9px] text-violet-300">{r.codeType}</span>
                 <span className="truncate font-mono text-zinc-200">{r.codeName}</span>
-                <span className="ml-auto shrink-0 text-zinc-600">{r.via} · {r.sourceLabel} L{r.line}</span>
+                <span className="ml-auto shrink-0 text-zinc-600" title={`Lines ${r.lines.join(', ')}`}>{r.via} · {r.sourceLabel} {formatLines(r.lines)}</span>
               </div>
             ))}
           </div>
@@ -248,4 +254,9 @@ function Relationships({ analysis, filtered, filtering, onSelectAsset }: {
   );
 }
 
-
+/** `L3`, `L3, 9, 12`, or `L3, 9, 12 +4` for long lists. */
+export function formatLines(lines: number[], max = 3): string {
+  if (!lines.length) return '';
+  const shown = lines.slice(0, max).join(', ');
+  return `L${shown}${lines.length > max ? ` +${lines.length - max}` : ''}`;
+}

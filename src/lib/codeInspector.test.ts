@@ -185,7 +185,7 @@ describe('analyzeCodebase', () => {
     expect(a.references).toEqual([
       expect.objectContaining({ fromName: 'f', toKind: 'asset', toName: 'heroBall', assetId: 7, fromLine: 2 }),
     ]);
-    expect(a.assetIndex.heroBall.usedBy).toEqual([{ fromName: 'f', fromSourceId: 's1', line: 2 }]);
+    expect(a.assetIndex.heroBall.usedBy).toEqual([{ fromName: 'f', fromSourceId: 's1', line: 2, lines: [2] }]);
   });
 
   it('scales linearly on large sources (CI-10)', () => {
@@ -195,6 +195,76 @@ describe('analyzeCodebase', () => {
     expect(a.counts.methods).toBe(3000);
     // Previously ~2.5s due to O(n) line lookups; now well under a second.
     expect(performance.now() - t0).toBeLessThan(1000);
+  });
+});
+
+describe('former limitations (audit §6)', () => {
+  it('masks regex literals so quotes/braces inside them do not derail parsing (L-1)', () => {
+    const src = 'function a(s) {\n  var r = /["{]/g;\n  heroBall.play();\n}\nfunction b() {\n  return x / 2 / y;\n}\nfunction c() {}';
+    const a = one(src);
+    expect(a.methods.map((m) => [m.name, m.startLine, m.endLine, m.assetRefs])).toEqual([
+      ['a', 1, 4, ['heroBall']],
+      ['b', 5, 7, []],
+      ['c', 8, 8, []],
+    ]);
+  });
+
+  it('keeps division working next to regex detection', () => {
+    expect(edges('var total = 1;\nvar n = 2;\nfunction avg() {\n  return total / n;\n}')).toEqual([
+      'avg-read->total@4', 'avg-read->n@4',
+    ]);
+  });
+
+  it('indexes every declarator of a multi-declaration (L-2)', () => {
+    const a = one('var a = 1, b:Number = f(1, 2), c;\nconst X = 1, Y = [1, 2]; var ignored = 3;');
+    expect(a.members.map((m) => [m.name, m.kind, m.value])).toEqual([
+      ['a', 'var', '1'], ['b', 'var', 'f(1, 2)'], ['c', 'var', ''],
+      ['X', 'const', '1'], ['Y', 'const', '[1, 2]'],
+    ]);
+  });
+
+  it('attributes initializer references to the right declarator', () => {
+    expect(edges('var a = 1, b = a + 1;')).toEqual(['b-read->a@1']);
+  });
+
+  it('resolves names by scope: params, locals, catch vars and closures shadow members (L-3)', () => {
+    const src = [
+      'var hp = 10;',
+      'var speed = 1;',
+      'function heal(hp) {',            // param shadows member
+      '  return hp + 1;',
+      '}',
+      'function loop() {',
+      '  for (var i = 0, speed = 2; i < 3; i++) {}',   // local shadows member
+      '  try {} catch (hp) { trace(hp); }',
+      '  var tick = function() { speed++; };',        // closure sees outer local
+      '  return this.hp;',                             // explicit member access
+      '}',
+      'function hurt() {',
+      '  hp -= 1;',
+      '}',
+    ].join('\n');
+    expect(edges(src)).toEqual(['loop-read->hp@10', 'hurt-read->hp@13', 'hurt-write->hp@13']);
+  });
+
+  it('a local shadows a method of the same name', () => {
+    expect(edges('function jump() {}\nfunction run(jump) {\n  jump();\n}\nfunction go() {\n  jump();\n}')).toEqual(['go-call->jump@6']);
+  });
+
+  it('resolves _root/_global/_parent member access like this.x (L-3)', () => {
+    expect(edges('var score = 0;\nfunction a() {\n  _root.score += 5;\n  _global.score = 1;\n  enemy.score = 2;\n}')).toEqual([
+      'a-read->score@3', 'a-write->score@3',
+    ]);
+  });
+
+  it('records every usage line of an edge, not just the first (L-4)', () => {
+    const a = base('var hp = 1;\nfunction f() {\n  hp = 2;\n  trace(1);\n  hp = 3;\n  heroBall.play();\n  heroBall.stop();\n}');
+    const write = a.references.find((r) => r.via === 'write')!;
+    expect([write.fromLine, write.lines]).toEqual([3, [3, 5]]);
+    const asset = a.references.find((r) => r.via === 'asset')!;
+    expect(asset.lines).toEqual([6, 7]);
+    const rel = one('function f() {\n  heroBall.play();\n\n  heroBall.stop();\n}').relationships[0];
+    expect([rel.line, rel.lines]).toEqual([2, [2, 4]]);
   });
 });
 
