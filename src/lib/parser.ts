@@ -100,6 +100,7 @@ class Parser {
   unknown: Record<string, number> = {};
   tagCount = 0;
   classNames = new Map<number, string>();
+  backgroundColor: number | undefined;
   exportNames = new Map<number, string>();
 
   detectNumberFormat(doc: Document) {
@@ -608,6 +609,11 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
       if (type === 'SymbolClassTag' || type === 'ExportAssetsTag') {
         readSymbolClass(P, t, type === 'SymbolClassTag');
       }
+      if (type === 'SetBackgroundColorTag') {
+        const c = t.querySelector('backgroundColor') ?? t.firstElementChild;
+        const ch = (k: string) => Math.max(0, Math.min(255, Number(c?.getAttribute(k) ?? 0) || 0));
+        if (c) P.backgroundColor = (ch('red') << 16) | (ch('green') << 8) | ch('blue');
+      }
       const kids = tagChildren(t);
       if (kids.length) walk(t, depthGuard + 1);
     }
@@ -654,7 +660,11 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
       frameCount: root.frameCount,
       stage,
       fileName: opts.fileName,
+      backgroundColor: P.backgroundColor,
     },
+    // Full SymbolClass table, including id 0 (the document class), which
+    // has no character to hang a className on.
+    symbolClasses: new Map(P.classNames),
     characters: P.characters,
     timelines: P.timelines,
     root,

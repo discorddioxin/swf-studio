@@ -115,6 +115,8 @@ export interface SwfHeader {
   stage: Rect;
   compression?: string;
   fileName: string;
+  /** SetBackgroundColor, 0xRRGGBB */
+  backgroundColor?: number;
 }
 
 export interface SwfDocument {
@@ -122,6 +124,8 @@ export interface SwfDocument {
   characters: Map<number, SwfCharacter>;
   timelines: Map<string, Timeline>;
   root: Timeline;
+  /** SymbolClass table: character id → AS3 class name (id 0 = document class). */
+  symbolClasses?: Map<number, string>;
   warnings: string[];
   stats: { tags: number; unknownTags: Record<string, number> };
 }
