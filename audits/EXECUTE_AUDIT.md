@@ -6,8 +6,8 @@
 | **Branch / commit audited** | `arena/01a0e624-swf-studio` @ `c1d799b` |
 | **Date** | 2026-09-28 |
 | **Scope** | The Execute workspace end to end: `ExecuteTab.tsx`, `src/engine/*`, and the parts of the parser, asset loader and renderer the runtime depends on |
-| **Evidence** | 23 executable probes in `audits/probes/execute.probe.test.tsx`, run against the real modules and components |
-| **Status** | Investigation only. No engine code was changed |
+| **Evidence** | 23 executable probes run against the real modules and components (results in §8; the probe files are in the history at `20a9f73`) |
+| **Status** | Investigation at `c1d799b`. **Resolved** by the AS3 engine, see §9 |
 
 ---
 
@@ -349,3 +349,52 @@ Which path fits depends on something this audit cannot see: **whether the game i
  ✓ EX-23 Export TS references undeclared symbols and ships AS as comments
  Tests  23 passed (23)
 ```
+
+---
+
+## 9. Resolution
+
+The game is ActionScript 3, and its code arrives already transpiled to
+TypeScript. Ruffle was ruled out. So Option A (emulator) and the AVM1 options
+(B/C) are replaced by a fourth option: **run the transpiled classes natively on
+an implementation of the AS3 `flash.*` API**, driven by the timelines and
+SymbolClass linkage in the JPEXS dump. It lives in `src/engine/flash/`. The
+design, contract and limits are documented in `src/engine/flash/README.md`.
+
+The scaffold the audit examined (`engine/runtime.ts`, `scope.ts`,
+`decompiler.ts`, `types.ts`, `clock.ts`) was deleted, and `ExecuteTab.tsx` was
+rewritten on top of the new player. The probes asserted the old behaviour, so
+they were retired with it. They remain in the history at `20a9f73`. The new
+behaviour is covered by `src/engine/flash/__tests__/player.test.ts`, which runs
+a JPEXS dump plus transpiled TS classes through the real parser, loader and
+player, and by `src/components/__tests__/executeTab.ui.test.tsx`, which plays
+the same game through the Execute tab's DOM.
+
+| ID | Resolution |
+|---|---|
+| EX-01 | The player renders the display list every animation frame (`FlashPlayer.render`), letterboxed to the panel |
+| EX-02 | Frame scripts run: `addFrameScript` scripts are queued when a clip enters a frame and run in the AVM2 order (§ README "Frame order"), and a goto runs its target script immediately |
+| EX-03 | The header shows the root's live `currentFrame`, `totalFrames`, label and player time |
+| EX-04 | Play and Pause use a single source of truth (`playingRef`), and the game starts playing |
+| EX-05 | **Step** pauses and runs exactly one frame, including timers due in that frame |
+| EX-06 | **Restart** disposes the player and builds a fresh one (fresh modules, stage and timers) |
+| EX-07 | Resizing only changes the view transform. The player survives |
+| EX-08 | Keyboard (focused canvas → `stage.focus` or stage) and mouse (picking, over/out/roll/down/up/click, drag) reach the game |
+| EX-09 | The game's own code executes: the TS is compiled in the browser with sucrase, and imports are resolved to the engine and to the other game files |
+| EX-10 | `play`, `stop`, `gotoAndPlay`, `gotoAndStop`, `nextFrame` and `prevFrame` drive real per-clip playheads |
+| EX-11, EX-12, EX-13 | Superseded: these were AS2-scope defects in the deleted scope shim. AS3 code now runs as real classes against a real API (`parent`, `root`, `stage`, fields, methods) |
+| EX-14 | `x`/`y`/`scaleX`/`rotation`/`width`/…, `hitTestObject`/`hitTestPoint` and `currentFrame` are real |
+| EX-15, EX-16, EX-25 | Superseded for AS3: `on()`/`onClipEvent()` are AS2-only. AS3 handlers are `addEventListener` calls in the transpiled code, which work |
+| EX-17 | AS3 no longer needs an AVM2: the `DoABC` bytecode is replaced by the transpiled classes, linked through SymbolClass (now parsed completely, including the document class, id 0) |
+| EX-18, EX-20 | Superseded: the inline-bytecode fallback no longer feeds execution, and `engine/decompiler.ts` was deleted. The fallback remains a read-only listing in the Code tab |
+| EX-19 | Fixed in `lib/parser.ts` (the word order of SWF doubles), with a test in `lib/parser.symbols.test.ts` |
+| EX-21 | Every MovieClip keeps its own playhead and live children, reconciled from the dump's per-frame snapshots |
+| EX-22 | `SimpleButton` switches between up, over and down, and hit-tests with its hit state |
+| EX-23 | **Export TS** was removed. The Code tab's TypeScript generator now emits an AS3-style `MovieClip` class for the engine (labels, clip ranges, `addFrameScript` stubs with the original ActionScript), and a test compiles and runs it |
+| EX-24 | The misleading engine files were deleted |
+| EX-26 | Timeline `StartSound` and linked `Sound` classes play the exported sound files (they can be muted) |
+| EX-27 | The stage is scaled to fit the panel and centred |
+
+Remaining limits (bounding-box hit tests, no tint/filter rendering, device
+fonts and so on) are listed in the README.
+

@@ -11,6 +11,9 @@ import { CodeInspector } from '../CodeInspector';
 import { CodeInspectorView } from '../CodeInspectorView';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { CodePanel, isBytecodeAttr } from '../inspector/CodePanel';
+import { compileSources, linkProgram } from '../../engine/flash/loader';
+import { FlashPlayer } from '../../engine/flash/player';
+import { MovieClip } from '../../engine/flash/display';
 
 beforeAll(() => {
   // jsdom's Blob has no text(); the app relies on it for .as files.
@@ -173,3 +176,36 @@ describe('ErrorBoundary (§7)', () => {
     spy.mockRestore();
   });
 });
+
+describe('CodePanel TypeScript tab', () => {
+  it('generates a class that compiles and runs on the AS3 engine, linked to its symbol', async () => {
+    const { bundle, doc } = await loadFixture();
+    const { container } = render(<CodePanel doc={doc} timeline={doc.timelines.get('sprite:10')!} selectedId={10} api={api()} assets={bundle} />);
+    fireEvent.click(screen.getByText('TypeScript'));
+    const source = await waitFor(() => {
+      const text = [...container.querySelectorAll('pre')].map((p) => p.textContent ?? '').find((t) => t.includes('extends MovieClip'));
+      expect(text).toBeTruthy();
+      return text!;
+    });
+    expect(source).toContain("from 'flash/display/MovieClip'");
+    expect(source).not.toContain('game-engine');
+    expect(source).toContain('"bounce_start": 1');
+    expect(source).toContain('12, this.frame13');
+
+    const program = linkProgram(compileSources([{ path: 'gen/HeroBall.ts', text: source }]));
+    expect(program.errors).toEqual([]);
+    const player = new FlashPlayer({ doc, program });
+    try {
+      expect(player.linkage.find((l) => l.id === 10)).toMatchObject({ className: 'HeroBall', linked: true });
+      player.start();
+      const hero = (player.root as MovieClip).getChildByName('hero') as MovieClip & { playClip(n: string): void };
+      expect(hero.constructor.name).toBe('HeroBall');
+      expect(hero.totalFrames).toBe(16);
+      for (let i = 0; i < 12; i++) player.step();
+      expect(hero.currentFrame).toBe(13);
+    } finally {
+      player.dispose();
+    }
+  });
+});
+

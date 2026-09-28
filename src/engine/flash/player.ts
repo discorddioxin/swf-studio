@@ -47,7 +47,8 @@ export interface LogEntry { level: LogLevel; message: string; detail?: string; t
 export interface PlayerOptions {
   doc: SwfDocument;
   assets?: AssetSource | null;
-  program?: ProgramLike | null;
+  /** The linked game code, or a factory that links it while this player is active. */
+  program?: ProgramLike | ((player: FlashPlayer) => ProgramLike) | null;
   /** Override for the document class (defaults to SymbolClass id 0). */
   documentClass?: string | null;
   audio?: AudioBackend | null;
@@ -72,7 +73,7 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
   cursor = 'default';
 
   private readonly assets: AssetSource | null;
-  private readonly program: ProgramLike | null;
+  private program: ProgramLike | null = null;
   private readonly onLog: (entry: LogEntry) => void;
   private readonly symbolClass = new Map<number, Ctor>();
   private readonly classSymbol = new Map<Function, SymbolRef>();
@@ -92,7 +93,6 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
   constructor(opts: PlayerOptions) {
     this.doc = opts.doc;
     this.assets = opts.assets ?? null;
-    this.program = opts.program ?? null;
     this.audio = opts.audio ?? null;
     this.onLog = opts.onLog ?? (() => {});
     const s = this.doc.header.stage;
@@ -108,6 +108,8 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
       runtime.player = previous;
     }
     this.stage.color = this.doc.header.backgroundColor ?? 0xffffff;
+    const program = opts.program;
+    this.program = typeof program === 'function' ? this.activate(() => program(this)) : program ?? null;
     this.linkClasses(opts.documentClass ?? null);
   }
 

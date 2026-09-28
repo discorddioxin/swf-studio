@@ -135,73 +135,83 @@ export function CodePanel({
     const clips = api.project.clips.filter((c) => c.timelineId === timeline.id);
     const containers = (api.project.containers ?? []).filter((c) => c.timelineId === timeline.id);
 
-    const clipLines = clips.length
-      ? clips.map(c => `this.registerClip("${c.name}", ${c.start}, ${c.end}, ${c.loop});`).join('\n    ')
-      : `// No clips defined yet. Create clips on the timeline to generate registrations.\n    // Example: this.registerClip("run", 0, 15, true);`;
+    // Clip ranges defined in SWF Studio (0-based in the project → 1-based AS3 frames).
+    const ranges = [
+      ...clips.map((c) => ({ name: c.name, first: c.start + 1, last: c.end + 1, loop: c.loop })),
+      ...containers.map((c) => ({ name: c.name, first: c.startFrame + 1, last: c.endFrame + 1, loop: false })),
+    ];
+    const clipTable = ranges.length
+      ? ranges.map((r) => `    ${JSON.stringify(r.name)}: [${r.first}, ${r.last}, ${r.loop}],`).join('\n')
+      : '    // No clips defined yet: create clips on the timeline, e.g.\n    // "run": [1, 16, true],';
+    const labels = timeline.frames.filter((f) => f.label);
+    const labelTable = labels.length
+      ? labels.map((f) => `    ${JSON.stringify(f.label)}: ${f.index + 1},`).join('\n')
+      : '    // This timeline has no frame labels.';
 
-    const containerLines = containers.length
-      ? containers.map(c => `this.registerAnimation("${c.name}", ${c.startFrame}, ${c.endFrame});`).join('\n    ')
-      : `// No contained ranges defined yet. Highlight timeline cells & right-click to "Contain" animations.\n    // Example: this.registerAnimation("jump", 16, 24);`;
+    const scripted = timeline.frames.map((f) => {
+      const actions = f.events.filter((e) => e.kind === 'action');
+      const sounds = f.events.filter((e) => e.kind === 'sound');
+      if (!actions.length) return null;
+      const original = actions.map((a) => sourceForEvent(a, f.index)?.text ?? a.detail).join('\n').trim();
+      const commented = original
+        ? original.replace(/\*\//g, '*\\/').split('\n').map((l) => `   *   ${l}`).join('\n')
+        : '   *   (no decompiled source available)';
+      const soundNote = sounds.length ? `\n   * Timeline sound(s) on this frame play automatically: ${sounds.map((x) => `#${x.characterId ?? '?'}`).join(', ')}.` : '';
+      return {
+        index: f.index,
+        method: `frame${f.index + 1}`,
+        body: `  /**\n   * Frame ${f.index + 1}${f.label ? ` (“${f.label}”)` : ''}. Original ActionScript:\n${commented}${soundNote}\n   */\n  private frame${f.index + 1}(): void {\n    // Port the original ActionScript above.\n  }`,
+      };
+    }).filter((x): x is { index: number; method: string; body: string } => x != null);
 
-    const sourceActions = timeline.frames.flatMap((f) => f.events
-      .filter((e) => e.kind === 'action')
-        .map((e) => ({ frame: f.index, source: sourceForEvent(e, f.index) })))
-      .filter((entry) => !!entry.source);
-    const sourceMap = sourceActions.length
-      ? sourceActions.map((entry) => `  ${entry.frame}: ${JSON.stringify(entry.source!.text)}`).join(',\n')
-      : '  // External .as files are loaded when available for this timeline.';
+    const frameScripts = scripted.length
+      ? `this.addFrameScript(\n      ${scripted.map((x) => `${x.index}, this.${x.method}`).join(',\n      ')},\n    );`
+      : '// No frame scripts on this timeline.';
 
-    const activeCases = timeline.frames.map(f => {
-      const hasLabel = f.label ? `// Label: ${f.label}` : '';
-      const acts = f.events.filter(e => e.kind === 'action' || e.kind === 'sound');
-      if (!acts.length && !f.label) return null;
-      const triggers = acts.map(a => {
-        const source = sourceForEvent(a, f.index);
-        if (a.kind === 'sound') {
-          return `this.playSound(${a.characterId == null ? 'undefined' : a.characterId});`;
-        }
-        const fallback = source?.text ?? a.detail;
-        return `this.emit('action', { frame: ${f.index}, tag: ${JSON.stringify(a.tagType)}, source: this.originalActionScript[${f.index}] ?? ${JSON.stringify(fallback)} });`;
-      }).join('\n        ');
-      const labelCode = f.label ? `this.emit('label', ${JSON.stringify(f.label)});` : '';
-      return `case ${f.index}: ${hasLabel}\n        ${labelCode}${labelCode && triggers ? '\n        ' : ''}${triggers || '// Trigger animations or state changes'}\n        break;`;
-    }).filter(Boolean);
-
-    const switchBody = activeCases.length
-      ? `switch (frameIndex) {\n      ${activeCases.join('\n      ')}\n    }`
-      : `// No frame actions or labels found in this timeline.\n    // (Add frame markers or labels in the timeline bar below the stage to generate triggers.)\n    /*\n    switch (frameIndex) {\n      case 0:\n        // Play frame specific audio or execute scripts\n        break;\n    }\n    */`;
-
-    return `import { Sprite, Animation } from 'game-engine';
+    return `import { MovieClip } from 'flash/display/MovieClip';
+import { Event } from 'flash/events/Event';
 
 /**
- * Modern Type-safe wrapper for ${className}
- * Extracted from SWF: isolated from Flash timeline engine.
+ * ${className}: class for timeline "${timeline.name}" (${timeline.frameCount} frame(s) at ${doc.header.frameRate} fps).
+ *
+ * Written against the AS3 API, so it runs on SWF Studio's engine (Execute tab)
+ * exactly like the game's own transpiled classes: put this file in the loaded
+ * folder and it is linked to the symbol through SymbolClass "${className}".
  */
-export class ${cleanClassName} extends Sprite {
-  constructor() {
-    super();
-    this.totalFrames = ${timeline.frameCount};
-    this.frameRate = ${doc.header.frameRate};
-    
-    // Register animations
-    ${clipLines}
-    ${containerLines}
-  }
-
-  /** Original JPEXS ActionScript, preserved while the TypeScript port is authored. */
-  private readonly originalActionScript: Record<number, string> = {
-${sourceMap}
+export class ${cleanClassName} extends MovieClip {
+  /** Frame labels on this timeline (1-based frame numbers). */
+  static readonly LABELS: Record<string, number> = {
+${labelTable}
   };
 
-  getOriginalActionScript(frameIndex: number): string {
-    return this.originalActionScript[frameIndex] ?? '';
+  /** Clips defined in SWF Studio: [first frame, last frame, loop] (1-based). */
+  static readonly CLIPS: Record<string, [number, number, boolean]> = {
+${clipTable}
+  };
+
+  private activeClip: [number, number, boolean] | null = null;
+
+  constructor() {
+    super();
+    ${frameScripts}
+    this.addEventListener(Event.ENTER_FRAME, this.updateClip);
   }
 
-  // Frame event trigger callback
-  onFrameUpdate(frameIndex: number) {
-    ${switchBody}
+  /** Play a clip range; it loops or stops on its last frame. */
+  playClip(name: string): void {
+    const clip = ${cleanClassName}.CLIPS[name];
+    if (!clip) return;
+    this.activeClip = clip;
+    this.gotoAndPlay(clip[0]);
   }
-}
+
+  private readonly updateClip = (): void => {
+    const clip = this.activeClip;
+    if (!clip || this.currentFrame < clip[1]) return;
+    if (clip[2]) this.gotoAndPlay(clip[0]);
+    else { this.gotoAndStop(clip[1]); this.activeClip = null; }
+  };
+${scripted.length ? '\n' + scripted.map((x) => x.body).join('\n\n') + '\n' : ''}}
 `;
   }, [doc, timeline, selectedId, api, assets, externalTexts]);
 

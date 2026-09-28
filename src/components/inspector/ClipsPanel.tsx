@@ -33,7 +33,7 @@ export function ClipsPanel({ api, timeline, frame, setAll, onOpenTimeline, setFr
       </div>
 
       <p className="text-[10px] text-zinc-500 italic">
-        💡 Drag-select frame cells on the timeline and right-click to "Contain" a range into a game-engine-ready animation structure!
+        💡 Drag-select frame cells on the timeline and right-click to "Contain" a range into a clip range. The TypeScript tab turns clips into playClip() ranges on the AS3 engine.
       </p>
 
       {containers.map((c) => {

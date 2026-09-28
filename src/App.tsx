@@ -356,7 +356,7 @@ export default function App() {
 
       <ErrorBoundary label={WORKSPACE_LABEL[workspace]} resetKeys={[doc, workspace]} className="flex min-h-0 flex-1 items-center justify-center p-4">
       {workspace === 'execute' ? (
-        <ExecuteTab doc={doc} cache={cache} />
+        <ExecuteTab doc={doc} cache={cache} assets={assets} />
       ) : workspace === 'engine' ? (
         <GameEngine
           doc={doc}

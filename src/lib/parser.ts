@@ -279,7 +279,9 @@ function stackLiteral(bytes: number[], at: number): { value: string; next: numbe
   if (kind === 5) return { value: bytes[p] ? 'true' : 'false', next: p + 1 };
   if (kind === 6) {
     const buf = new ArrayBuffer(8); const view = new DataView(buf);
-    for (let i = 0; i < 8; i++) view.setUint8(i, bytes[p + i] ?? 0);
+    // SWF stores a double as two little-endian 32-bit words, high word first:
+    // swap the halves to get a little-endian float64.
+    for (let i = 0; i < 8; i++) view.setUint8((i + 4) % 8, bytes[p + i] ?? 0);
     return { value: String(view.getFloat64(0, true)), next: p + 8 };
   }
   if (kind === 7) return { value: String(leS32(bytes, p)), next: p + 4 };
