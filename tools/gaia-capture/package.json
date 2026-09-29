@@ -1,0 +1,8 @@
+{
+  "name": "gaia-capture",
+  "private": true,
+  "type": "module",
+  "description": "Records what a live Gaia Flash game loads and does over time (run locally, logged in).",
+  "scripts": { "capture": "node capture.mjs" },
+  "dependencies": { "puppeteer": "^24.0.0" }
+}
