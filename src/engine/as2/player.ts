@@ -207,6 +207,8 @@ export class AS2Player {
   private listeners: (() => void)[] = [];
   errors = 0;
   cursorHidden = false;
+  /** external SWFs the game asked for that could not be resolved */
+  readonly missingExternals = new Set<string>();
 
   constructor(opts: AS2PlayerOptions) {
     this.opts = opts;
@@ -223,6 +225,8 @@ export class AS2Player {
     RT.resetRuntime();
     RT.installHost(this.host());
     this.builtins = installBuiltins(this);
+    // AS2 classes live on _global (e.g. _global.com.rawfishsoftware.sushi.SushiAPI)
+    for (const [name, cls] of Object.entries(opts.program?.classes ?? {})) RT.$rt.registerClass(name, cls);
 
     // _level0
     this.root = new DisplayNode('clip', this.movie, 0);
@@ -571,6 +575,7 @@ export class AS2Player {
   bind(obj: any, node: DisplayNode) {
     Object.defineProperty(obj, NODE, { value: node, enumerable: false, configurable: true });
     node.obj = obj;
+    if (node.parent && node.name) this.publishName(node);
   }
 
   attach(parent: DisplayNode, node: DisplayNode) {

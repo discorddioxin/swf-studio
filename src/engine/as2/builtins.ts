@@ -41,6 +41,8 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     duplicate, removeClip, startDrag, updateDrag, loadMovie, loadVariables, unloadMovie, typeInto,
   };
 
+  const missingWarned = new Set<string>();
+
   // ------------------------------------------------------------ helpers
   function nextDepth(node: DisplayNode) {
     let max = -1;
@@ -142,7 +144,11 @@ export function installBuiltins(p: AS2Player): BuiltinState {
           fire('onLoadError', 'URLNotFound', 404);
           return;
         }
-        p.log('warn', `loadMovie: "${u}" is not available – continuing as if it loaded empty. Add its FFDec export to play this part of the game.`);
+        if (!missingWarned.has(u)) {
+          missingWarned.add(u);
+          p.log('warn', `loadMovie: "${u}" is not available – continuing as if it loaded empty. Add its FFDec export to play this part of the game.`);
+        }
+        p.missingExternals.add(u);
         fire('onLoadStart');
         replaceContent(target, null, u);
         fire('onLoadProgress', 0, 0);
