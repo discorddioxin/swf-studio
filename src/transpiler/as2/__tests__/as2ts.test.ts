@@ -60,14 +60,29 @@ describe('emitter scoping', () => {
     expect(code).toContain('$t.f = function f(this: any, a: any)');
     expect(code).toContain('var b: any = a + $t.n;');
     expect(code).toContain('$t.stop();');
-    expect(code).toContain('$t.n = $t.f(2);');
+    expect(code).toContain('$t.n = $t.f?.(2);'); // f may not be defined yet: AS2 ignores the call
+  });
+
+  it('follows AS2 null semantics: no throws on undefined objects or functions', () => {
+    const code = script('a.b.c = 1; x = a.b.c; a.go(); var o = new Object(); o.k = 1; o.m(); stop(); _root.main.play(); gotoAndStop(2); Math.floor(1);');
+    expect(code).toContain('($t.a?.b ?? $rt.sink).c = 1;');
+    expect(code).toContain('$t.x = $t.a?.b?.c;');
+    expect(code).toContain('$t.a?.go?.();');
+    expect(code).toContain('$t.stop();');
+    expect(code).toContain('$t.gotoAndStop(2);');
+    expect(code).toContain('$t._root.main?.play?.();');
+    expect(code).toContain('Math.floor(1);');
+    const fn = script('function f() { var o = new Object(); o.k = 1; o.m(); var p; p.k = 2; }');
+    expect(fn).toContain('o.k = 1;');
+    expect(fn).toContain('o.m?.();');
+    expect(fn).toContain('(p ?? $rt.sink).k = 2;');
   });
 
   it('keeps dynamic this in nested functions and maps runtime globals', () => {
     const code = script('mc.onEnterFrame = function() { this._x += Key.isDown(Key.LEFT) ? -1 : 1; trace(getTimer()); };');
-    expect(code).toContain('$t.mc.onEnterFrame = function(this: any) {');
+    expect(code).toContain('($t.mc ?? $rt.sink).onEnterFrame = function(this: any) {');
     expect(code).toContain('this._x += Key.isDown(Key.LEFT) ? -1 : 1;');
-    expect(code).toMatch(/import \{ Key, getTimer, trace, type AS2Clip \} from "@\/runtime\/as2";/);
+    expect(code).toMatch(/import \{ \$rt, Key, getTimer, trace, type AS2Clip \} from "@\/runtime\/as2";/);
   });
 
   it('translates contextual globals, eval assignment, with, typeof and Object.registerClass', () => {
@@ -81,7 +96,7 @@ describe('emitter scoping', () => {
 
   it('flags FFDec undecompiled markers', () => {
     const r = transpileScript('§§push(1);');
-    expect(r.code).toContain('$rt.ffdec("§§push")(1)');
+    expect(r.code).toContain('$rt.ffdec("§§push")?.(1)');
     expect(r.diagnostics[0].message).toMatch(/could not be decompiled/);
   });
 
@@ -100,7 +115,7 @@ describe('emitter scoping', () => {
     expect(code).toMatch(/constructor\(\) \{\n\s+super\(\);\n\s+this\.speed = 2;\n\s+Fish\.COUNT\+\+;/);
     expect(code).toContain('get fast(): boolean {');
     expect(code).toContain('this._x += this.speed * dt;');
-    expect(code).toContain('this.helper();'); // MovieClip subclass: unknown names are inherited members
+    expect(code).toContain('this.helper?.();'); // MovieClip subclass: unknown names are inherited members
     expect(code).toContain('$rt.registerClass("game.Fish", Fish);');
   });
 });

@@ -47,7 +47,7 @@ export const RUNTIME_CLASSES = new Set([
   'MovieClip', 'Button', 'TextField', 'TextFormat', 'Sound', 'Color', 'Key', 'Mouse', 'Stage', 'Selection', 'System',
   'XML', 'XMLNode', 'LoadVars', 'SharedObject', 'LocalConnection', 'MovieClipLoader', 'ContextMenu', 'ContextMenuItem',
   'AsBroadcaster', 'Camera', 'Microphone', 'NetConnection', 'NetStream', 'Video', 'TextSnapshot', 'Accessibility',
-  'PrintJob', 'flash',
+  'PrintJob', 'XMLSocket', 'flash',
 ]);
 
 /** Global functions provided by the runtime module (imported by name). */
@@ -66,6 +66,15 @@ export const CONTEXT_FUNCTIONS = new Set([
 
 /** Classes that make unknown unqualified names resolve to `this.x` in subclasses. */
 const DYNAMIC_BASES = new Set(['MovieClip', 'Button', 'TextField', 'Object', 'Sound', 'XML', 'LoadVars']);
+
+/** MovieClip methods that always exist on a timeline (no null guard needed when called on `$t`/`this`). */
+const MOVIECLIP_METHODS = new Set([
+  'play', 'stop', 'gotoAndPlay', 'gotoAndStop', 'nextFrame', 'prevFrame', 'attachMovie', 'createEmptyMovieClip',
+  'createTextField', 'duplicateMovieClip', 'removeMovieClip', 'swapDepths', 'getDepth', 'getNextHighestDepth',
+  'getInstanceAtDepth', 'hitTest', 'getBounds', 'localToGlobal', 'globalToLocal', 'startDrag', 'stopDrag',
+  'loadMovie', 'unloadMovie', 'loadVariables', 'getBytesLoaded', 'getBytesTotal', 'getURL', 'attachSound',
+  'setMask', 'lineStyle', 'beginFill', 'beginGradientFill', 'endFill', 'moveTo', 'lineTo', 'curveTo', 'clear',
+]);
 
 const PREC: Record<string, number> = {
   ',': 1, '=': 2, '?': 3, '||': 4, '&&': 5, '|': 6, '^': 7, '&': 8, '==': 9, '!=': 9, '===': 9, '!==': 9,
@@ -96,6 +105,8 @@ interface Ctx {
   withs: string[];
   cls: ClassInfo | null;
   isStatic: boolean;
+  /** locals that only ever hold objects (new …, literals, functions): member access needs no null guard */
+  safe?: Set<string>;
 }
 
 interface ClassInfo {
@@ -195,7 +206,7 @@ export class ModuleEmitter {
     if (ctor || instanceFields.some((f) => f.init) || decl.extends) {
       const scope: Scope = { kind: 'method', names: new Set(), parent: null };
       const ctx = clsCtx(false, scope);
-      const params = ctor ? this.params(ctor.params, scope, pkg) : '';
+      const params = ctor ? this.params(ctor.params, scope, pkg, ctor.body) : '';
       this.indentLevel = 2;
       let body = '';
       let bodyStmts = ctor?.body ?? [];
@@ -216,7 +227,7 @@ export class ModuleEmitter {
       if (decl.intrinsic) continue;
       const scope: Scope = { kind: 'method', names: new Set(), parent: null };
       const ctx = clsCtx(m.isStatic, scope);
-      const params = this.params(m.params, scope, pkg);
+      const params = m.kind === 'getter' || m.kind === 'setter' ? this.params(m.params, scope, pkg).replace('?:', ':') : this.params(m.params, scope, pkg, m.body);
       const ret = m.kind === 'setter' ? '' : m.type ? `: ${this.mapType(m.type, pkg)}` : '';
       this.indentLevel = 2;
       const body = this.functionBody(m.body, ctx, scope, m.params);
@@ -338,7 +349,7 @@ export class ModuleEmitter {
     for (const p of params) scope.names.add(p.name);
     collectDeclarations(body, scope.names);
     const declared = new Set<string>(params.map((p) => p.name));
-    const inner: Ctx = { ...ctx, scope };
+    const inner: Ctx = { ...ctx, scope, safe: safeLocals(body, params) };
     (inner as CtxWithDeclared).declared = declared;
     let out = '';
     // nested function declarations are hoisted
@@ -347,18 +358,26 @@ export class ModuleEmitter {
     return out;
   }
 
-  private params(ps: Param[], scope: Scope, pkg: string): string {
-    return ps.map((p) => {
+  /**
+   * AS2 never enforces argument counts, so untyped parameters are optional;
+   * functions that read `arguments` also accept extra arguments.
+   */
+  private params(ps: Param[], scope: Scope, pkg: string, body?: Stmt[]): string {
+    scope.names.add('arguments');
+    const out = ps.map((p) => {
       scope.names.add(p.name);
       const name = safeLocal(p.name);
-      return p.rest ? `...${name}: any[]` : `${name}: ${this.mapType(p.type, pkg)}`;
-    }).join(', ');
+      if (p.rest) return `...${name}: any[]`;
+      return p.type ? `${name}: ${this.mapType(p.type, pkg)}` : `${name}?: any`;
+    });
+    if (body && !ps.some((p) => p.rest) && usesArguments(body)) out.push('..._args: any[]');
+    return out.join(', ');
   }
 
   private funcExpr(name: string | null, params: Param[], ret: TypeRef, body: Stmt[], ctx: Ctx): string {
     const scope: Scope = { kind: 'function', names: new Set(['arguments']), parent: ctx.scope };
     const pkg = ctx.cls?.pkg ?? '';
-    const ps = this.params(params, scope, pkg);
+    const ps = this.params(params, scope, pkg, body);
     const retType = ret ? `: ${this.mapType(ret, pkg)}` : '';
     this.indentLevel++;
     const inner = this.functionBody(body, { ...ctx, scope }, scope, params);
@@ -546,7 +565,7 @@ export class ModuleEmitter {
       }
       case 'func': return this.wrap(this.funcExpr(e.name, e.params, e.ret, e.body, ctx), P_PRIMARY, min);
       case 'member': return this.member(e, ctx);
-      case 'index': return `${this.expr(e.obj, ctx, P_CALL)}[${this.expr(e.index, ctx, 0)}]`;
+      case 'index': return `${this.expr(e.obj, ctx, P_CALL)}${this.isSafe(e.obj, ctx) ? '' : '?.'}[${this.expr(e.index, ctx, 0)}]`;
       case 'call': return this.call(e, ctx, min);
       case 'new': {
         const callee = this.expr(e.callee, ctx, P_CALL);
@@ -561,7 +580,7 @@ export class ModuleEmitter {
         return this.wrap(`${e.op}${sep}${arg}`, P_UNARY, min);
       }
       case 'update': {
-        const arg = this.expr(e.arg, ctx, P_POSTFIX);
+        const arg = this.target(e.arg, ctx);
         return this.wrap(e.prefix ? `${e.op}${arg}` : `${arg}${e.op}`, e.prefix ? P_UNARY : P_POSTFIX, min);
       }
       case 'binary': {
@@ -577,7 +596,7 @@ export class ModuleEmitter {
             : `$rt.eval(${ctx.timeline}, ${name}) ${e.op.slice(0, -1)} ${this.wrap(this.expr(e.value, ctx, PREC['=']), 0, 0)}`;
           return this.wrap(`$rt.set(${ctx.timeline}, ${name}, ${value})`, P_CALL, min);
         }
-        return this.wrap(`${this.expr(e.target, ctx, P_POSTFIX)} ${e.op} ${this.value(e.value, ctx)}`, PREC['='], min);
+        return this.wrap(`${this.target(e.target, ctx)} ${e.op} ${this.value(e.value, ctx)}`, PREC['='], min);
       }
       case 'cond':
         return this.wrap(`${this.expr(e.test, ctx, PREC['?'] + 1)} ? ${this.expr(e.then, ctx, PREC['='])} : ${this.expr(e.else, ctx, PREC['='])}`, PREC['?'], min);
@@ -594,9 +613,60 @@ export class ModuleEmitter {
       if (q) return this.aliasFor(q);
     }
     const obj = this.expr(e.obj, ctx, P_CALL);
+    const q = this.isSafe(e.obj, ctx) ? '' : '?.';
     const prop = e.prop;
-    if (!VALID_IDENT.test(prop)) return `${obj}[${JSON.stringify(prop)}]`;
-    return `${obj}.${prop}`;
+    if (!VALID_IDENT.test(prop)) return `${obj}${q}[${JSON.stringify(prop)}]`;
+    return `${obj}${q || '.'}${prop}`;
+  }
+
+  /**
+   * Can this expression be dereferenced without a null guard? AS2 silently
+   * yields undefined for `undefined.x` and ignores `undefined.f()`; JS throws,
+   * so everything not provably an object gets `?.`.
+   */
+  private isSafe(e: Expr, ctx: Ctx): boolean {
+    switch (e.k) {
+      case 'lit': return e.v === 'this';
+      case 'new': case 'object': case 'array': case 'str': case 'func': return true;
+      case 'id': {
+        if (this.isLocal(e.name, ctx)) return e.name === 'arguments' || !!ctx.safe?.has(e.name);
+        if (e.name === 'super' || e.name === '_root' || e.name === '_global') return true;
+        const cls = ctx.cls;
+        if (cls && (cls.statics.has(e.name) || cls.instance.has(e.name))) return false;
+        if (this.resolveClassName(e.name, cls?.pkg ?? '')) return true;
+        return RUNTIME_FUNCTIONS.has(e.name) || RUNTIME_CLASSES.has(e.name) || JS_GLOBALS.has(e.name);
+      }
+      case 'member': { const chain = memberChain(e); return !!(chain && this.opts.classes?.has(chain)); }
+      default: return false;
+    }
+  }
+
+  /** Is `obj.method` known to exist (static call on a class/global, or a declared method of this class)? */
+  private isKnownMethod(obj: Expr, prop: string, ctx: Ctx): boolean {
+    if (obj.k === 'id' && !this.isLocal(obj.name, ctx)) {
+      if (obj.name === 'super') return true;
+      if (RUNTIME_CLASSES.has(obj.name) || RUNTIME_FUNCTIONS.has(obj.name) || JS_GLOBALS.has(obj.name)) return true;
+      if (this.resolveClassName(obj.name, ctx.cls?.pkg ?? '')) return true;
+    }
+    if (obj.k === 'member') { const chain = memberChain(obj); if (chain && this.opts.classes?.has(chain)) return true; }
+    if (obj.k === 'lit' && obj.v === 'this' && ctx.cls && !ctx.cls.dynamicBase && ctx.cls.instance.has(prop)) return true;
+    if (obj.k === 'lit' && obj.v === 'this' && !ctx.cls && kindOf(ctx.scope) === 'timeline' && MOVIECLIP_METHODS.has(prop)) return true;
+    if ((obj.k === 'str' || obj.k === 'array') && prop in (obj.k === 'str' ? String.prototype : Array.prototype)) return true;
+    return false;
+  }
+
+  /** Assignment target: writes through a possibly-undefined object are dropped, as in AS2. */
+  private target(e: Expr, ctx: Ctx): string {
+    if (e.k === 'member' && !this.isSafe(e.obj, ctx) && !memberChainIsClass(e, this.opts.classes)) {
+      this.useRuntime('$rt');
+      const prop = VALID_IDENT.test(e.prop) ? `.${e.prop}` : `[${JSON.stringify(e.prop)}]`;
+      return `(${this.expr(e.obj, ctx, PREC['?'] + 1)} ?? $rt.sink)${prop}`;
+    }
+    if (e.k === 'index' && !this.isSafe(e.obj, ctx)) {
+      this.useRuntime('$rt');
+      return `(${this.expr(e.obj, ctx, PREC['?'] + 1)} ?? $rt.sink)[${this.expr(e.index, ctx, 0)}]`;
+    }
+    return this.expr(e, ctx, P_POSTFIX);
   }
 
   private call(e: Extract<Expr, { k: 'call' }>, ctx: Ctx, min: number): string {
@@ -623,8 +693,22 @@ export class ModuleEmitter {
       this.useRuntime('$rt');
       return this.wrap(`$rt.registerLinkage(${args()})`, P_CALL, min);
     }
-    const callee = this.expr(e.callee, ctx, P_CALL);
-    return this.wrap(`${callee}(${args()})`, P_CALL, min);
+    // AS2 ignores calls to undefined functions / on undefined objects: guard unless known to exist
+    let callee: string;
+    let guard = '?.';
+    if (e.callee.k === 'member') {
+      callee = this.expr(e.callee, ctx, P_CALL);
+      if (this.isKnownMethod(e.callee.obj, e.callee.prop, ctx)) guard = '';
+    } else if (e.callee.k === 'id') {
+      callee = this.expr(e.callee, ctx, P_CALL);
+      const n = e.callee.name;
+      if (this.isLocal(n, ctx) ? ctx.safe?.has(n) : ((!ctx.cls && MOVIECLIP_METHODS.has(n)) || RUNTIME_FUNCTIONS.has(n) || RUNTIME_CLASSES.has(n) || JS_GLOBALS.has(n)
+        || !!this.resolveClassName(n, ctx.cls?.pkg ?? '') || (!!ctx.cls && !ctx.cls.dynamicBase && (ctx.cls.instance.has(n) || ctx.cls.statics.has(n))))) guard = '';
+    } else {
+      callee = this.expr(e.callee, ctx, P_CALL);
+      if (e.callee.k === 'func') guard = '';
+    }
+    return this.wrap(`${callee}${guard}(${args()})`, P_CALL, min);
   }
 
   private castTarget(callee: Expr, ctx: Ctx): string | null {
@@ -719,6 +803,101 @@ export function collectDeclarations(body: Stmt[], into: Set<string>) {
     }
   };
   body.forEach(visit);
+}
+
+/** Does a function body (excluding nested functions) read `arguments`? */
+function usesArguments(body: Stmt[]): boolean {
+  let found = false;
+  const ex = (e: Expr | null | undefined): void => {
+    if (!e || found) return;
+    switch (e.k) {
+      case 'id': if (e.name === 'arguments') found = true; break;
+      case 'func': break;
+      case 'member': ex(e.obj); break;
+      case 'index': ex(e.obj); ex(e.index); break;
+      case 'call': case 'new': ex(e.callee); e.args.forEach(ex); break;
+      case 'unary': case 'update': ex(e.arg); break;
+      case 'binary': ex(e.left); ex(e.right); break;
+      case 'assign': ex(e.target); ex(e.value); break;
+      case 'cond': ex(e.test); ex(e.then); ex(e.else); break;
+      case 'seq': e.items.forEach(ex); break;
+      case 'array': e.items.forEach((x) => ex(x)); break;
+      case 'object': e.props.forEach((p) => ex(p.value)); break;
+      default: break;
+    }
+  };
+  const st = (s: Stmt | null): void => {
+    if (!s || found) return;
+    switch (s.k) {
+      case 'expr': ex(s.e); break;
+      case 'var': s.decls.forEach((d) => ex(d.init)); break;
+      case 'block': case 'ifFrameLoaded': case 'tellTarget': case 'on': case 'onClipEvent': s.body.forEach(st); break;
+      case 'if': ex(s.test); st(s.then); st(s.else); break;
+      case 'for': if (s.init && (s.init as Stmt).k === 'var') st(s.init as Stmt); else ex(s.init as Expr | null); ex(s.test); ex(s.update); st(s.body); break;
+      case 'forin': ex(s.obj); st(s.body); break;
+      case 'while': case 'dowhile': ex(s.test); st(s.body); break;
+      case 'with': ex(s.obj); st(s.body); break;
+      case 'label': st(s.body); break;
+      case 'switch': ex(s.disc); s.cases.forEach((c) => { ex(c.test); c.body.forEach(st); }); break;
+      case 'return': case 'throw': ex(s.arg); break;
+      case 'try': s.block.forEach(st); s.handler?.forEach(st); s.finalizer?.forEach(st); break;
+      default: break;
+    }
+  };
+  body.forEach(st);
+  return found;
+}
+
+function memberChainIsClass(e: Expr, classes?: Map<string, KnownClass>): boolean {
+  const chain = memberChain(e);
+  return !!(chain && classes?.has(chain));
+}
+
+/** Locals whose every assignment is an object/array/function/new expression (never undefined once set). */
+function safeLocals(body: Stmt[], params: Param[]): Set<string> {
+  const good = new Set<string>();
+  const bad = new Set<string>(params.map((p) => p.name));
+  const isObj = (e: Expr | null) => !!e && (e.k === 'new' || e.k === 'object' || e.k === 'array' || e.k === 'func');
+  const note = (name: string, e: Expr | null) => { if (isObj(e)) good.add(name); else bad.add(name); };
+  const ex = (e: Expr | null | undefined): void => {
+    if (!e) return;
+    switch (e.k) {
+      case 'assign': if (e.target.k === 'id') note(e.target.name, e.op === '=' ? e.value : null); ex(e.target); ex(e.value); break;
+      case 'update': if (e.arg.k === 'id') bad.add(e.arg.name); ex(e.arg); break;
+      case 'member': ex(e.obj); break;
+      case 'index': ex(e.obj); ex(e.index); break;
+      case 'call': case 'new': ex(e.callee); e.args.forEach(ex); break;
+      case 'unary': ex(e.arg); break;
+      case 'binary': ex(e.left); ex(e.right); break;
+      case 'cond': ex(e.test); ex(e.then); ex(e.else); break;
+      case 'seq': e.items.forEach(ex); break;
+      case 'array': e.items.forEach((x) => ex(x)); break;
+      case 'object': e.props.forEach((p) => ex(p.value)); break;
+      default: break; // nested functions have their own scope
+    }
+  };
+  const st = (s: Stmt | null): void => {
+    if (!s) return;
+    switch (s.k) {
+      case 'expr': ex(s.e); break;
+      case 'var': for (const d of s.decls) { if (d.init) note(d.name, d.init); ex(d.init); } break;
+      case 'function': good.add(s.name); break;
+      case 'block': case 'ifFrameLoaded': case 'tellTarget': case 'on': case 'onClipEvent': s.body.forEach(st); break;
+      case 'if': ex(s.test); st(s.then); st(s.else); break;
+      case 'for': if (s.init && (s.init as Stmt).k === 'var') st(s.init as Stmt); else ex(s.init as Expr | null); ex(s.test); ex(s.update); st(s.body); break;
+      case 'forin': if (s.left.target.k === 'id') bad.add(s.left.target.name); ex(s.obj); st(s.body); break;
+      case 'while': case 'dowhile': ex(s.test); st(s.body); break;
+      case 'with': ex(s.obj); st(s.body); break;
+      case 'label': st(s.body); break;
+      case 'switch': ex(s.disc); for (const c of s.cases) { ex(c.test); c.body.forEach(st); } break;
+      case 'return': case 'throw': ex(s.arg); break;
+      case 'try': s.block.forEach(st); if (s.param) bad.add(s.param); s.handler?.forEach(st); s.finalizer?.forEach(st); break;
+      default: break;
+    }
+  };
+  body.forEach(st);
+  for (const b of bad) good.delete(b);
+  return good;
 }
 
 function memberChain(e: Expr): string | null {

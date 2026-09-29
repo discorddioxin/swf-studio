@@ -41,6 +41,8 @@ export interface AS2Program {
   buttons: Record<number, AS2Handler[]>;
   /** AS2 classes keyed by fully-qualified name */
   classes: Record<string, unknown>;
+  /** DoInitAction code of exported sprites, keyed by linkage (export) name */
+  initByName?: Record<string, (this: AS2Clip) => void>;
 }
 
 /** Everything the runtime needs from the engine. */
@@ -69,7 +71,8 @@ export interface AS2Host {
 let host: AS2Host | null = null;
 const log: string[] = [];
 
-export function installHost(h: AS2Host | null) { host = h; }
+export function installHost(h: AS2Host | null) { host = h; if (h) installAS2Extensions(); }
+export function currentHost(): AS2Host | null { return host; }
 function need(): AS2Host {
   if (!host) throw new Error('AS2 runtime: no host installed (call installHost() from the engine first)');
   return host;
@@ -94,7 +97,11 @@ function setPath(obj: Record<string, any>, path: string, value: unknown) {
 
 // ----------------------------------------------------------------- $rt API
 
+/** Assignment target for writes through undefined objects (`undefined.x = 1` is a no-op in AS2). */
+const sink: any = new Proxy(Object.create(null), { set: () => true, get: () => undefined, deleteProperty: () => true });
+
 export const $rt = {
+  sink,
   get root(): AS2Clip { return need().root; },
   level(n: number): AS2Clip | undefined { return need().level(n); },
 
@@ -277,9 +284,27 @@ export function toggleHighQuality(): void { /* no-op */ }
 // time. The engine attaches behaviour by filling in their prototypes / static
 // members when it installs itself – exactly how the AS2 player exposes them.
 
-export class MovieClip { [key: string]: any; }
-export class Button { [key: string]: any; }
-export class TextField { [key: string]: any; }
+/**
+ * Display classes. The engine creates instances (including instances of
+ * registered subclasses) by setting `__construct` right before `new`, so the
+ * display state, instance name and init object exist before the subclass
+ * constructor body runs – exactly the order the AS2 player uses.
+ */
+export class MovieClip {
+  [key: string]: any;
+  static __construct: ((obj: any) => void) | null = null;
+  constructor() { const c = MovieClip.__construct; MovieClip.__construct = null; c?.(this); }
+}
+export class Button {
+  [key: string]: any;
+  static __construct: ((obj: any) => void) | null = null;
+  constructor() { const c = Button.__construct; Button.__construct = null; c?.(this); }
+}
+export class TextField {
+  [key: string]: any;
+  static __construct: ((obj: any) => void) | null = null;
+  constructor() { const c = TextField.__construct; TextField.__construct = null; c?.(this); }
+}
 export class TextFormat {
   [key: string]: any;
   constructor(font?: string, size?: number, color?: number, bold?: boolean, italic?: boolean, underline?: boolean, url?: string, target?: string, align?: string, leftMargin?: number, rightMargin?: number, indent?: number, leading?: number) {
@@ -300,6 +325,7 @@ export class NetStream { [key: string]: any; }
 export class Video { [key: string]: any; }
 export class TextSnapshot { [key: string]: any; }
 export class PrintJob { [key: string]: any; }
+export class XMLSocket { [key: string]: any; }
 
 /** Key codes as in Flash's Key object; the engine fills in isDown / listeners. */
 export const Key: Record<string, any> = {
@@ -316,6 +342,73 @@ export const Camera: Record<string, any> = {};
 export const Microphone: Record<string, any> = {};
 export const Accessibility: Record<string, any> = { isActive: () => false, updateProperties: () => {} };
 export const flash: Record<string, any> = { geom: {}, filters: {}, display: {}, external: {}, net: {}, text: {} };
+
+// ------------------------------------------------------ scope-chain fallback
+// Timeline code reads unresolved names as `$t.name`. In the AS2 player the
+// scope chain continues from the timeline to _global, so MovieClip instances
+// get a prototype link whose lookups fall through to _global.
+// Object.prototype members (toString, hasOwnProperty, …) keep working.
+const globalFallback = new Proxy(Object.create(null), {
+  get: (_t, p, receiver) => (typeof p === 'string' && !(p in Object.prototype) ? _global[p] : Reflect.get(Object.prototype, p, receiver)),
+  has: (_t, p) => p in Object.prototype || (typeof p === 'string' && p in _global),
+  set: (_t, p, v, receiver) => Reflect.defineProperty(receiver, p, { value: v, writable: true, enumerable: true, configurable: true }),
+});
+Object.setPrototypeOf(MovieClip.prototype, globalFallback);
+
+// ------------------------------------------------------------ AS2 built-ins
+// AS2 Array extras that JavaScript lacks (sortOn, numeric sort flags).
+const ARRAY_FLAGS = { CASEINSENSITIVE: 1, DESCENDING: 2, UNIQUESORT: 4, RETURNINDEXEDARRAY: 8, NUMERIC: 16 };
+let extensionsInstalled = false;
+function flagCompare(flags: number) {
+  return (a: any, b: any) => {
+    let x = a, y = b;
+    if (flags & ARRAY_FLAGS.NUMERIC) { x = Number(a); y = Number(b); }
+    else { x = String(a); y = String(b); if (flags & ARRAY_FLAGS.CASEINSENSITIVE) { x = x.toLowerCase(); y = y.toLowerCase(); } }
+    const r = x < y ? -1 : x > y ? 1 : 0;
+    return flags & ARRAY_FLAGS.DESCENDING ? -r : r;
+  };
+}
+function sortWith(arr: any[], cmp: (a: any, b: any) => number, flags: number) {
+  const idx = arr.map((v, i) => ({ v, i })).sort((p, q) => cmp(p.v, q.v));
+  if (flags & ARRAY_FLAGS.UNIQUESORT && idx.some((p, i) => i > 0 && cmp(idx[i - 1].v, p.v) === 0)) return 0;
+  if (flags & ARRAY_FLAGS.RETURNINDEXEDARRAY) return idx.map((p) => p.i);
+  idx.forEach((p, i) => { arr[i] = p.v; });
+  return arr;
+}
+export function installAS2Extensions() {
+  if (extensionsInstalled) return;
+  extensionsInstalled = true;
+  Object.assign(Array, ARRAY_FLAGS);
+  const nativeSort = Array.prototype.sort;
+  Object.defineProperty(Array.prototype, 'sort', {
+    configurable: true, writable: true,
+    value: function sort(this: any[], a?: any, b?: any) {
+      if (typeof a === 'number') return sortWith(this, flagCompare(a), a);
+      if (typeof a === 'function' && typeof b === 'number') return sortWith(this, b & ARRAY_FLAGS.DESCENDING ? (x: any, y: any) => -a(x, y) : a, b);
+      return nativeSort.call(this, a);
+    },
+  });
+  Object.defineProperty(Array.prototype, 'sortOn', {
+    configurable: true, writable: true,
+    value: function sortOn(this: any[], field: string | string[], options?: number | number[]) {
+      const fields = Array.isArray(field) ? field : [field];
+      const opts = fields.map((_, i) => (Array.isArray(options) ? options[i] ?? 0 : options ?? 0));
+      const cmp = (a: any, b: any) => {
+        for (let i = 0; i < fields.length; i++) { const r = flagCompare(opts[i])(a?.[fields[i]], b?.[fields[i]]); if (r) return r; }
+        return 0;
+      };
+      return sortWith(this, cmp, opts[0]);
+    },
+  });
+}
+
+/** Clears all program state (_global, class and linkage registries) for a fresh run. */
+export function resetRuntime() {
+  for (const k of Object.keys(_global)) delete _global[k];
+  classes.clear();
+  linkage.clear();
+  log.length = 0;
+}
 
 /** Messages logged before a host was installed. */
 export function pendingLog(): string[] { return log.splice(0); }

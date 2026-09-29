@@ -44,6 +44,7 @@ type Role =
   | { kind: 'button'; button: number }
   | { kind: 'placement'; timeline: number; frame: number; character: number; depth: number }
   | { kind: 'class' }
+  | { kind: 'initByName'; name: string }
   | { kind: 'unknown' };
 
 const RE = {
@@ -79,7 +80,8 @@ export function classify(path: string): Role {
 
 interface Parsed { file: ProjectFile; role: Role; body: Stmt[] | null; error: string | null; line?: number }
 
-const natural = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+// "frame_1/DoAction.as" must come before "frame_1/DoAction_2.as" (tag order in the SWF)
+const natural = (a: string, b: string) => a.replace(/\.as$/i, '').localeCompare(b.replace(/\.as$/i, ''), undefined, { numeric: true });
 
 export function transpileProject(input: ProjectFile[], options: ProjectOptions = {}): ProjectResult {
   const runtime = options.runtime ?? '@/runtime/as2';
@@ -96,6 +98,10 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
     try {
       const body = inlineIncludes(parseProgram(file.content), path, byPath, new Set([path]));
       if (role.kind === 'unknown' && body.some((s) => s.k === 'class')) role = { kind: 'class' };
+      // FFDec names a DoInitAction of an exported sprite after its linkage name: scripts/<exportName>.as
+      else if (role.kind === 'unknown' && /^(?:scripts\/)?[^/]+\.as$/i.test(path.replace(/^.*?(scripts\/)/i, 'scripts/')) && !path.includes('__Packages')) {
+        role = { kind: 'initByName', name: path.split('/').pop()!.replace(/\.as$/i, '') };
+      }
       parsed.push({ file: { path, content: file.content }, role, body, error: null });
     } catch (err) {
       const line = err instanceof ParseError || err instanceof LexError ? err.line : undefined;
@@ -132,6 +138,7 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
   interface TimelineAcc { frames: Map<number, Parsed[]>; placements: Map<string, Parsed[]>; init: Parsed[] }
   const timelines = new Map<number, TimelineAcc>();
   const buttons = new Map<number, Parsed[]>();
+  const initsByName = new Map<string, Parsed[]>();
   const tl = (id: number) => {
     let t = timelines.get(id);
     if (!t) timelines.set(id, (t = { frames: new Map(), placements: new Map(), init: [] }));
@@ -149,6 +156,7 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
         break;
       }
       case 'button': buttons.set(r.button, [...(buttons.get(r.button) ?? []), p]); break;
+      case 'initByName': initsByName.set(r.name, [...(initsByName.get(r.name) ?? []), p]); break;
       case 'class':
         if (p.error) report.push({ source: p.file.path, target: null, role: 'class', diagnostics: [{ level: 'error', message: p.error, line: p.line }] });
         break;
@@ -220,17 +228,33 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
     report.push({ source: sources.join('\n'), target: `${module}.ts`, role: `button ${id}`, diagnostics: [...diags, ...em.diagnostics] });
   }
 
+  const initModules: [string, string][] = [];
+  for (const [name, list] of [...initsByName].sort((a, b) => natural(a[0], b[0]))) {
+    const module = `init/${name.replace(/[^\w$]/g, '_')}`;
+    const em = new ModuleEmitter({ runtime, selfModule: module, classes });
+    const diags: Diagnostic[] = [];
+    for (const p of list) if (p.error) diags.push({ level: 'error', message: `${p.file.path}: ${p.error}`, line: p.line });
+    const body = list.flatMap((p) => p.body ?? []);
+    const fn = em.timelineFunction(body);
+    const code = `/** DoInitAction of the sprite exported as "${name}" (runs once, before the frame it is defined on). */\nexport const init = ${fn};\n`;
+    files.set(`${module}.ts`, banner(list.map((p) => p.file.path).join(', ')) + em.header() + code);
+    initModules.push([name, module]);
+    report.push({ source: list.map((p) => p.file.path).join('\n'), target: `${module}.ts`, role: `init action of "${name}"`, diagnostics: [...diags, ...em.diagnostics] });
+  }
+
   // ------------------------------------------------------------ index
   const idx: string[] = [`import type { AS2Program } from ${JSON.stringify(runtime)};`];
   for (const [id, m] of timelineModules) idx.push(`import * as ${id === 0 ? 'root' : `sprite_${id}`} from './${m}';`);
   for (const [id, m] of buttonModules) idx.push(`import { handlers as button_${id} } from './${m}';`);
   const classList = [...classes.values()].sort((a, b) => natural(a.name, b.name));
   classList.forEach((c, i) => idx.push(`import { ${c.name.split('.').pop()} as class_${i} } from './${c.module}';`));
+  initModules.forEach(([, m], i) => idx.push(`import { init as init_${i} } from './${m}';`));
   idx.push('');
   idx.push('export const program: AS2Program = {');
   idx.push(`  timelines: {${timelineModules.map(([id]) => `\n    ${id}: ${id === 0 ? 'root' : `sprite_${id}`},`).join('')}\n  },`);
   idx.push(`  buttons: {${buttonModules.map(([id]) => `\n    ${id}: button_${id},`).join('')}\n  },`);
   idx.push(`  classes: {${classList.map((c, i) => `\n    ${JSON.stringify(c.name)}: class_${i},`).join('')}\n  },`);
+  idx.push(`  initByName: {${initModules.map(([n], i) => `\n    ${JSON.stringify(n)}: init_${i},`).join('')}\n  },`);
   idx.push('};');
   idx.push('');
   idx.push('export default program;');

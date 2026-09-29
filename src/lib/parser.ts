@@ -1,6 +1,6 @@
 import {
   type ColorTransform, type DisplayItem, type EventKind, type Frame, type FrameEvent,
-  type Matrix, type PlaceOp, type Rect, type SwfCharacter, type SwfDocument,
+  type Matrix, type PlaceOp, type Rect, type SwfCharacter, type TextRecord, type SwfDocument,
   type Timeline, type CharacterKind, IDENTITY,
 } from '../types';
 
@@ -591,6 +591,15 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
     if (ext) ch.externalFile = ext;
     const bounds = P.rectOf(el);
     if (bounds && (bounds.xMax - bounds.xMin || bounds.yMax - bounds.yMin)) ch.bounds = ch.bounds ?? bounds;
+    if (kind === 'text') readTextRecords(P, ch, el);
+    if (kind === 'font') {
+      const table = Array.from(el.children).find((c) => c.tagName === 'codeTable');
+      if (table && table.children.length) ch.codeTable = Array.from(table.children).map((c) => num(c.getAttribute('value') ?? c.textContent));
+    }
+    if (kind === 'edittext') {
+      const c = Array.from(el.children).find((x) => x.tagName === 'textColor');
+      if (c) ch.attrs.textColor = rgbHex(c);
+    }
     if (kind === 'sprite') {
       ch.frameCount = num(el.getAttribute('frameCount'), 0);
       ch.timelineId = `sprite:${id}`;
@@ -673,6 +682,35 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
     warnings: P.warnings,
     stats: { tags: P.tagCount, unknownTags: P.unknown },
   };
+}
+
+function rgbHex(c: Element): string {
+  const ch = (k: string) => Math.max(0, Math.min(255, num(c.getAttribute(k)))).toString(16).padStart(2, '0');
+  return `#${ch('red')}${ch('green')}${ch('blue')}`;
+}
+
+/** DefineText records: font, size, colour, offsets and glyph runs (chars resolved via the font's codeTable). */
+function readTextRecords(P: Parser, ch: SwfCharacter, el: Element) {
+  const tm = Array.from(el.children).find((c) => c.tagName === 'textMatrix');
+  if (tm) ch.textMatrix = P.readMatrix(tm);
+  const list = Array.from(el.children).find((c) => c.tagName === 'textRecords');
+  if (!list) return;
+  const records: TextRecord[] = [];
+  for (const r of Array.from(list.children)) {
+    const rec: TextRecord = { glyphs: [] };
+    if (bool(r.getAttribute('styleFlagsHasFont'))) { rec.fontId = num(r.getAttribute('fontId')); rec.height = num(r.getAttribute('textHeight')); }
+    if (bool(r.getAttribute('styleFlagsHasXOffset'))) rec.x = num(r.getAttribute('xOffset'));
+    if (bool(r.getAttribute('styleFlagsHasYOffset'))) rec.y = num(r.getAttribute('yOffset'));
+    const color = Array.from(r.children).find((c) => c.tagName === 'textColor');
+    if (color && bool(r.getAttribute('styleFlagsHasColor'))) {
+      rec.color = rgbHex(color);
+      if (color.hasAttribute('alpha')) rec.alpha = num(color.getAttribute('alpha')) / 255;
+    }
+    const glyphs = Array.from(r.children).find((c) => c.tagName === 'glyphEntries');
+    for (const g of Array.from(glyphs?.children ?? [])) rec.glyphs.push({ index: num(g.getAttribute('glyphIndex')), advance: num(g.getAttribute('glyphAdvance')) });
+    records.push(rec);
+  }
+  ch.textRecords = records;
 }
 
 function readSymbolClass(P: Parser, el: Element, isClass: boolean) {
