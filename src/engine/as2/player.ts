@@ -45,6 +45,10 @@ export interface Movie {
   program: AS2Program | null;
   assets: AssetSource | null;
   url: string;
+  /** identifies a loaded (external) SWF package; used for its fonts */
+  key?: string;
+  /** sound playback for this SWF's embedded sounds (defaults to the player's backend) */
+  audio?: AudioBackend | null;
 }
 
 export type NodeKind = 'clip' | 'button' | 'text' | 'graphic';
@@ -154,7 +158,7 @@ export interface AS2PlayerOptions {
   audio?: AudioBackend | null;
   onLog?: (entry: LogEntry) => void;
   /** Resolve a CSS font-family list for an embedded font character id / font name. */
-  fontFamily?: (fontIdOrName: number | string) => string;
+  fontFamily?: (fontIdOrName: number | string, movie: Movie) => string;
   /** Load another SWF (loadMovie / MovieClipLoader). null = not available. */
   resolveExternal?: (url: string) => Promise<Movie | null> | Movie | null;
   /** What to do when an external SWF can't be resolved: pretend it loaded empty, or report an error to the game. */
@@ -203,7 +207,7 @@ export class AS2Player {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private measureCtx: CanvasRenderingContext2D | null | undefined;
-  private channels = new Set<{ id: number | null; handle: AudioHandle }>();
+  private channels = new Set<{ id: number | null; movie: Movie; handle: AudioHandle }>();
   private started = false;
   private disposed = false;
   private hitCanvas: HTMLCanvasElement | null = null;
@@ -257,6 +261,9 @@ export class AS2Player {
       this.log('error', `${label}: ${err?.message ?? String(e)}`, err?.stack?.split('\n').slice(0, 6).join('\n'));
     }
   }
+
+  /** Object.registerClass library of a movie (null = the main movie) */
+  linkageScope(movie: Movie): Movie | null { return movie === this.movie ? null : movie; }
 
   // ------------------------------------------------------------ lifecycle
   /** Initialise: DoInitAction scripts, flashvars, then root frame 1. */
@@ -397,16 +404,16 @@ export class AS2Player {
     const fn = this.frameScript(node, frameIndex);
     if (fn) this.enqueue(node, `${this.describe(node)} frame ${frameIndex + 1}`, () => fn.call(node.obj));
     const frame = node.timeline?.frames[frameIndex];
-    if (frame) this.frameSounds(frame);
+    if (frame) this.frameSounds(frame, node.movie);
   }
 
-  private frameSounds(frame: Frame) {
+  private frameSounds(frame: Frame, movie: Movie) {
     for (const e of frame.events) {
       if (e.kind !== 'sound' || e.characterId == null || !/^StartSound/.test(e.tagType)) continue;
       const stop = /\bstop\b/.test(e.detail);
       const loops = Number(/loop ×(\d+)/.exec(e.detail)?.[1] ?? 1);
-      if (stop) this.stopSound(e.characterId);
-      else if (!(/noMultiple/.test(e.detail) && [...this.channels].some((c) => c.id === e.characterId))) this.playSound(e.characterId, null, 0, loops, 1);
+      if (stop) this.stopSound(e.characterId, movie);
+      else if (!(/noMultiple/.test(e.detail) && [...this.channels].some((c) => c.id === e.characterId && c.movie === movie))) this.playSound(e.characterId, null, 0, loops, 1, movie);
     }
   }
 
@@ -540,7 +547,7 @@ export class AS2Player {
     node.bornTick = this.tickCount;
     if (kind === 'clip') node.timeline = movie.doc.timelines.get(`sprite:${characterId}`) ?? null;
     if (kind === 'button') node.timeline = movie.doc.timelines.get(`button:${characterId}`) ?? null;
-    if (kind === 'text' && ch) node.text = this.textFromCharacter(ch);
+    if (kind === 'text' && ch) node.text = this.textFromCharacter(ch, movie);
     if (kind === 'graphic') {
       this.attach(parent, node);
       return node;
@@ -555,7 +562,7 @@ export class AS2Player {
       if (kind === 'button') this.buildButtonState(node);
     };
     if (kind === 'clip') {
-      const cls = (o.cls ?? (ch?.exportName ? RT.$rt.linkedClass(ch.exportName) : undefined)) as (new () => any) | undefined;
+      const cls = (o.cls ?? (ch?.exportName ? RT.$rt.linkedClass(ch.exportName, this.linkageScope(movie)) : undefined)) as (new () => any) | undefined;
       const Ctor = typeof cls === 'function' ? cls : RT.MovieClip;
       RT.MovieClip.__construct = build;
       this.runHandlers(node, 'construct');
@@ -883,31 +890,31 @@ export class AS2Player {
   }
 
   // ------------------------------------------------------------ text fields
-  fontFamily(fontIdOrName: number | string | undefined): string {
+  fontFamily(fontIdOrName: number | string | undefined, movie: Movie = this.movie): string {
     if (fontIdOrName == null) return 'Times New Roman, serif';
-    if (this.opts.fontFamily) return this.opts.fontFamily(fontIdOrName);
+    if (this.opts.fontFamily) return this.opts.fontFamily(fontIdOrName, movie);
     if (typeof fontIdOrName === 'number') {
-      const name = this.doc.characters.get(fontIdOrName)?.attrs.fontName?.replace(/\u0000/g, '');
+      const name = movie.doc.characters.get(fontIdOrName)?.attrs.fontName?.replace(/\u0000/g, '');
       return name ? `"${name}", sans-serif` : 'sans-serif';
     }
     return `"${fontIdOrName}", sans-serif`;
   }
 
-  private fontNameOf(id: number | undefined): string {
+  private fontNameOf(id: number | undefined, movie: Movie): string {
     if (id == null) return 'Times New Roman';
-    const ch = this.doc.characters.get(id);
+    const ch = movie.doc.characters.get(id);
     return (ch?.attrs.fontName ?? '').replace(/\u0000/g, '') || `font${id}`;
   }
 
-  textFromCharacter(ch: SwfCharacter): TextState {
+  textFromCharacter(ch: SwfCharacter, movie: Movie = this.movie): TextState {
     const a = ch.attrs;
     const bool = (k: string) => a[k] === 'true';
     const fontId = a.fontId != null ? Number(a.fontId) : undefined;
     const alignN = Number(a.align ?? 0);
     const format: TextStyle = {
-      font: this.fontNameOf(fontId), size: Number(a.fontHeight ?? 240) / TWIPS, color: a.textColor ?? '#000000',
-      bold: this.doc.characters.get(fontId ?? -1)?.attrs.fontFlagsBold === 'true',
-      italic: this.doc.characters.get(fontId ?? -1)?.attrs.fontFlagsItalic === 'true', underline: false,
+      font: this.fontNameOf(fontId, movie), size: Number(a.fontHeight ?? 240) / TWIPS, color: a.textColor ?? '#000000',
+      bold: movie.doc.characters.get(fontId ?? -1)?.attrs.fontFlagsBold === 'true',
+      italic: movie.doc.characters.get(fontId ?? -1)?.attrs.fontFlagsItalic === 'true', underline: false,
       align: (['left', 'right', 'center', 'justify'] as const)[alignN] ?? 'left',
     };
     const t: TextState = {
@@ -980,19 +987,20 @@ export class AS2Player {
   }
 
   // ------------------------------------------------------------ sounds
-  playSound(characterId: number | null, url: string | null, startMs: number, loops: number, volume: number): AudioHandle | null {
-    if (!this.audio) return null;
-    const handle = this.audio.play(characterId, url, startMs, Math.max(0, loops - 1), volume * this.builtins.globalVolume);
+  playSound(characterId: number | null, url: string | null, startMs: number, loops: number, volume: number, movie: Movie = this.movie): AudioHandle | null {
+    const audio = movie.audio ?? this.audio;
+    if (!audio) return null;
+    const handle = audio.play(characterId, url, startMs, Math.max(0, loops - 1), volume * this.builtins.globalVolume);
     if (handle) {
-      const entry = { id: characterId, handle };
+      const entry = { id: characterId, movie, handle };
       this.channels.add(entry);
       const prev = handle.onended;
       handle.onended = () => { this.channels.delete(entry); prev?.(); };
     }
     return handle;
   }
-  stopSound(characterId: number | null) {
-    for (const c of [...this.channels]) if (characterId == null || c.id === characterId) { c.handle.stop(); this.channels.delete(c); }
+  stopSound(characterId: number | null, movie: Movie = this.movie) {
+    for (const c of [...this.channels]) if (characterId == null || (c.id === characterId && c.movie === movie)) { c.handle.stop(); this.channels.delete(c); }
   }
   stopAllSounds() { this.stopSound(null); }
 
@@ -1258,7 +1266,7 @@ export class AS2Player {
   private drawGraphic(ctx: CanvasRenderingContext2D, node: DisplayNode, ct: ColorTransform | undefined) {
     const ch = node.character;
     if (!ch) return;
-    if (ch.kind === 'text' && ch.textRecords?.length) { this.drawStaticText(ctx, ch, ct); return; }
+    if (ch.kind === 'text' && ch.textRecords?.length) { this.drawStaticText(ctx, ch, ct, node.movie); return; }
     const assets = node.movie.assets;
     if (!assets) return;
     const a = assets.get(ch.id, ch.kind, ch.bounds);
@@ -1299,7 +1307,7 @@ export class AS2Player {
     ctx.drawImage(c, d.x, d.y, d.w, d.h);
   }
 
-  private drawStaticText(ctx: CanvasRenderingContext2D, ch: SwfCharacter, ct: ColorTransform | undefined) {
+  private drawStaticText(ctx: CanvasRenderingContext2D, ch: SwfCharacter, ct: ColorTransform | undefined, movie: Movie) {
     const m = ch.textMatrix;
     ctx.save();
     if (m) ctx.transform(m.a, m.b, m.c, m.d, m.tx, m.ty);
@@ -1311,9 +1319,9 @@ export class AS2Player {
       if (r.color) color = r.color;
       if (r.x != null) x = r.x;
       if (r.y != null) y = r.y;
-      const fch = font != null ? this.doc.characters.get(font) : undefined;
+      const fch = font != null ? movie.doc.characters.get(font) : undefined;
       const table = fch?.codeTable ?? [];
-      ctx.font = `${fch?.attrs.fontFlagsItalic === 'true' ? 'italic ' : ''}${fch?.attrs.fontFlagsBold === 'true' ? 'bold ' : ''}${height}px ${this.fontFamily(font)}`;
+      ctx.font = `${fch?.attrs.fontFlagsItalic === 'true' ? 'italic ' : ''}${fch?.attrs.fontFlagsBold === 'true' ? 'bold ' : ''}${height}px ${this.fontFamily(font, movie)}`;
       ctx.fillStyle = ct && !isColorIdentity(ct) ? tint(color, ct) : color;
       for (const g of r.glyphs) {
         const code = table[g.index];
@@ -1345,7 +1353,7 @@ export class AS2Player {
       const free = w - 4 - line.width;
       const off = line.align === 'center' ? free / 2 : line.align === 'right' ? free : 0;
       for (const r of line.runs) {
-        ctx.font = cssFont(r, (f) => this.fontFamily(f));
+        ctx.font = cssFont(r, (f) => this.fontFamily(f, node.movie));
         ctx.fillStyle = r.color;
         ctx.textBaseline = 'alphabetic';
         const s = t.password ? '*'.repeat(r.text.length) : r.text;

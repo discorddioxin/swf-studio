@@ -56,9 +56,10 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   }
 
   function attachMovie(parent: DisplayNode, linkage: string, name: string, depth: number, init?: Record<string, unknown> | null) {
-    const movie = parent.movie;
+    // Flash looks the symbol up in the library of the SWF the target clip belongs to; fall back to the main movie
+    let movie = parent.movie;
     let ch = [...movie.doc.characters.values()].find((c) => c.exportName === linkage);
-    if (!ch) ch = [...p.movie.doc.characters.values()].find((c) => c.exportName === linkage);
+    if (!ch && movie !== p.movie) { movie = p.movie; ch = [...movie.doc.characters.values()].find((c) => c.exportName === linkage); }
     if (!ch) { p.log('warn', `attachMovie: no symbol exported as "${linkage}"`); return undefined; }
     place(parent, num(depth));
     const node = p.instantiate(movie, ch.id, parent, num(depth), String(name), { initObject: init ?? null });
@@ -175,8 +176,16 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     node.playing = true;
     const prog = movie.program;
     if (prog) {
-      for (const [n, fn] of Object.entries(prog.initByName ?? {})) p.guard(`init action "${n}" (${url})`, () => fn.call(node.obj));
-      for (const [id, mod] of Object.entries(prog.timelines)) if (mod.init) p.guard(`init action ${id} (${url})`, () => mod.init!.call(node.obj));
+      // AS2 classes of the loaded SWF join _global unless a class of that name is already defined (first definition wins, as in Flash)
+      for (const [name, cls] of Object.entries(prog.classes ?? {})) if (!RT.$rt.classByName(name)) RT.$rt.registerClass(name, cls);
+      // Object.registerClass in its init actions registers into the loaded SWF's own library
+      const prev = RT.setLinkageScope(p.linkageScope(movie));
+      try {
+        for (const [n, fn] of Object.entries(prog.initByName ?? {})) p.guard(`init action "${n}" (${url})`, () => fn.call(node.obj));
+        for (const [id, mod] of Object.entries(prog.timelines)) if (mod.init) p.guard(`init action ${id} (${url})`, () => mod.init!.call(node.obj));
+      } finally {
+        RT.setLinkageScope(prev);
+      }
     }
     p.enterFirstFrame(node);
   }
@@ -563,8 +572,14 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   // ------------------------------------------------------------ Sound
   def(RT.Sound.prototype, {
     attachSound(this: any, id: any) {
-      const ch = [...p.doc.characters.values()].find((c) => c.kind === 'sound' && c.exportName === String(id));
+      // the library of the SWF the Sound's target clip came from, then the main movie
+      const own = N(this.target)?.movie;
+      const find = (m: Movie) => [...m.doc.characters.values()].find((c) => c.kind === 'sound' && c.exportName === String(id));
+      let movie: Movie = own ?? p.movie;
+      let ch = find(movie);
+      if (!ch && movie !== p.movie) { movie = p.movie; ch = find(movie); }
       if (!ch) p.log('warn', `Sound.attachSound: no sound exported as "${id}"`);
+      this.__movie = movie;
       this.__sound = ch?.id ?? null;
       this.__url = null;
     },
@@ -576,7 +591,7 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     start(this: any, offset?: any, loops?: any) {
       if (this.__sound == null && !this.__url) return;
       const vol = (this.__volume ?? 100) / 100 * volumeOf(this.target);
-      const h = p.playSound(this.__sound ?? null, this.__url ?? null, num(offset) * 1000, Math.max(1, num(loops, 1)), vol);
+      const h = p.playSound(this.__sound ?? null, this.__url ?? null, num(offset) * 1000, Math.max(1, num(loops, 1)), vol, this.__movie ?? p.movie);
       if (h) {
         (this.__handles ??= new Set()).add(h);
         const prev = h.onended;
@@ -584,7 +599,12 @@ export function installBuiltins(p: AS2Player): BuiltinState {
       }
     },
     stop(this: any, id?: any) {
-      if (id != null) { const ch = [...p.doc.characters.values()].find((c) => c.exportName === String(id)); p.stopSound(ch?.id ?? -1); return; }
+      if (id != null) {
+        const movie: Movie = this.__movie ?? N(this.target)?.movie ?? p.movie;
+        const ch = [...movie.doc.characters.values()].find((c) => c.exportName === String(id));
+        p.stopSound(ch?.id ?? -1, movie);
+        return;
+      }
       if (this.target == null && this.__sound == null) { p.stopAllSounds(); return; }
       for (const h of this.__handles ?? []) h.stop();
       this.__handles?.clear();
@@ -601,7 +621,7 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     getTransform(this: any) { return this.__transform ?? { ll: 100, lr: 0, rl: 0, rr: 100 }; },
     getBytesLoaded() { return 1; },
     getBytesTotal() { return 1; },
-    duration: { get(this: any) { const ch = this.__sound != null ? p.doc.characters.get(this.__sound) : null; return ch ? Math.round((Number(ch.attrs.soundSampleCount ?? 0) / soundRate(ch.attrs.soundRate)) * 1000) : 0; } },
+    duration: { get(this: any) { const ch = this.__sound != null ? ((this.__movie as Movie | undefined) ?? p.movie).doc.characters.get(this.__sound) : null; return ch ? Math.round((Number(ch.attrs.soundSampleCount ?? 0) / soundRate(ch.attrs.soundRate)) * 1000) : 0; } },
     position: { get(this: any) { const h = [...(this.__handles ?? [])][0]; return h ? Math.round(h.position) : 0; } },
   });
   const targetVolumes = new WeakMap<object, number>();

@@ -86,7 +86,11 @@ export const _global: Record<string, any> = Object.create(null);
 // ----------------------------------------------------------- class registry
 
 const classes = new Map<string, unknown>();
-const linkage = new Map<string, unknown>();
+/** Object.registerClass registry, one per loaded SWF library (scope null = the main movie). */
+const linkage = new Map<unknown, Map<string, unknown>>();
+let linkageScope: unknown = null;
+/** Sets the library that Object.registerClass calls register into (the engine sets it while a loaded SWF's init actions run). */
+export function setLinkageScope(scope: unknown): unknown { const prev = linkageScope; linkageScope = scope; return prev; }
 
 function setPath(obj: Record<string, any>, path: string, value: unknown) {
   const parts = path.split('.');
@@ -113,9 +117,21 @@ export const $rt = {
     return true;
   },
   /** Object.registerClass("linkageId", Class) */
-  registerLinkage(id: string, cls: unknown): boolean { linkage.set(id, cls); return true; },
+  registerLinkage(id: string, cls: unknown): boolean {
+    let lib = linkage.get(linkageScope);
+    if (!lib) linkage.set(linkageScope, (lib = new Map()));
+    lib.set(String(id), cls);
+    return true;
+  },
   classByName(name: string): unknown { return classes.get(name) ?? (_global as any)[name]; },
-  linkedClass(id: string): unknown { return linkage.get(id); },
+  /** class registered for a linkage id in the given library (default: the current scope) */
+  linkedClass(id: string, scope: unknown = linkageScope): unknown { return linkage.get(scope)?.get(id); },
+
+  /** obj[name](...args) when it is a function; AS2 ignores calls of non-function values. */
+  invoke(obj: any, name: string, ...args: unknown[]): any {
+    const f = obj?.[name];
+    return typeof f === 'function' ? f.apply(obj, args) : undefined;
+  },
 
   /** AS2 cast `Type(value)`: the value if it is an instance of Type, otherwise null. */
   cast<T>(value: unknown, type: abstract new (...args: any[]) => T): T {
@@ -276,7 +292,23 @@ export function stopDrag(): void { need().stopDrag(); }
 export function loadMovieNum(url: string, level: number, method?: string) { need().loadMovie(url, level, method); }
 export function loadVariablesNum(url: string, level: number, method?: string) { need().loadVariables(url, level, method); }
 export function unloadMovieNum(level: number) { need().unloadMovie(level); }
-export function ASSetPropFlags(_obj: unknown, _props: unknown, _set: number, _clear?: number): void { /* enumeration flags are not emulated */ }
+/** ASSetPropFlags(obj, props, set, clear): only the "don't enumerate" bit (1) is emulated – it hides
+ * properties from for..in (V2 components hide e.g. Object.prototype.LargestID this way). Read-only (4)
+ * and don't-delete (2) are ignored. props: null = all own properties, "a,b" or an array of names. */
+export function ASSetPropFlags(obj: unknown, props: unknown, set: number, clear?: number): void {
+  if (obj == null || (typeof obj !== 'object' && typeof obj !== 'function')) return;
+  const o = obj as Record<string, unknown>;
+  const names = props == null ? Object.getOwnPropertyNames(o)
+    : Array.isArray(props) ? props.map(String)
+    : String(props).split(',').map((n) => n.trim()).filter(Boolean);
+  const hide = (Number(set) & 1) !== 0, show = (Number(clear) & 1) !== 0;
+  if (!hide && !show) return;
+  for (const n of names) {
+    const d = Object.getOwnPropertyDescriptor(o, n);
+    if (!d || !d.configurable) continue;
+    try { Object.defineProperty(o, n, { enumerable: show && !hide ? true : !hide }); } catch { /* frozen */ }
+  }
+}
 export function toggleHighQuality(): void { /* no-op */ }
 
 // ------------------------------------------------------------ Flash classes
@@ -411,11 +443,30 @@ export function installAS2Extensions() {
 
 /** Clears all program state (_global, class and linkage registries) for a fresh run. */
 export function resetRuntime() {
-  for (const k of Object.keys(_global)) delete _global[k];
+  for (const k of Object.getOwnPropertyNames(_global)) delete _global[k];
+  installGlobals();
   classes.clear();
   linkage.clear();
+  linkageScope = null;
   log.length = 0;
 }
 
 /** Messages logged before a host was installed. */
 export function pendingLog(): string[] { return log.splice(0); }
+
+/** In Flash _global is the object holding the built-ins (_global.ASSetPropFlags, _global.MovieClip, …).
+ * They are installed non-enumerable so for..in over _global only sees game data. */
+function installGlobals() {
+  const builtins: Record<string, unknown> = {
+    Object, Array, String, Number, Boolean, Math, Date, Function, Error, parseInt, parseFloat, isNaN, isFinite, escape, unescape,
+    trace, getTimer, random, int, chr, ord, mbchr, mbord, mblength, mbsubstring, substring, setInterval, clearInterval, setTimeout, clearTimeout,
+    getURL, fscommand, stopAllSounds, updateAfterEvent, getVersion, targetPath, stopDrag, loadMovieNum, loadVariablesNum, unloadMovieNum,
+    ASSetPropFlags, toggleHighQuality, MovieClip, Button, TextField, TextFormat, Sound, Color, XMLNode, XML, LoadVars, LocalConnection,
+    MovieClipLoader, ContextMenu, ContextMenuItem, NetConnection, NetStream, Video, TextSnapshot, PrintJob, XMLSocket,
+    Key, Mouse, Stage, Selection, System, SharedObject, AsBroadcaster, Camera, Microphone,
+  };
+  for (const [k, v] of Object.entries(builtins)) {
+    if (v !== undefined) Object.defineProperty(_global, k, { value: v, writable: true, configurable: true, enumerable: false });
+  }
+}
+installGlobals();

@@ -3,14 +3,15 @@
 // player (src/engine/as2) against the parsed SWF document.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AssetCache } from '../lib/assets';
+import type { AssetCache, SwfPackage } from '../lib/assets';
 import type { AssetBundle, SwfDocument } from '../types';
 import { cn } from '../utils/cn';
 import { Button } from './ui';
 import type { LogEntry } from '../engine/flash/player';
-import { AS2Player } from '../engine/as2/player';
+import { AS2Player, type Movie } from '../engine/as2/player';
+import { createExternalResolver, swfNameOf, type ExternalSwf } from '../engine/as2/externals';
 import { buildAS2Program, type AS2Build } from '../engine/as2/program';
-import { AS2AudioBackend, registerFonts, soundFilesOf } from '../engine/as2/audio';
+import { AS2AudioBackend, embeddedFontFamily, registerFonts, soundFilesOf } from '../engine/as2/audio';
 
 const MAX_LOG = 500;
 const BOOT_KEY = 'swf-studio.as2.boot';
@@ -29,11 +30,15 @@ export const isAs2Bundle = (doc: SwfDocument, assets: AssetBundle | null) =>
 
 type BuildState = { status: 'loading' } | { status: 'ready'; build: AS2Build; sourceCount: number } | { status: 'failed'; error: string };
 
-export function As2Execute({ doc, cache, assets }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null }) {
+/** An external SWF export with its key (used for its fonts). */
+interface ExternalEntry { pkg: SwfPackage; name: string; key: string }
+
+export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; externals?: SwfPackage[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<AS2Player | null>(null);
   const audioRef = useRef<AS2AudioBackend | null>(null);
+  const extAudioRef = useRef<AS2AudioBackend[]>([]);
   const playingRef = useRef(true);
   const [build, setBuild] = useState<BuildState>({ status: 'loading' });
   const [session, setSession] = useState(0);
@@ -48,6 +53,13 @@ export function As2Execute({ doc, cache, assets }: { doc: SwfDocument; cache: As
   const [size, setSize] = useState({ w: 800, h: 500 });
   const [boot, setBoot] = useState<string>(() => { try { return localStorage.getItem(BOOT_KEY) ?? ''; } catch { return ''; } });
   const [fontIds, setFontIds] = useState<Set<number>>(new Set());
+  /** registered embedded fonts of the external SWFs, per key */
+  const [extFontIds, setExtFontIds] = useState<Map<string, Set<number>>>(new Map());
+  const [loadedExternals, setLoadedExternals] = useState<{ name: string; ms: number; errors: number }[]>([]);
+  const extEntries = useMemo<ExternalEntry[]>(() => externals.map((pkg, i) => {
+    const name = swfNameOf(pkg.bundle.xmlName || pkg.doc.header.fileName || `external${i}`);
+    return { pkg, name, key: `x${i}-${name.replace(/[^a-z0-9]+/gi, '_')}` };
+  }), [externals]);
   const [viewFile, setViewFile] = useState<string | null>(null);
   const pendingLogs = useRef<LogEntry[]>([]);
 
@@ -69,13 +81,38 @@ export function As2Execute({ doc, cache, assets }: { doc: SwfDocument; cache: As
     return () => { cancelled = true; };
   }, [assets]);
 
-  const fontFamily = useCallback((f: number | string) => {
-    const byName = (name: string) => [...doc.characters.values()].find((c) => c.kind === 'font' && (c.attrs.fontName ?? '').replace(/\u0000/g, '').toLowerCase() === name.toLowerCase());
-    const ch = typeof f === 'number' ? doc.characters.get(f) : byName(f);
-    const name = typeof f === 'string' ? f : (ch?.attrs.fontName ?? '').replace(/\u0000/g, '');
-    const embedded = ch && fontIds.has(ch.id) ? `"swf-font-${ch.id}", ` : '';
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(extEntries.map(async (e) => [e.key, await registerFonts(e.pkg.bundle.files, e.key)] as const))
+      .then((pairs) => { if (!cancelled) setExtFontIds(new Map(pairs)); });
+    return () => { cancelled = true; };
+  }, [extEntries]);
+
+  // Embedded fonts: by character id in the movie that uses it; by name in the calling movie,
+  // then the main movie, then any loaded SWF (text formats only carry the font name).
+  const fontFamily = useCallback((f: number | string, movie?: Movie) => {
+    const libs: { doc: SwfDocument; key?: string; ids: Set<number> }[] = [
+      { doc, ids: fontIds },
+      ...extEntries.map((e) => ({ doc: e.pkg.doc, key: e.key, ids: extFontIds.get(e.key) ?? new Set<number>() })),
+    ];
+    const own = movie?.key ? libs.find((l) => l.key === movie.key) : libs[0];
+    const fontName = (c: { attrs: Record<string, string> } | undefined) => (c?.attrs.fontName ?? '').replace(/\u0000/g, '');
+    let hit: { lib: (typeof libs)[number]; id: number } | null = null;
+    let name = typeof f === 'string' ? f : '';
+    if (typeof f === 'number') {
+      const lib = own ?? libs[0];
+      name = fontName(lib.doc.characters.get(f));
+      if (lib.ids.has(f)) hit = { lib, id: f };
+    }
+    if (!hit && name) {
+      for (const lib of own ? [own, ...libs.filter((l) => l !== own)] : libs) {
+        const c = [...lib.doc.characters.values()].find((x) => x.kind === 'font' && lib.ids.has(x.id) && fontName(x).toLowerCase() === name.toLowerCase());
+        if (c) { hit = { lib, id: c.id }; break; }
+      }
+    }
+    const embedded = hit ? `"${embeddedFontFamily(hit.id, hit.lib.key)}", ` : '';
     return `${embedded}${name ? `"${name}", ` : ''}sans-serif`;
-  }, [doc, fontIds]);
+  }, [doc, fontIds, extEntries, extFontIds]);
 
   // ---- a player per (document, build, restart)
   useEffect(() => {
@@ -85,6 +122,23 @@ export function As2Execute({ doc, cache, assets }: { doc: SwfDocument; cache: As
     const audio = new AS2AudioBackend(cache, soundFilesOf(assets?.files ?? []));
     audio.muted = muted;
     audioRef.current = audio;
+    // SWFs the game loads at run time: each export in the folder besides the main movie
+    const extAudio = extEntries.map((e) => { const a = new AS2AudioBackend(e.pkg.cache, soundFilesOf(e.pkg.bundle.files)); a.muted = muted; return a; });
+    extAudioRef.current = extAudio;
+    setLoadedExternals([]);
+    const swfs: ExternalSwf[] = extEntries.map((e, i) => ({
+      name: e.name, key: e.key, doc: e.pkg.doc, assets: e.pkg.cache, audio: extAudio[i],
+      sources: () => Promise.all(e.pkg.bundle.files.filter((f) => /\.as$/i.test(f.path)).map(async (f) => ({ path: f.path, text: await readText(f.file) }))),
+    }));
+    let playerForLog: AS2Player | null = null;
+    const resolveExternal = createExternalResolver(swfs, {
+      onBuild: (swf, b, ms) => {
+        setLoadedExternals((l) => [...l, { name: swf.name, ms, errors: b.errors.length }]);
+        playerForLog?.log('info', `loaded external SWF ${swf.name}: ${b.files.size} modules transpiled in ${ms} ms`);
+        for (const e of b.errors) playerForLog?.log('error', `as2ts (${swf.name}): ${e.file}: ${e.message}`);
+      },
+      onError: (swf, e) => playerForLog?.log('error', `external SWF ${swf.name}: ${e.message}`),
+    });
     const bootCode = boot.trim();
     const player = new AS2Player({
       doc,
@@ -92,6 +146,7 @@ export function As2Execute({ doc, cache, assets }: { doc: SwfDocument; cache: As
       assets: cache,
       audio,
       fontFamily,
+      resolveExternal,
       missingExternal: 'empty',
       onLog: (entry) => {
         pendingLogs.current.push(entry);
@@ -103,14 +158,22 @@ export function As2Execute({ doc, cache, assets }: { doc: SwfDocument; cache: As
       } : undefined,
     });
     for (const e of build.build.errors) player.log('error', `as2ts: ${e.file}: ${e.message}`);
+    playerForLog = player;
+    if (swfs.length) player.log('info', `external SWFs available: ${swfs.map((s) => s.name).join(', ')}`);
     playerRef.current = player;
     player.start();
     canvasRef.current?.focus({ preventScroll: true });
-    return () => { player.dispose(); audio.dispose(); if (playerRef.current === player) playerRef.current = null; };
+    return () => {
+      player.dispose(); audio.dispose(); extAudio.forEach((a) => a.dispose());
+      if (playerRef.current === player) playerRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, cache, build, session, fontFamily]);
+  }, [doc, cache, build, session, fontFamily, extEntries]);
 
-  useEffect(() => { if (audioRef.current) audioRef.current.muted = muted; }, [muted]);
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.muted = muted;
+    extAudioRef.current.forEach((a) => { a.muted = muted; });
+  }, [muted]);
 
   // ---- fit the canvas
   useEffect(() => {
@@ -302,7 +365,18 @@ export function As2Execute({ doc, cache, assets }: { doc: SwfDocument; cache: As
                 <Button className="mt-1" onClick={restart}>Restart with script</Button>
               </div>
               <div>
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Missing external SWFs</div>
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">External SWFs</div>
+                {extEntries.length === 0 && <div className="mb-2 text-zinc-500">Only the main movie is loaded. Put the FFDec export of every SWF the game loads in the same folder (one sub-folder each).</div>}
+                {extEntries.map((e) => {
+                  const l = loadedExternals.find((x) => x.name === e.name);
+                  return (
+                    <div key={e.key} className="font-mono text-[10px]">
+                      <span className={l ? (l.errors ? 'text-amber-300' : 'text-emerald-300') : 'text-zinc-400'}>{l ? '●' : '○'} {e.name}.swf</span>
+                      <span className="text-zinc-500"> {l ? `loaded, ${l.ms} ms${l.errors ? `, ${l.errors} error(s)` : ''}` : 'not requested yet'}</span>
+                    </div>
+                  );
+                })}
+                <div className="mt-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Missing external SWFs</div>
                 {missing.length === 0 && <div className="text-zinc-500">None requested so far.</div>}
                 {missing.map((m) => <div key={m} className="font-mono text-[10px] text-amber-300">{m}</div>)}
                 {missing.length > 0 && (

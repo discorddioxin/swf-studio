@@ -119,11 +119,41 @@ describe('emitter scoping', () => {
     expect(code).toContain('export class Fish extends MovieClip {');
     expect(code).toContain('static COUNT: number = 0;');
     expect(code).toContain('declare speed: number;');
-    expect(code).toMatch(/constructor\(\) \{\n\s+super\(\);\n\s+this\.speed = 2;\n\s+Fish\.COUNT\+\+;/);
+    expect(code).toMatch(/constructor\(\) \{\n\s+super\(\);\n\s+Fish\.COUNT\+\+;/);
+    // instance initialisers live on the prototype, as compiled by AS2
+    expect(code).toContain('(Fish.prototype as any).speed = 2;');
     expect(code).toContain('get fast(): boolean {');
     expect(code).toContain('this._x += this.speed * dt;');
     expect(code).toContain('this.helper?.();'); // MovieClip subclass: unknown names are inherited members
     expect(code).toContain('$rt.registerClass("game.Fish", Fish);');
+  });
+});
+
+describe('super member access', () => {
+  it('emits super.method() as TypeScript super calls', () => {
+    const { code } = transpileScript(`
+      class ui.List extends ui.Base {
+        function init(Void) { super.init(); super.size = 3; }
+        function later() { var f = function() { super.draw(); }; }
+      }`);
+    expect(code).toContain('super.init();');
+    expect(code).not.toContain('this.super');
+    // nested function: TS forbids super there, the superclass prototype is used instead
+    expect(code).toContain('Object.getPrototypeOf(List.prototype).draw');
+  });
+});
+
+describe('function-valued fields', () => {
+  it('calls var members through $rt.invoke (non-functions are ignored, as in AS2)', () => {
+    const { code } = transpileScript(`
+      class ui.Obj extends MovieClip {
+        var initProperties;
+        function init() { this.initProperties(); initProperties(1); draw(); }
+        function draw() {}
+      }`);
+    expect(code).toContain('$rt.invoke(this, "initProperties");');
+    expect(code).toContain('$rt.invoke(this, "initProperties", 1);');
+    expect(code).toContain('this.draw?.();'); // MovieClip subclasses are dynamic: ordinary guarded call
   });
 });
 
@@ -133,6 +163,12 @@ describe('project mapping', () => {
     expect(classify('scripts/DefineSprite_12_fish/frame_3/DoAction_2.as')).toEqual({ kind: 'frame', timeline: 12, frame: 3 });
     expect(classify('scripts/DefineButton2_40/on(release).as')).toEqual({ kind: 'button', button: 40 });
     expect(classify('scripts/frame_2/PlaceObject2_45_7/onClipEvent(load).as')).toEqual({ kind: 'placement', timeline: 0, frame: 2, character: 45, depth: 7 });
+    // FFDec 22 adds the instance name between character and depth
+    expect(classify('scripts/frame_12/PlaceObject2_94_UIScrollBar_9/onClipEvent(construct).as')).toEqual({ kind: 'placement', timeline: 0, frame: 12, character: 94, depth: 9 });
+    expect(classify('scripts/DefineSprite_3/frame_1/PlaceObject2_7_btn_2_4/on(release).as')).toEqual({ kind: 'placement', timeline: 3, frame: 1, character: 7, depth: 4 });
+    // FFDec 22 files DoInitAction of exported sprites under <default package>/<linkage>.as
+    expect(classify('scripts/%3Cdefault package%3E/themap.as')).toEqual({ kind: 'initByName', name: 'themap' });
+    expect(classify('scripts/DefineSprite_10_fisher/frame_1/DoAction.as')).toEqual({ kind: 'frame', timeline: 10, frame: 1 });
     expect(classify('scripts/DefineSprite_9/DoInitAction.as')).toEqual({ kind: 'init', timeline: 9 });
     expect(classify('scripts/__Packages/com/x/Foo.as')).toEqual({ kind: 'class' });
   });

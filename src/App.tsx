@@ -9,7 +9,7 @@ import { Stage } from './components/Stage';
 import { TimelineView } from './components/TimelineView';
 import { GameEngine } from './components/GameEngine';
 import { Button } from './components/ui';
-import { AssetCache, expandUploadFiles, hydrateActionScriptSources, ingestFiles, patchButtonAssetIds } from './lib/assets';
+import { AssetCache, expandUploadFiles, hydrateActionScriptSources, ingestFiles, patchButtonAssetIds, splitPackages, type SwfPackage } from './lib/assets';
 import { parseSwfXml } from './lib/parser';
 import { useProject } from './lib/project';
 import type { AssetBundle, FlattenedSprite, SwfDocument } from './types';
@@ -56,6 +56,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const cacheRef = useRef<AssetCache | null>(null);
+  /** every loaded FFDec export (index = loadedDocs index); [0] is the main movie */
+  const [packages, setPackages] = useState<SwfPackage[]>([]);
 
   const [timelineId, setTimelineId] = useState('root');
   const [frame, setFrame] = useState(0);
@@ -84,25 +86,28 @@ export default function App() {
       const hasArchives = files.some((file) => /\.zip$/i.test(file.name));
       if (hasArchives) setBusy('Unpacking ZIP archives…');
       const expandedFiles = await expandUploadFiles(files);
-      const bundle = ingestFiles(expandedFiles);
-      if (!bundle.xmlFile) throw new Error('No .xml file found in that folder — expected the JPEXS dump at its root.');
+      // one package per FFDec export (.xml + its folder); the shallowest one is the main movie,
+      // the others are SWFs the game loads at run time (loadMovie / MovieClipLoader)
+      const parts = splitPackages(expandedFiles);
+      if (!parts.length) throw new Error('No .xml file found in that folder — expected the JPEXS dump at its root.');
       await new Promise((r) => setTimeout(r, 30));
-      const xmlFiles = expandedFiles.filter((file) => /\.xml$/i.test(file.name));
-      const parsedDocs: SwfDocument[] = [];
-      for (const xmlFile of xmlFiles) {
-        setBusy(`Parsing ${xmlFile.name}…`);
-        const parsed = parseSwfXml(await xmlFile.text(), { fileName: xmlFile.name });
-        patchButtonAssetIds(bundle, parsed);
-        await hydrateActionScriptSources(parsed, bundle);
-        parsedDocs.push(parsed);
+      const loaded: SwfPackage[] = [];
+      for (const part of parts) {
+        setBusy(`Parsing ${part.xmlFile.name}${parts.length > 1 ? ` (${loaded.length + 1}/${parts.length})` : ''}…`);
+        const bundle = ingestFiles(part.files);
+        const parsedDoc = parseSwfXml(await part.xmlFile.text(), { fileName: part.xmlFile.name });
+        patchButtonAssetIds(bundle, parsedDoc);
+        await hydrateActionScriptSources(parsedDoc, bundle);
+        const pkgCache = new AssetCache(bundle, () => setTick((t) => t + 1));
+        pkgCache.useExternals(parsedDoc.characters.values());
+        loaded.push({ doc: parsedDoc, bundle, cache: pkgCache });
       }
-      const parsed = parsedDocs[0];
+      const parsed = loaded[0]?.doc;
       if (!parsed) throw new Error('No readable .xml SWF files found in the selected uploads.');
-      cacheRef.current?.dispose();
-      cacheRef.current = new AssetCache(bundle, () => setTick((t) => t + 1));
-      cacheRef.current.useExternals(parsed.characters.values());
-      setAssets(bundle);
-      setLoadedDocs(parsedDocs);
+      setPackages((previous) => { previous.forEach((p) => p.cache.dispose()); return loaded; });
+      cacheRef.current = loaded[0].cache;
+      setAssets(loaded[0].bundle);
+      setLoadedDocs(loaded.map((p) => p.doc));
       setActiveSwfIndex(0);
       setDoc(parsed);
       setFlattenedSprites((previous) => {
@@ -235,6 +240,8 @@ export default function App() {
   const selectSwf = useCallback((index: number) => {
     const next = loadedDocs[index];
     if (!next) return;
+    const pkg = packages[index];
+    if (pkg) { cacheRef.current = pkg.cache; setAssets(pkg.bundle); }
     setActiveSwfIndex(index);
     setDoc(next);
     setTimelineId('root');
@@ -244,7 +251,7 @@ export default function App() {
     setSelectedPath(undefined);
     setSelectedActorId(null);
     setStartFrame(1);
-  }, [loadedDocs]);
+  }, [loadedDocs, packages]);
 
   const flattenSprite = useCallback(async (characterId: number) => {
     if (!doc || !cacheRef.current) return;
@@ -345,7 +352,7 @@ export default function App() {
             </span>
           )}
           <Button variant="ghost" className="px-2 py-1 text-[10px]" onClick={() => {
-            cacheRef.current?.dispose(); cacheRef.current = null;
+            packages.forEach((p) => p.cache.dispose()); setPackages([]); cacheRef.current = null;
             flattenedSprites.forEach((sprite) => sprite.frames.forEach((frameAsset) => URL.revokeObjectURL(frameAsset.url)));
             setFlattenedSprites([]); setLoadedDocs([]); setActiveSwfIndex(0); setDoc(null); setAssets(null);
           }}>
@@ -356,7 +363,7 @@ export default function App() {
 
       <ErrorBoundary label={WORKSPACE_LABEL[workspace]} resetKeys={[doc, workspace]} className="flex min-h-0 flex-1 items-center justify-center p-4">
       {workspace === 'execute' ? (
-        <ExecuteTab doc={doc} cache={cache} assets={assets} />
+        <ExecuteTab doc={doc} cache={cache} assets={assets} externals={packages.filter((_, i) => i !== activeSwfIndex)} />
       ) : workspace === 'engine' ? (
         <GameEngine
           doc={doc}

@@ -5,7 +5,7 @@
 // and run on the flash.* engine in src/engine/flash.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AssetCache } from '../lib/assets';
+import type { AssetCache, SwfPackage } from '../lib/assets';
 import type { AssetBundle, SwfDocument } from '../types';
 import { cn } from '../utils/cn';
 import { Button } from './ui';
@@ -21,9 +21,9 @@ type CodeState =
 
 const MAX_LOG = 500;
 
-export function ExecuteTab(props: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null }) {
+export function ExecuteTab({ externals, ...props }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; externals?: SwfPackage[] }) {
   // ActionScript 1/2 exports (SWF ≤ 8, .as scripts) run on the AS2 player; AS3 code on the flash.* engine.
-  return isAs2Bundle(props.doc, props.assets) ? <As2Execute {...props} /> : <As3Execute {...props} />;
+  return isAs2Bundle(props.doc, props.assets) ? <As2Execute {...props} externals={externals} /> : <As3Execute {...props} />;
 }
 
 function As3Execute({ doc, cache, assets }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null }) {

@@ -51,7 +51,10 @@ const RE = {
   sprite: /DefineSprite(?:Tag)?_(\d+)/i,
   frame: /(?:^|\/)frame_?(\d+)(?:\/|\.as$)/i,
   button: /DefineButton2?(?:Tag)?_(\d+)/i,
-  place: /PlaceObject\d?(?:Tag)?_(\d+)(?:_(\d+))?/i,
+  // PlaceObject2_<char>_<depth>, or (FFDec ≥ 22) PlaceObject2_<char>_<instanceName>_<depth>
+  place: /PlaceObject\d?(?:Tag)?_(\d+)(?:_(?:[^/]*_)?(\d+))?(?=\/|$)/i,
+  // FFDec ≥ 22 files a sprite's DoInitAction under "<default package>/<linkageName>.as"
+  defaultPackage: /(?:^|\/)(?:%3Cdefault(?: |%20)package%3E|<default package>)\/([^/]+)\.as$/i,
   depth: /depth_?(\d+)/i,
   init: /DoInitAction/i,
   packages: /(?:^|\/)__Packages\/(.+)\.as$/i,
@@ -60,6 +63,8 @@ const RE = {
 export function classify(path: string): Role {
   const p = path.replace(/\\/g, '/');
   if (RE.packages.test(p)) return { kind: 'class' };
+  const dp = RE.defaultPackage.exec(p);
+  if (dp) return { kind: 'initByName', name: decodeURIComponent(dp[1]) };
   const sprite = RE.sprite.exec(p);
   const timeline = sprite ? Number(sprite[1]) : 0;
   const button = RE.button.exec(p);
@@ -97,7 +102,7 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
     let role = classify(path);
     try {
       const body = inlineIncludes(parseProgram(file.content), path, byPath, new Set([path]));
-      if (role.kind === 'unknown' && body.some((s) => s.k === 'class')) role = { kind: 'class' };
+      if ((role.kind === 'unknown' || role.kind === 'initByName') && body.some((s) => s.k === 'class')) role = { kind: 'class' };
       // FFDec names a DoInitAction of an exported sprite after its linkage name: scripts/<exportName>.as
       else if (role.kind === 'unknown' && /^(?:scripts\/)?[^/]+\.as$/i.test(path.replace(/^.*?(scripts\/)/i, 'scripts/')) && !path.includes('__Packages')) {
         role = { kind: 'initByName', name: path.split('/').pop()!.replace(/\.as$/i, '') };
@@ -119,7 +124,7 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
       const module = `classes/${s.decl.name.replace(/\./g, '/')}`;
       classes.set(s.decl.name, {
         name: s.decl.name, module, extends: s.decl.extends,
-        members: s.decl.members.map((m) => ({ name: m.name, isStatic: m.isStatic })),
+        members: s.decl.members.map((m) => ({ name: m.name, isStatic: m.isStatic, field: m.kind === 'field' })),
       });
       classDecls.push({ decl: s.decl, source: p });
     }

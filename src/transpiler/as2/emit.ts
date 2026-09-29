@@ -19,7 +19,7 @@ export interface KnownClass {
   /** output module path relative to the project root, no extension, e.g. classes/com/gaia/fishing/Fish */
   module: string;
   /** declared members (for unqualified member resolution in subclasses) */
-  members?: { name: string; isStatic: boolean }[];
+  members?: { name: string; isStatic: boolean; field?: boolean }[];
   extends?: string | null;
 }
 
@@ -115,6 +115,8 @@ interface ClassInfo {
   pkg: string;
   instance: Set<string>;
   statics: Set<string>;
+  /** instance members declared as data fields (`var`) – they may hold a function, or not */
+  fields: Set<string>;
   dynamicBase: boolean;
 }
 
@@ -158,10 +160,15 @@ export class ModuleEmitter {
     const pkg = dot < 0 ? '' : decl.name.slice(0, dot);
     const info: ClassInfo = {
       name: short, qualified: decl.name, pkg,
-      instance: new Set(), statics: new Set(), dynamicBase: false,
+      instance: new Set(), statics: new Set(), fields: new Set(), dynamicBase: false,
     };
     // own + inherited members
-    for (const m of decl.members) (m.isStatic ? info.statics : info.instance).add(m.name);
+    const methods = new Set<string>();
+    const note = (m: { name: string; isStatic: boolean; field?: boolean }) => {
+      (m.isStatic ? info.statics : info.instance).add(m.name);
+      if (!m.isStatic) (m.field ? info.fields : methods).add(m.name);
+    };
+    for (const m of decl.members) note({ name: m.name, isStatic: m.isStatic, field: m.kind === 'field' });
     let base = decl.extends ? this.resolveClassName(decl.extends, pkg) : null;
     let baseName = decl.extends;
     const seen = new Set<string>();
@@ -170,12 +177,13 @@ export class ModuleEmitter {
       if (!known) { if (DYNAMIC_BASES.has(baseName.split('.').pop()!)) info.dynamicBase = true; break; }
       if (seen.has(known.name)) break;
       seen.add(known.name);
-      for (const m of known.members ?? []) (m.isStatic ? info.statics : info.instance).add(m.name);
+      for (const m of known.members ?? []) note(m);
       const knownPkg = known.name.includes('.') ? known.name.slice(0, known.name.lastIndexOf('.')) : '';
       baseName = known.extends ?? null;
       base = baseName ? this.resolveClassName(baseName, knownPkg) : null;
     }
     if (decl.dynamic) info.dynamicBase = true;
+    for (const m of methods) info.fields.delete(m);
 
     const lines: string[] = [];
     let ext = '';
@@ -201,9 +209,11 @@ export class ModuleEmitter {
       }
     }
 
-    // constructor (field initialisers are applied first, like AS2)
-    const fieldInits = (ctx: Ctx) => instanceFields.filter((f) => f.init).map((f) => `${this.pad()}this.${f.name} = ${this.value(f.init!, ctx)};\n`).join('');
-    if (ctor || instanceFields.some((f) => f.init) || decl.extends) {
+    // AS2 compiles instance `var x = value` initialisers onto the prototype, so they are visible
+    // while superclass constructors run (V2 components read skin names etc. from them) and
+    // object values are shared by all instances. Emitted after the class, below.
+    const protoInits = instanceFields.filter((f) => f.init);
+    if (ctor || decl.extends) {
       const scope: Scope = { kind: 'method', names: new Set(), parent: null };
       const ctx = clsCtx(false, scope);
       const params = ctor ? this.params(ctor.params, scope, pkg, ctor.body) : '';
@@ -218,7 +228,7 @@ export class ModuleEmitter {
           bodyStmts = bodyStmts.slice(1);
         } else superCall = `${this.pad()}super();\n`;
       }
-      body = superCall + fieldInits(ctx) + this.functionBody(bodyStmts, ctx, scope, ctor?.params ?? []);
+      body = superCall + this.functionBody(bodyStmts, ctx, scope, ctor?.params ?? []);
       lines.push(`  constructor(${params}) {\n${body}  }`);
     }
 
@@ -235,6 +245,11 @@ export class ModuleEmitter {
       lines.push(`  ${prefix}${m.name}(${params})${ret} {\n${body}  }`);
     }
     lines.push('}');
+    if (protoInits.length) {
+      this.indentLevel = 0;
+      const ctx = clsCtx(true, { kind: 'method', names: new Set(), parent: null });
+      for (const f of protoInits) lines.push(`(${short}.prototype as any).${f.name} = ${this.value(f.init!, ctx)};`);
+    }
     this.useRuntime('$rt');
     lines.push(`$rt.registerClass(${JSON.stringify(decl.name)}, ${short});`);
     this.indentLevel = 0;
@@ -694,6 +709,16 @@ export class ModuleEmitter {
       return this.wrap(`$rt.registerLinkage(${args()})`, P_CALL, min);
     }
     // AS2 ignores calls to undefined functions / on undefined objects: guard unless known to exist
+    // calling a `var` member: AS2 silently ignores it when the value is not a function
+    // (V2 components set e.g. `initProperties = 0` and later call this.initProperties())
+    if (ctx.cls && !ctx.isStatic) {
+      const field = e.callee.k === 'member' && e.callee.obj.k === 'lit' && e.callee.obj.v === 'this' ? e.callee.prop
+        : e.callee.k === 'id' && !this.isLocal(e.callee.name, ctx) ? e.callee.name : null;
+      if (field && ctx.cls.fields.has(field)) {
+        this.useRuntime('$rt');
+        return this.wrap(`$rt.invoke(this, ${JSON.stringify(field)}${e.args.length ? ', ' + args() : ''})`, P_CALL, min);
+      }
+    }
     let callee: string;
     let guard = '?.';
     if (e.callee.k === 'member') {
@@ -749,6 +774,12 @@ export class ModuleEmitter {
     };
 
     const cls = ctx.cls;
+    if (name === 'super' && cls) {
+      // super.method(): TypeScript `super` is only valid directly in the method body; inside a
+      // nested function fall back to the superclass prototype (static: the superclass itself)
+      if (kindOf(ctx.scope) === 'method') return 'super';
+      return ctx.isStatic ? `Object.getPrototypeOf(${cls.name})` : `Object.getPrototypeOf(${cls.name}.prototype)`;
+    }
     if (cls) {
       if (cls.statics.has(name)) return `${cls.name}.${name}`;
       if (cls.instance.has(name) && !ctx.isStatic) return `this.${name}`;

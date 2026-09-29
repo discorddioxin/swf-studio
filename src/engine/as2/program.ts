@@ -46,6 +46,9 @@ export function buildAS2Program(sources: SourceInput[]): AS2Build {
 
 function link(compiled: Map<string, string>, errors: BuildIssue[]): AS2Program | null {
   const cache = new Map<string, { exports: any }>();
+  // modules whose body threw (usually a static initializer reading a class that was still being
+  // loaded through an import cycle); they are re-run once the other modules exist
+  const failed = new Map<string, Error>();
   const norm = (from: string, spec: string) => {
     const base = from.split('/').slice(0, -1);
     for (const part of spec.split('/')) {
@@ -62,6 +65,10 @@ function link(compiled: Map<string, string>, errors: BuildIssue[]): AS2Program |
     if (code == null) throw new Error(`module not found: ${path}`);
     const mod = { exports: {} as any };
     cache.set(path, mod);
+    run(path, code, mod);
+    return mod.exports;
+  };
+  const run = (path: string, code: string, mod: { exports: any }) => {
     const require = (spec: string) => {
       if (spec === RUNTIME_SPECIFIER || spec.endsWith('runtime/as2')) return runtime;
       if (spec.startsWith('.')) return load(norm(path, spec));
@@ -69,14 +76,27 @@ function link(compiled: Map<string, string>, errors: BuildIssue[]): AS2Program |
     };
     try {
       new Function('exports', 'require', 'module', `${code}\n//# sourceURL=as2/${path}`)(mod.exports, require, mod);
+      failed.delete(path);
     } catch (e) {
-      errors.push({ file: path, message: `load: ${(e as Error).message}` });
+      failed.set(path, e as Error);
     }
-    return mod.exports;
+  };
+  // Flash's compiler orders class definitions by dependency; here a failed module is simply
+  // re-run (with the same exports object, so importers' live bindings see the class) until
+  // a pass makes no progress.
+  const retryFailed = () => {
+    for (let pass = 0; pass < 8 && failed.size; pass++) {
+      const before = failed.size;
+      for (const path of [...failed.keys()]) run(path, compiled.get(path)!, cache.get(path)!);
+      if (failed.size >= before) break;
+    }
   };
   if (!compiled.has('index.ts')) { errors.push({ file: 'index.ts', message: 'no project index was generated' }); return null; }
   // load classes first so registration order follows dependencies, then the index
   for (const p of [...compiled.keys()].filter((k) => k.startsWith('classes/'))) load(p);
+  retryFailed();
   const idx = load('index.ts');
+  retryFailed();
+  for (const [file, e] of failed) errors.push({ file, message: `load: ${e.message}` });
   return (idx.program ?? idx.default ?? null) as AS2Program | null;
 }

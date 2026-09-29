@@ -1,0 +1,729 @@
+<?xml version="1.0" encoding="UTF-8"?><!--
+WARNING: The structure of this XML is not final.
+In later versions of FFDec it can be changed.
+Make sure you use compatible reader/writer based on _xmlExportMajor/_xmlExportMinor keys.
+--><swf _xmlExportMajor="2" _xmlExportMinor="1" _generator="JPEXS Free Flash Decompiler v.22.0.2" type="SWF" charset="UTF-8" compression="ZLIB" encrypted="false" frameCount="34" frameRate="12.0" gfx="false" hasEndTag="true" version="7">
+  <displayRect type="RECT" Xmax="640" Xmin="0" Ymax="640" Ymin="0" nbits="11"/>
+  <tags>
+    <item type="SetBackgroundColorTag" forceWriteAsLong="false">
+      <backgroundColor type="RGB" blue="255" green="255" red="255"/>
+    </item>
+    <item type="DoActionTag" actionBytes="0700" forceWriteAsLong="true"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="1" forceWriteAsLong="true" zlibBitmapData="78daed544b6b1351181de258b59347d53ac664ee641e99473233493a79cce4d98214b54a2bb5051f501414f40fb8b1ae74e15250a888e04645d1ba51dc14b1eaae88dd08823b11142b4ab6ae8e33898a8a13376ec41e387771cfe1bbf77edfe15214051f4b332a16678af87cf1281e8ea770f7a083f6d90378b33f8df7271af83029a03d2de2ed5e01cb3b0956a624bc9e90f0729f8ac763323e1db2706b4f1eb70fef407b42c4abdd22562655bc1893f0713a83e55d693c1b37b0342ae3e976190bc312de4d595818d5315715f1fcc9232cb644dc2c11dcaf497830a2e05e4bc5f57a1ae7cb22ee54245c1a4a61bea1e16a55c57ccbc09cabe35c51c18d92846bb50caeb8195c76b3b850c96036afe094c7933905b37606679a259cd6051c13391c37751cd155505d6095abfc5f39dc1314f5cfe8b487209d0e852291c8c6b521fa777ac8a5a84d0c138e4607f46f069ee70dc3e8e8be2c518ccc3034934c7a86751b06222c1b4977f510edfa9f08c3f88eada96d5ba2ebe998dc4fb39ad1a9dfa479cfe086fb3d68b118138dc989449c65e382d03dbf3594755d6fc3472c1c8eb1718e708938c70d7ebd5fab9acd2a842344e6b9b80f2ec1a9b9a430f8fd7d5527ab28bc6e398e4608e104cd2edbc2e61ffbd3742b05c7751cc7545559354ddbd6fa7eee9fa7f9ab6d6a3cd14c8df4fddaff8ec1b1349327b2c6af09984fde323d83990e9a9f9bd77595d899c0f9d6f396a5150b817ad32d5ba592189c8f46a1681783eb0f57ebc59c37bae07cd50cd1e8993fc330fe90cf9ef5ff6afebf00061b0200"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="2">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="1" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="2" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+      <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="0" translateY="0"/>
+    </item>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="3" forceWriteAsLong="true" zlibBitmapData="78daed54cf6bd360180e5d326dda256d93344bb2a4e99c4ba25dd32d7326ce75ffc0fe04078ae041411004f5e0445645654a2f3d6851c4290a137f5584e28f22132695593c7870885ebcf420781284e163baa9a89879f122ee81e7bb3c0feff77eeffbf0110481165ecd8a98bbd90b34b7018d38e6671268d63af1e9450677ca1e169f31785be9c0c73916ef1f30685663f8508be3735d40a5c863e15a14ef2a092cccf078734bc0e2d32ebcbea161f6bc8ee7e504ea3e5f5ef67d5793685c14503f9bc4fc05114f4a22eae7645c3a9244719fdf4389c3e3333c1e4d09a8152554a714cc1c9531b15347a3fe10f72659dc3f21e06e81c7f4011eb70b0aaa275594f7cb983ea4e1fa8486d25e15570ea651d8a162d2e7e17115a77667706c5cc4e95d291cdfde8d3d633a88656095abfc5f39ba2208e29fd1491f413a190a452291f6f610f93b3de4114492a2a234cdc4bf196459b66d7b496fc91b094aa228921205df40ae5d1361984466590f915eeb1389512d4734198bd151929568b2c3b097eae749cd37787e759a365896a65949e03986e1d29dcbf7e7b359cfe3980e1f0c1b8db20cc72bbcc0757585bff6971fc9f6f52a3e2459e15ae00545ef1753e1efef1bf1fad6f7f4e42cd7355455e13523373098367f9c4fdedbbcc9f55cd735755dd24d7330a7877f9e9fafb54ecb3474d5308d54dbaff35f32b896616aaa64686d01fb712cd34ca9fdd9a0fd798e95d3d5c181c0fd0e3b966538eb02f5bc37603943ddc1f9c86f75724e70fdd10dc343fdfeea82f3b5c5b6ec15f367dbf61ff2b962fdbf9aff2f285e1263"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="4">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="3" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="4" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="5" forceWriteAsLong="true" zlibBitmapData="78daedd3cf6bd3500007f0b2ac5bdb345bbaa4d9ba36491393f447fa636db2ac69bb14b731a7870d3727a288bf90a173307088a0203814c493203bb98b2078108f5e04ff00c1bb178fde04f128085f5f9b6e78e804d19bfb92f75ef23ee1bdbcf7482010403bac2e239e57489bc468218d44310dd95121562528532a345743da91a1ba0a794e43af6b28cee661782aac8509e80d05f9390de513391c3dd54469c140bea560f1c22cceae2fe1d6c3ebb0e715349734b496339859cd61eeb489f93326664e2a38b62261f9dc2456cf2bb8b8a6e1ca351d6b1b595c5dcf60ed4606972e8bb8bf5dc6c6ba8c3bb773d8da54b17daf8517cfb7f0edcb1bec3ec9e3e5331befdf2de2e6868d8f1f36f1e3fb27bc7dbd82af9f77f0f8ae8ea70f0ad879e4e1d5ee71e4c46104fce0b01c96ffb5b47e9b40e0cf7dfc404fb5ab507fe200e7424446e8507f6f4f711cdd8ad19cd03fded3594e880eb31c792bd5ed19fbc5630c4551c1816094619998df158fee7b821ea0fc04834cd4ef1b65f73d3e18a4a2d4503b1415f29966937b1e1f64249e1f4aa7d3a48e04833132c1082788acef634c58e073b21f9e5c03218615795ee23a3e96a43d4fce65fce4b2d9ac24099224f172aae349d1f32a5e448e50722422b7354c2290193beb2f68c4c900728658366b9a86619ae3b66d74bd5eb50ccf3325332b11b4486cdba9398e119684cef8e4d9140dc90c870dd357abde98ae09b4e07f5fbd6aebba68897d832241db719bed35374a49721c9df54d5a2532a1de279a441d77babbe34786bbdeaa551dd7b5758bd46ea5522eef9fc9defe362dbb4d5315928942a1c7f937a79d4a658a64a2a46a895ee76f397e6b1652f15ede2cba7e5b577b7aa361fb37f57ccff1c93e74dbe2dffd1fffd67f026639eb4b"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="6">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="5" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="6" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="7" forceWriteAsLong="true" zlibBitmapData="78daed933b6fd35014c7436bd22476ecb84d62ece2344d1ac775633b89edbcdc3869f30044444511a8a29578a85009d405062ad4092418995818991899185999f804482cec7c853f37715a754891106cf42f1ddfebfb3b3a0f9feb402080a13ccb454dafa0535f43dbf2d0aeb4d06d74d06bf4c859173db78fac52c652dec262ae0845ab603ebd82ac6a6169d986aa5721c879287a1d56a38b767f0305670d6ad1855eeb6299c4dcdcd9c5f6ee2324337908391557b6b6114b6770ffe029f26b0e0e5f1c62d06fa0e328b8de2ee2e1ed0d0cdc026e92fdeec0c5d6d575ec746cdca8afe0f9ad3ede3db98bbd6bebf8f0fa009fdebec2d78feff1edcb67fcfcf11dfb97aa78f37807f7564decad3bd8bfece241af8e977736f16ce02113e711f085333bb3ffd55abf5520f0e77cf1547e7ef8e0e6e64fe15294109e8ea627f329498ab5123141486727f2b824f0c2ac74418a4e8d4f164ef0043327cb1cc7f17c9c49f84749fe985fa439594ec9a9147161f87139f1639e8ccec9acccce12a5529c8fe978e68827a34c5814d948249248b02cc7254802561282719fafc418515422bec45048e0a2743c288a6169c417a669cf0b2927341316c3616253233e1df43cdb63436c2ac4f2338a42510c9148328efa577384930021651443d38696354d65ccdda6a1789e16d69419020c22d32c554b6595d43c8a4fde354aa1348651349f1af546b52ad2825f5fad62aa2a6550699a22d02c5babc39e1b7a46a2c7fd35974942351dd4081d63a22561cc5b66b36459a66a942dcbb2ed7cf1782647dfd7183a58b6631365757dc2fc9bab65db76ce394e493f9f9b9f347fa3e4afae3a9d9cc48b05cbf7abe526f246a5ea6f6ab9fcc4fbe556fcb55ef8bbffe3dff25f029be4ed"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="8">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="7" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="8" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="9" forceWriteAsLong="true" zlibBitmapData="78daedd3cf6bdb561c007025fe152bb264d94a14c792acc48ee53c49ef593f2cfb49727dd821ed06bb6c837a7430c60e856ea365eda1b09576838e410325873625a776eb617430026b613b953006bbf4d21e7ae9a1879dc7fe82efe4c81eeb6081c16eeb17be077d3fbcc757ef7d1fc33030096eae0865a10c1cc78320ae009329808a62c8b022640a45088f6fc18937df00371ac07c661e789187aa5c854dab037a4b8177de1d43382470eedc87f0e5d510ae7c3a809b3b5bf0dea9065cbbfa2a7c7bf7143cf8ee03b8f01185dbb74ec2eef531fcf4e379b8f8f17178fcf3277063fb24b41a45b876e52d78f2cb2ebcff76005fed9e85efbfb90cbf3fdf8783fb3bf0ecc90fb0b7f3193c7cf0358c5ff3e0febd3dd8be741a1e1decc32bbe0eaf8f10dcbb73037efbf52998eb32ecdfbe0e776f6d43df5881bd2fcec3d9f1167c7e660c6bd2222c2de48049035ee6cbfcbfe6e8c86098ffd4634c47231a94ffc103412c8f861e15a7dfc3bffab049c55266349f2be3e6b422fce994afea0a56d6754f6416aad5b426e4663e6412966bf2babaacbb4c31dd3fcbcf1c6739d49057654d935555a14cfe70cd82c0a7de64848ab9d9a837d6d61af5d5ba12a4cd96f9d48779ae5441b666d6eb666373555670e08dbc76db6d160fbd50e058ce345674b5b3d659326539e914b771db734b132f14d80a67391ba651333636144d5d52979576bba528dee1f91458961bf4d1a6d1310c845a6a4dabcb35a3b6dcd2e9d439d64746cf346dc7b45147eb68b5755d6db594203ff54584b4b9c489dd0ffb8eeda0aea177756f589c794592500fd93d870c7c62d9be1586898ba9732c9b2b4992a911c721a66313e28796154b9e909d3a5f9a632454b14d7be0fb3e09ad641b0bd32c3fdd3f9b0c1a57919c9ee998c4f2bb7184f1b1a6909bad674b0cb72839c427498bc48a319e9cbf584ed7731cbbc82164f69cfe805849632e9e5dc0c4290d82380e4342c23ee913bf1be9d38911a6f31504811b257f1426d9ed4656abf9c2fcd1288a5dd7c3511c479ee7c5abcd8517dca56e3c090fbb09d3e4daf27f9bdfa48e3176695a3b962f1ef93e28131cfd7ee8bf795f7f0040b3eaca"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="10">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="9" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="10" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="11" forceWriteAsLong="true" zlibBitmapData="78daedd35f4853511c07f0ebfedc79b7dd6d77f7ee36e7b63bf5de3bb7dd39a7dbdcdf2bd44314f410213d483d44113d5810423ed81fc80595a1911626192a0d4ba4ac8c8c28940882f2c1370b22909e7a08829ebf2de8a5ed4e7acf033f0e9ccf393fcebfdff71f3f716ab088576b1b585a59c1f8cc34e6979fe1eefc1cd63f7fc2cce202deacafa1383e8ab9a5452cbf5dc59dfbf7b0f2e11d3e6e7ec1e8e42d4c966630fb681ed726c6507abc8027af5f606cea36ce5f1ec2f0cdeb288e5cc1c4ec14aede18c1fb8d756c7efb8ae907b3181a2e82d011283d2ca1ce4440672670e65c3f8ef61dc6854b8370b8cdd8d7b31b274e1ec3cebd39f4f51fc7e9813e9cbd3880c5e7f3a06c7ab4a524785b58bc5c7d8a83bdfb41b33ab81acde8cab7211c0ba0a7770f0e1d39008f6047739087baab1de95c100441fc0ee24fbf1ddbf15f46f7968d203406653f67d8c2299faf9c98abe556ca47f84c765d0d37baac94cd67f7519ca6cb468e7408668ab21afd5aee3678780fcd7b5c2e57bd960b2ceff0304d7e8eb3309af91b0de509244993b44373bdec30f03ccff0f40ecdfd352802c9180c2ccbca9a6e8d28b2831564775db58b11a9bb49141545148506a9e27e947032974dc6d3a9ce68540c291d15f7df994b06e3f16436112b78989010ad789f5432988dc7b3b954b8906f97abde37130806632dcdaaaa06f2e1d6ae4af7aa815899cb9e8e48e94c67a52b6a22d61c4caa79bdcfe43585d2952ea9b1583ca7a66c56baa98d325539a306e28544c244910cefb0d83355fb53d5ae9c2ada2db48774bb6c4a95fbd5444235da9c34e9b498e4d6eaff2b958fa6b75a9c16bd53086b3841b6ab36afd1c8354ae9b0a4f1ffad167787be418c4432ad29cdfaa8174319451422e1428dfae1048165c47ca1767d45dd52ea5feaef2fff0574410c9f"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="12">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="11" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="12" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="13" forceWriteAsLong="true" zlibBitmapData="78daed92db6f125110c669a12015582ebba5bbcbb29c6d815df6c6de81ed618b945ad25a631a8d5163a22f467df34d13135f7cf3cf357dfd5c4b624c6bfbdcc4cec92427f9cd7c339399b5b57558f610e57209e7e73ff1f87489972f9ec273742c8f16389c8510790ecbc3193ebc7b0b22b770f0204160f731a701164984e53cc6b72f9fb09806702d0db3d8c78fef5f3176752cd29837cf8e318d86d81fbb38a021f6c221ce8ee7885c33cd1fc3d255706c0381ef6139f571946a3e3f5de0643682d957f0f9fd2b7c7c7d86d8b7b09c4d707240918c7df48884c3546fd02598c7014cad0757efe134e54f1eeea73dea7894c6bbea0eea5506bb0a413c34d016056c731c322bc39ddff9ffeac98d96c9dc2e5ede4c926cf686fc4c211deafef53c37c9aafe64bd58c815ff9dbf19179baaa2a42a93845ee5ebd94ca5cd0ff8b0c76bbc73854f647ed0164d83635c8369aa97b9d26a3b4e55e4bc8620762d5bbec44ba44a0441a8343851a7512993bde01b99c4b28c426ec7b389ceb6248be934184a15ca5ef4dfa1e335c771c6f6d4693a7a95ad71d59a6cc4545157f3d97e7fb4bb2b0a4d533349beafcb9df4e5ef79c5dc8ab3dc56bdce47241ad4db122b583209bb32cb6c373756dcd2796dc0f3835e6aad904d6155e0f235c2e6ec0b1e17296976c3b03de2424b14a46a833118a3ed56ecc2aabec6578a25560ffa239391cc1a63444ca3d6129cf24a9f71436dd09d5222e7853d5992c4da901105912dd6ffeca713685aa87a8e17c7312b495db3cbe951e9effd9941ba10fafbe7a9252fca13dfdeb8e6be8c3d8738944eafbfbfad4aadc7d76fe5fd5fe5bf00fa49dcab"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="14">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="13" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="14" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="15" forceWriteAsLong="true" zlibBitmapData="78daed92cb6b135114c627cd7b663299476792cc24996726334927336932c9d8da08d29d0b7157702168575a5c28a2052d588b5268375a170a561417820f50dc09fd1bfc8f3ea72f69b5edba602f7cdcc5ef7c877beef91e3f5ac3cb8d77208831bcd9fc8cf71fbee3d3d72d3c78b88e676b9b98bfbd8a8db75b585c7e8da5a79bf8f1f31716ee3fc7f2fa47acbef8827b4b1b58b8bb82abd7efe0c6cd45d47417d76eadc4be27587ff50da3d9cbe80d47b832378f8aeae0e2a539b4fd10449a861fce605cb1e0f8116851454190c19654542d0fa617c16a75d19b9e85d79b023196c278dd81a4b5203702544c0fb56617aadb43ddee40315c946b06b24509b6d743ab3b846ab7a13b5eec4da26a3490486790c9e74116e8785e625bc4de7da633fd97ba70e2218853c1e54c4e9224f1389e2359892ab022458a477159127322cb50892c996528f11fce721ccfe7655d26b33c97600b99c3bc2fb32c4fd3a39d63f34482a40a07b935c14b9c44cb31adc7e2d9449262d8037ecb97b982941746a3be115738559a4e97287e9f9b5adb97795662f2e5d83e737e746e502d245349669f07ca20745481658b19796cf71923319ddc2ed8e9af845d47e9f8359e231926ab56b7792e9d4aa54abbf3f9911a695adbf31d59e6a82223b142912ee58a457eefffa2815b37bb467b581994cbb29021494eca093929bbc79b6e646856c7a9a9baa3ba8e538dfb080227d7f7f7135a96a9e87e108561398c6c7b22f01b95c0d0feecb76e361a9df1665375a7d441609aed09cdb67cefc0feb5c94e5473bbcdca50d13c7bd21aeaa67f281f8a1a7777631ce9bed2d794a01ffc9d9f9eae35878eab5b86626a8dc9a3f2a5d6a2ded4d0eef72bd631f9f37cdb6c4d9faefc9fc07f03fa05e0d3"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="16">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="15" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="16" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="17" forceWriteAsLong="true" zlibBitmapData="78daadd37b3414581c07f0c1488df78cb779640623c32a33deaf4819138a2935a9bc26aca6073d286c09598fe4591ed14a515b540853b1656b57a5b74a0f45adde6d6db5e965bf3b68b76dff70ce9eb3f79cfbc73d9fdfef9e7b7ebfdfe5abaa61d7a208ec59b90a4737e5a02d3d03770f35632e491de772f2509990849eda038865986223d71115c162d4ad4e407d523226d0e8b8585201beb226d2cdb9d82910021de7d0b4b900c1da747850f4b1d8808d502373ac9a608b7457014ae78a71322d178dc999c811cc415d741cba328b11c5b641895b0044ba6c34ce5b8e63957b91e41008458a3a8ccc0dc1b136859c1c010a0a72306268803b8989494c0decc85f87543e09693e1ac8f2d3848ea60a14890a90f0e4b1d64d09654275940531f08d23018b262a2078a212c45c126a2338688ab54785988b041b02245632e710102edb734d0918472460a5b51cc49672289f4a84c0780c96d8aa609b2f054d0b0c513f9f8a96452cec5b68046994399aa338b81867836ad97d4f0a6781a5af097b3d39847114b14b4042a2b31a6a847a680c32446b380bc97c063a6278b892e08c3b2953d097e18df4004b0c94cfc7605518d092061cce00ae4a61af2b8f83dee3a04b9247da642db88d57415b381bf7131df1f16032d07b16d2006dd40b1970a629a345c4849fa9067c64bb7981056a02cd206093316382169ea6f9c0824a41abd0001d81342439e9e17aa4053a23ac707db93db6f99be344a42dccb495116d4787a59e2a1ac39d207131066fbc0ed8061450b534f0465a82622732a2396a68994147f9741684665a3812cc43269f037796361ea6086535f18503531762b61a3a456c886431ee740d7c4815a2359a8fda500f3c2b8a058f4585bbae12422c0d30dd581bede16ea89e6d077b1a05420b1ad83a1ab23a85a03e46840c91179e54a4405a55860026196e0c2d6cf1b1818bec7d0e0c1d4825b370667d244ac3fd2172e6e2fdc3bb984627c3428f8cc6956128726461a2962a1a7cb9f0a06b63858d096cf5c998c6d4c72459cc7a2f7b0cecd884fedd25e0a92b613e830c6f2a195d6b2291e4cf47675622de4af7a2d2cd02a9366c38ca72dca83ab29912a12b3d1e3d1505b8545e88c797cfc389a28a58332a3c6431d3a9da70d695cd858e26a6d174511d1f838eca32b05549389e9b89d6b2adb0a653511323c1d1d475b8d9b01ff1e626c873b1c3d1a83064ccf28727d71a9da55bd15598879ef2529cccce44c95209ba0f35620e990c89813ef2bcbd71bdb0005c6363bc6aa8c78d9d5530363484259389d6827c34646783482482205b18758dea479246f513eda3e67f7fa4fdf497bea4cd72c7c0df9707069e38f5850b56deda98ddd7a73e7cb8d59e9dd4fdcb675f3c473077fac2c9e1a5568b1b87fd445696d567e778f9b8fbcd0870db10eb10d7563ef4b8dd5b0e5a5dfacb177b88437d83971666acdb50ddbab67bc81b6e966c39fcc93953441111a1a1a15b2b962d4b2e969c067adab725ecd9f5c9a74d1589c2c40b22438a73127352be11e51e43cfa993993b0f1c1c764fcf29dec2e5c15e41694d954d6b72caf266a5e617159d2cba7e6aa43e9eee22a1502c8e088e2faeabdc5c98b626383adecfe168fef9d7c3eee9ee2e0c09991db9b478dfe3aeae9aeaf88ce255ab9a5c830a7f18e98fa7a35750c8ec055139e77e7dfef6f9d933df356dafc9c8dfde5cd3da3dec531c27f987cdf6952effe9cdbddefb72c47757af9c6d3e94da5c7bbca36d249febea3ad3372c66efd56b2f5fa8697f9cd87bf7cee5cbcd9d05b76f0c39dfd6da61e60cbff98b569c7d39eec58307bdfbf70ff6abca3fa9dd73ece6907bd872ed791f3ef885f9d48dd3a0130707effd264fa32bf4a7ff78ecf690bbd8d959f05a9eaa7bcffcf99ae23b45d3b1f75518ca7166717d963bb286dcd9c98eb3f1a974604dddb3c17bcf3ef6deedff9d190798ad9ef055e0900bf84e1c9efac0fbb75aef886af7c6f6371b8e891b1e105df3d5435ef5b58bc4c2e68fc74a2fc6d38c684a34aae1a3919e5f6ce36d1aee4f47ee3c496a3d856262624255a1183eae29f8f69ff34d203f7a94bbfec243328bc566eaebb1aaab4abe98ff57044dcaa30bcaca2403633d639d037ddda7fffd3f5ebd7a4d22e9c93ef57ffb3fff8bff09e0bf9137"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="18">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="17" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="18" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="19" forceWriteAsLong="true" zlibBitmapData="78daadd30954cd591c07f00cadafc57b5ade5abdf77abdded2e2b579ed7aa5bd9422927854a888c80825b25496a4418b2132d1682c53915221a1a1b244219419d95a2ca38919dff98b7166719c3373e67fceffdcfbbf9fefffdefb3fbffb0fa6d171c8760c52456214126d084b1ffba476c823faeb2c4663928121bce80c2c1408b1d5c6164bc4a6901bf13099cd811783096f260b85ae321cf5f145c3d470b42f4ec4e58509b8b97c05ae2d4dc2ad0d1b716ffb0e74e4e5a373d76e3c3d7c04dd65e57856538bc79527d0537d128f4fd6c051570feec47c37f61481a6ac02433575185286c18ca6085b862246d355a0a1340cda6ac3e1cd2561ac2109c12232641c4dd83149f0e36941a8a30a6baa2adc0d3530864ec2786332e4122ad6c745107d0a9cf5b53055ac0b1b862612ec3930d151878f95004c75454ce15320d1558317878c716c32fc79dad836c307a5f1a1e828cd838ca901fe481548e99ac8f4b240418803b89aca9829d08390a206093157b2948b70211d51e62ce4f85a6199cc027559a9b0d121c15f9f8c197c5d781b5010caa7412e66214ec24696cc14bb7dad71a3600312ccf4e1ce24f6c9a0a0c04f8afda1ee684c8dc7edc26c3cac28418c808128010b2bad79e068aa21c3518c05963ca44845280a74828bae26512b0aa278744ce3529161cd8791160949567c08c81a8812b1e1cfa621d7cd06a71266e15ad66a0cb65d81dd280d6cb615224b2ac6462709568e31c5e100575484faa031712e3a7337a135270371be1e9863c480274d1b767aa310cc65215f2645f5b4209c899c0237261557962fc693ca32043369586526409cc008b90eb6f064d1b1dfdd0959f63668089f84b37366624d5000fa6aaa10c6a061018f8b02277b34a710e7267d1d92664c473a87836291085512097612ed1a1313b8ea68a3ded9199bcdcd61a4ae0e8a9212d6989a62b95008399b8d6d9696c8b5b6c601077ba45b58c08fc180484b0b152e2e38ecec84524747625f66083334440e914b26de8de6f120e77271c1cb0b2764326413e3294426492cc61262ddf9c4ba9389bc8442410c9f8f48223f9dc87bd0e970a552b1482c4204f11ca8af8f3062cf1389ec494f0f441a1bc38fc5829dae2e72a452d4f8f9814122e174f00414b8c9b0cbd313250101688c98864b9191688d8d459a9b1baae5725c8c894169581872c68fc7c54509684f4b43ebdab5b89e9e8e134b97a288c8decece463d31de5d5c8ce39999b87fe8101af2f3d15b5585eeca4af43634e0517d3d7a1b1bd1dfd484e72d2d186c6fc7abb636282828bcbb15f0d9eb3ff8cd82cff9959b5d3b3fed37ae34b6a86a5c6d6ddd1af109bf74f1fcd9860b976a8e5fe5f03645fec32f9dbbd8df535f5bdb705aa5a5e510eff2df5ce354d3f9ba815ffbef2876772b9f3bdd744df32fae5177eae4f747f6fc36706f6f5fffb111c78fff50f967bfd0fcbcb7e2587945cf60dfd9ae81ceeaba9e732d87af365f6d7befea3fd6fefc4befdd470fcf0cbcb8dbff86ae77e26593b22a47abad9d3bf29defd8d5f5e8cdeb81dee2036c03ca9d01fa83be375dcaa754d4da9bf3c2095f169b798bdcf1f20dab64ff6336f5db9e57a3a806e51dcc11aacd9b3787101ebf22e5cecd2f9ebc1ea40efb89c528e97ea15864f040479fa4a6ba3cfcddfa5b52f28b74aabe7bc27e7d8ffc9aa577ffc591dea7c38d7a6ad4b6863bbcf384d96b3b3a8f3ebdf5749076af8f56aaf76c785179d5eeeb6d35b32cc60c794c5a27adf37ed9a37dbde46eddae9c9c1ddbbece981be536d5d7da7cc8176fa8621a6a77a6676c2fa3e87d35376545547454b493a950623ef4fd8ba6ec51e0dd5eb93e5b1e5b5131aa68fdec89fe7e13fd057c13dbf8f79e5868fc8dcbd894e8f593f72a7528257b7a3a091c0013b3d111ef7dd1c1cc79d2b1c94bd2de2ecdcfadce9ee3959cbc00b030730f19f2d48d07bf94baf8c487ae7b2b4acb4a5bb3654e6a2a51143b1bbb71431e1890e81be8133b3f7ded5bdf6099edc2b4558943a5b377f8a37e63c3c26256af880eb00a09b6138b8282660d7990db07974d983e7f4acc4cb98dd342072bb1d8f143e9e3a77d706b2b9b1913e2bc3cdcdc27092d2d9d3f9ebda48fe7c7dbd475bc77e03c9fffe5fff997fe3bc6458fc5"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="20">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="19" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="20" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="21" forceWriteAsLong="true" zlibBitmapData="78daad937b540c581cc7b35ecb7aac47a5182ad434a6999ae935d3642aa68c1a3d551e5b44a24492424293b47a1153ca1615aa697a4d7a283d28512391496962f3d8daf51a096bd1faee789c5d9663cf71f6f7cffdddfb39e7feeeeff7fd5ed5316331f0e4295a2bab316ef05094141462fad469501e3e0ac4c91a08f30d84b1011d8df50d983a8580fede87302053c1a69ba1fd721bda5aa5e8973f86b4450a59870c0b6cedc13060c1d488898cb46338557a06b2b69b7058e08455de3e48884b82ca443514179c84b4b51d478fe4c2cd7511681416a6a86ba230bf04c9897968b9d88644413a7489c6303176424e76252894d91008448ad5109b364580cf8f018fe784cece1ed4d74bf050fe028ffa5e2239251d268cb9888e3f86dc824670e73ba0beb11bba242af6c41ec2f926292c390bb12bfa386cb88e38dd20c3f6f038a4a40ad17ca90b777ae4201b3a61a6ae090acbafa2f4542b0e678a21ede8c1c64ddbf040fe0c3df75ee1aaec1e468e5183268903bbc53b4131e641476f361c966c0589c2c0aebd8a596a532038528dd3925e549fbf039a211349a9f968697f0059b71c2a5a6c4ca72fc134c51dcaeada30b65a06aaa105b2caae233c4e84bd07734120db81c4f4c40c9a231cd7e640854006cb7a29324a6fc27b7d24744806389e5705616115c4a535305e9c0ea2c53a50b96160b8ee87a9031f045d2b18d906c3941702cfcd4258dafbc2c92b02b36816d037e12034468482eaeb88da2fc4a1ac1aa84e5207c93a14047d27d01c6340b6de0892852f88b357c236b002548e1fcc1646424b9f0b7dab95b0f78e81aee13c786c3880f094b3581d9a06229585b07d6218b1b808de9d89b0d86c649d90203e59048e9f10ece529d0365b0acb95a9d09be3036d861bdcb788e1e09f06b2990b7ce31a60c6f3c51cb7107885e5c0dcce1ba9c5ed482b6842d4816c70378860eaca077dbe3f582ec1d0a2b04165bb62797811d6efad4570721382f69d44606c31e86c0744e748b13b5382a06811220f5522afee368e557420605b3c589ef160ba8763861e03190acd7529463871b60b737d1240e77ac321e020e89ca57055f4a76f6281a95a3a58b1360447b20a915f528da2920a1099f6f0e40b41a631202aab83269d03bab90de84c4bc599299836cee005c481e1bc1aceabb7806e6907bb253e30e7d8c2dac50346ecb9984e9a85ecdce320280f87aaf204349fad42a9381fcaa387e34c4d159844023454c7e3f1bd5e5494884121ce44b7a416f76fdd4051622c260f5102494d055d975ba0a7ae0a379e1dae5d90a057d689614a4a382810a0a3ad0daf0706a0a4087c31be8237377f89c74ada233fcfe363d3b7eebb20cdaa946dff0ccf8c8abd2ebcd15472c0d965b78dcb273c738fb8f8586261615d42c941d7ef08c5ffe299d1314575bcd783ce976dde2bbe60e3eebfe2239eb059dc286e2c7abdd8b336eff0a6a37e7e2dfe1ff21c2d2d0bbea4ede4388efdaaf5e579d97519f55e0e3f6eedf07ac7b74c0ca00530e699936ece35a01b2ef05c921d1d7c64cd32c7132dee1bdef0dbca339e8d63a8f57f3f58c5d472416d6d8407fd7446d4f2a8960de7ba159ca1ff5ce7f9d489a35e4e7b4876cb6746d8367894c79dca5bbee6ecc56b4d0aae6965fe7ccc1f1a637f9ff46a66526458d9bcb2c4aa88f3e58743ae7676bfa91ff878e0b7fb53ec3426519e2afb2455a4728f6fcb2f5d9be11b2aebea7afbbe6f9ef4dc9dfc42c37cce30254152f3fec8eae45cb74535d6953bbd73def5f7ed903fefcacfdc67bd3a77eb973b3e8285b383663ce25b87bb1e48783f1f56bffcf59517cf88392bb308f74cd8bb54073476589ba554fe3d5fab4183faef3f70aa5e17fe6beffc1fe6b30eed9a35b42f45f88f3eadf297e3357f0a4cfbf956206dda0e4711d037426ffb07fa06055951566fa4d15e6a4fe84f4ddd0f8c18b154f4b17f34a997af048da4694f78bbd3ed3376fed45f05ea978cdea7a3bb3eeb4f3e39f95d32dcfbcbfeded6f51ffe9ffe75ffe37fe67f01148812fa"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="22">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="21" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="22" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="23" forceWriteAsLong="true" zlibBitmapData="78daad94775413461cc76951abd5d6bd5a441110aa08c80a09912404c20849800c35cc3254f6b2280e4446222043821411044da86c14431541a14c076a54c081485d28e2a8ab2d5afa6d1cafd5eab3eff97a7fdcfbddfbfceeee37be77448db998396214a80473381248d0549b051ac9021d6ded5830570bea63be44962819b56555080f0802c9c40c074a2af1f0c600f25324d8122fc6ddde1bb0a559c391610fb61d137b76c9901e9f0c0b3322ce349d801d9d81a55c01c8c6446426a5232531092403026a4aab614da5c3c7d31be909a9885dbd11643332d8f66c08f94214e41440922a417b633b58966cac098b068fcdc70a4f7f88e2c4880a8ec60ec94e9c3e7a1696640ab8ce3c24c5a7a254568980e5c12897ed47aa381324530abcdd5682ba980e0fa18f322e2bf87a0421d02f1202ae10a141914812a5a1a9a11d2e9ca5e03a2d03d582096ff71058d39838b0af1521feebc0a073b0bfa205a2842da05b31c072580232898e65021f38b197a0bbb317196939b8d23380e57e01b0a2b82059bc03991979f0f2f453c6c884acf0308e1f3dafb439d0d531c491ba4eb4b57421227c2de262b371b5ef314c8cad41b6608144b4058feb8da4cdb9caf3225058508ef2b283c8cb6d44de8e6a30183c68692d808b8b9bd26683cf774744c42a84848ab15b2ac7d9aea798367d0e96b94541b034081992729496d5c0c1d10db2e266e819d0e022080281688384cdbb60e7c0078fef0a6b3b573039be60bbf8c194e4008aad1bcc2d5970e2b983c375858dad83d2c711542b2b30598e6032edc06633c1e1b0616ea68712693a3c5db9cafee6405e9c8d8a122916aa8d86b33d05b525db70acbe1c87e52590e649c073a463a5271f5545b97075b24161da3ae488a31015e8054b9219f696ca70a5f3047aeaa5904bb3c0b2b5c2ec49a34131d4466ca837d26222a0ada10e267d3142fddc51949d026db56920eacf83a5d17cac5d21049d4c40595e269a6bcad05853819a2d11d8aadc278e0a4446620c3806b3305f6d0a6c17133078f13472d39370efda6504f36c61676e8848210b7e5c07dcea3e092ecb0159c98990e6e722383000fece0c3088c6e86e90a35fd1860a59213a9a1b60a0ad815325b9c84bda84734d75885f1f8db3475b90e52f445f472ba8fabaa05910616362804da101d89db30d7463033892cd512faf06497d06d68406232e7a355aea6ab1275b824c5102f61549a13552054c5323982f3284e6e489e8ed388eb5e161c8cf9260f8fe3d4c505101414f0ff16161cadcc9b0a3d12060b3a1686ec6607f3f868786a0a2f45179317d707c045fb5ea433c7e55e7a9f7739bc4503f8b67a9ccc9b5e4f7706b717cd5fe5d5f754c9aa9b56f1cf11d6ebd36524353cddb5ba0a73df2d3ee11ceffe22ea20d42017ff8cbf556b6a479cfbe7ee019f61677894e384d1d4b1eb6778f09a14547d8b9feeaf9268f54555534deba346b22f75bb7e0b8101f014d63f19a6462bad32b1eabb87af3aac2b4fed02efa225fdfd5ee8e3ee11b282b363afd5e79fde80b9eaddad9ff8762c6b9ae4f6e98daaf8e8971f3e207068896880efc7ca650c915c7fb5bfbef2a269e1bd534de3cd09ef04da0d7d2efd6052ed9dc575d6eace4c7f6d2fb5515779e5ffcfce9784d1d4d1f8289eeb2f541fe0ee2e6eaad2fee3f542acbdf79a1e1ce17bfdd531dbc3d61ea6c03671d4d034ae8ca3d99192fe33b7f78dbf7072fdea13f1efdcba34b8fc6eae89b6b8e31e4794c31324a7995dfe5b29e9cb6dbf5837fee9166ed98b660e1b3bbbbf34c96cf99be29e9757d8a4eb40d179fed570fe7a48ea81833574d2e9307783c60a7fd5ddf234f9eb4ecfcc992a53754937bedf1b5467d5d62f78f339dffe9cff6b6dee7c7aca6b6fe5078ea6697991f15a83c332ef28dfe6e2fdedba03b75e0e6c3819e9228e5778dfb67fab6bcad9f63470a7617d7d577f5bc5ccdbf32c478575f27dbab64afcdeb92f7ea73c285c1d7ad35fab0bec592ffd0ff671ff73efe67fe17923305e0"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="24">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="23" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="24" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="25" forceWriteAsLong="true" zlibBitmapData="78daed52cd6bd3601cce92699b7e58ede7d2244d9a7649a6ae499b6ec9b6369debba7e312b081e3c0bfe0bf3e2f0209ebc797378d283388421a2309828130f8216d9454114040f5efc3a787c4cbb292aa65ebc88fbc1effd7a1e9ef77d7fbfe7a958c4bddc3cbe9c5ac267ae8e4d760aafa406de4f9ec46ae538de8cd4f081a9612b61e35d721eafd905bce55b78c155f149ece00637836ebc8a97c9053ce71ae8f20d6c090d7c544ee099720ceb6a0b0fd926eeb3353ce69be80a8b789472f6421b9b620beb82b3961671992f61836be22ed7c26d47ff4eba8d35a98dabe93a2e8ab338932de1c9c603dc4cd4708b6f63d579eb0a3b87eb520b6bd90e2e8955ac645bb8367a1457940e96a5399c958e60296de3bcbe88656e1617b2759c539a389da98020885e123bf36eeee67f9995814110ff0c4e3ae1869304e1f3f9868709f2773861d9763c44d134bd6fff37423299d434ad8ff7e04336c550144925620e81dcbbc7170e1f38bc8d13a483db7688ea3142f15088f69341862603b2d6d72f93298760f91d795af607293ac8c4a2917020921ed9bebf9ccb599673e0f57a0341bf3f188844d9682cc2719e9df7954bb9f15196635926c9457a118db1623e2178beffaf648d6733195d354d99e7d9685ad60bc5b4f2637dcad6e4986999a6a98822232a4a51173d3fd7cfc17aa3aac8222f2bb230f46bfdfb0453959514cfc8a92197fe186a5e11f87ccead7f96a1eb225f2cb8f677da5055d91873c5cb5641352624777f94670cdd70d7af1c9c9ec83bad73f7d794a66a03fda769da1ffc3950ffaffaff2bc9ea008b"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="26">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="25" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="26" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="27" forceWriteAsLong="true" zlibBitmapData="78daedd34d4f13410006e02e8b6db7852ddbaed076b7d4d26eb76c3fb6fbd576fbb1a54014120211b8a0010f444c4c0c2626265e9083f1e2c59878f2ae270ffe058d3fc393e12f787d9d760af1b09818bdc99b9d999d7992999d996c4e4ca298ca2227a6519216b0985160e475d47255988a01a7e4a09e3760156d18051336e977750f0db58581b342c61b70b51efafa0a36065be85607b05517db6b7b38d8bd8f67c7a7b04a1e9a959b68ebebe8991be8db9bf0ac61bb054bbb05bdb48641770766f5361c630f0df32e5ce71e5af63e9af601cada2e96074fe0798f51d3f7e1761ec2b40f7172fa0e9fbf9e61b0f6121b3baf71f4e81396568ff0e2d5177c3ffb8107c7efb1b973820f1fbfc15d7e8aa5f5e7b873f816abdb6f204a0504687055aecaff5afabf4d20f0e79ebcd4d3c32a383177890b4122331c37e1ef694188f6639c204e247d9d17c4c8342f0802971e8fccfee2b128c330ec241b89f2d1181d4a442e7c8e9b646858361aa163d7f90b4f702c1366a686619820658e4f9d7b221892e3f1a96c364bea30cbc6c802338228f1d467a321315ecad0c4c933198cf2523c2e0b239f4d719e972915694aaaaacab228cb725c4e8f3c25795edd0b67c24c261c9e1f6a8844242b8ef65fc913f7bcf94c9198aa6a9aa294cb49cb52c6de364cc5f3b4794d95099a2496e5341d4709c9e2687ed22f4b8aac85428a46d56c77ba4d9113e9f7b50dab50904c29704d2268396e77b8e74e2d2570747f76af46162c04a432d131932c4c8fbddfec39ae6b154c52bbf57a4bbbb893f3f36d516ad449f44ac5e7fe3b5da75e6f90e8b51bf939bffb371dda962b37127edeaabab46de77cbdd3b1e84b7bd1777e720ee3b6fa77ffc7bff59f612fe334"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="28">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="27" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="28" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsJPEG3Tag" bitmapAlphaData="78dac5d2410ac0200c44d1b9ffa5bfd08d959a1f9082b37d42429ce4c780d95e9931fb32088330a654517c5c9563edc6c635ae512cb9fe85e59caeef076549965df605eadbd769c8bd0cff659e70" characterID="29" forceWriteAsLong="true" imageData="ffd8ffdb0043000302020302020303030304030304050805050404050a070706080c0a0c0c0b0a0b0b0d0e12100d0e110e0b0b1016101113141515150c0f171816141812141514ffdb00430103040405040509050509140d0b0d1414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414ffc4001f0000010501010101010100000000000000000102030405060708090a0bffc400b5100002010303020403050504040000017d01020300041105122131410613516107227114328191a1082342b1c11552d1f02433627282090a161718191a25262728292a3435363738393a434445464748494a535455565758595a636465666768696a737475767778797a838485868788898a92939495969798999aa2a3a4a5a6a7a8a9aab2b3b4b5b6b7b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae1e2e3e4e5e6e7e8e9eaf1f2f3f4f5f6f7f8f9faffc4001f0100030101010101010101010000000000000102030405060708090a0bffc400b51100020102040403040705040400010277000102031104052131061241510761711322328108144291a1b1c109233352f0156272d10a162434e125f11718191a262728292a35363738393a434445464748494a535455565758595a636465666768696a737475767778797a82838485868788898a92939495969798999aa2a3a4a5a6a7a8a9aab2b3b4b5b6b7b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae2e3e4e5e6e7e8e9eaf2f3f4f5f6f7f8f9faffd9ffd8ffe000104a46494600010100000100010000ffdb0043000302020302020303030304030304050805050404050a070706080c0a0c0c0b0a0b0b0d0e12100d0e110e0b0b1016101113141515150c0f171816141812141514ffdb00430103040405040509050509140d0b0d1414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414ffc0001108001e001e03012200021101031101ffc4001f0000010501010101010100000000000000000102030405060708090a0bffc400b5100002010303020403050504040000017d01020300041105122131410613516107227114328191a1082342b1c11552d1f02433627282090a161718191a25262728292a3435363738393a434445464748494a535455565758595a636465666768696a737475767778797a838485868788898a92939495969798999aa2a3a4a5a6a7a8a9aab2b3b4b5b6b7b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae1e2e3e4e5e6e7e8e9eaf1f2f3f4f5f6f7f8f9faffc4001f0100030101010101010101010000000000000102030405060708090a0bffc400b51100020102040403040705040400010277000102031104052131061241510761711322328108144291a1b1c109233352f0156272d10a162434e125f11718191a262728292a35363738393a434445464748494a535455565758595a636465666768696a737475767778797a82838485868788898a92939495969798999aa2a3a4a5a6a7a8a9aab2b3b4b5b6b7b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae2e3e4e5e6e7e8e9eaf2f3f4f5f6f7f8f9faffda000c03010002110311003f00fcc0f0bf85f50f186b30699a6c225b89392cc76a46bddddbb28cf5fa019240afa0a0fd84fc6cbe13b2f154b0dddce81206696e2dacc84ca9c3aabb1c75040623b74e08af58fd9c3e08dce87f0e740d7ed74db3d5975e81671a8d8dfa992da4612ac5e6c61c8908b9fb3c7e50590858ee018d246427ec5d27e30683f0bfe33ea3f0ff004f8e05f06ff61da6b0ba5c96cf1cf24d2492a4b2a4c587cbb22b552a73c952080ad5138cf74ec8f2f14f131bca12518a5f3ff86f43f27be31781749d267b57f0e68f79a3c16566915ec17f73e74971229c35cab10a3e62d831aa8dbb370c8276f95d7ec87c65f841f0bfe2a43750c5a77f64de3409e64d676fe6452234595650aacd2b8c91959140e37672057e70f8f7c29e15f0db3dcea369e7584732dbc6da546aa5999376e3feaf83b5ba8e3a63a9ace152fa339f078ff68fd94d6abe65bfd8f7f6b1d5bf65af88906a0d6c75af095e48a356d198292ea0f1343bb8595080c3901b68562382bf406a1f167e027ed03aff0088b51d4bc517fe01d4b53f2e2b11a8da173616b043b56352331004abc8143825dc01963cfc05456ef5563d99c54d599fa29fb4dfed0ba2fecfb041e11f035dea97fe229346b613ea5ac696ebf6927720964b86923692409b9b22375f31c82c0aba0f8cfe2b6bd0ea1a4e856f0dd9b8690cd77232e556553b563623819e25c700807b66bcdeac5e6a375a8f91f6ab892e3c8896088cac58a46bf75467b0cf03b52b19468a8b4cffd9"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="30">
+      <shapeBounds type="RECT" Xmax="600" Xmin="0" Ymax="600" Ymin="0" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="29" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="0" moveDeltaX="0" moveDeltaY="0" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="false" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-600" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-600" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="30" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="31" forceWriteAsLong="true" zlibBitmapData="78daed53674c5351146ee87bf7b5cf852b5af7de7bb5b8f740c15107b580880c91a1604b5952441901941151414445a4801a08a035b8100902e2c0200695883146c48809b8e2c8e7754463ece397fff4242779e77edfcd3de73bdf138944f81a2dcfefa1f9e92d343d2e4743ed65d455e6e0ba31115949c1d03a2f85c6c91245f9c9a829cfc1cbfa6b68ac2b41c38362ca2fc3eb862a7c7edf842dea397055cd867eeb2a68e89d38fd4684f9da2273bf2fa2831c911ce5859387f4484f0c4466921e2753427126231a1585a9a82e31e0c1f5d328351e467141326e5f31e06ee929d4ddcc476d452eeaab8cb85f998f9b57b2f1fc6109eda10cef5edcc5dbc66afafe1dbc785441eb1a3cbc5384b72febe065bf00be2ecbe0ef660d9dab154d6bdad3d77a05c2b52a846c5b8b400f25a20336209cf618a65523d44785d4184f1c0c77c34efa1de26d835d1a7abe7d3d1276ba202ac001b17a27c4d059c275f614b3c5c108775a6f4254a02392223d71ee44183212fd9012e38d3dc12e28cd8b475a820e4762b5389b1e8184dd1e301c08c2e1bd5aaa45088e25f8637fa4372e9e8a45fef148aac92e180d7b50793e1585d971a8bd96851b178ea2cc98829282245415a5e3d6a534e4a645a1faaa81ea968df2c234aa57166aca72d14475f9d8fc04ef5fd5e343cb337c7ad3087c68a6f3d9213ed41dc5b9fb90773c86ea7a0ea2ef81fff9efa6bed51089fe02beb48ff30e6761dcd24b43c483ec2542b8c251d99165d8e1a618dff07e4469ce109675ed6dfafd791bd4ddc42c2166bd8606494cf5df630527fb46e058d6dbe47cbc9a138b0999cc71be6dd4a6e6e7bb73ec78968809475899cc843e94c08ca35d321c67366988e437dc6219c5fbca06122d43e81c9461a69658fdc4f9b5ed55aabe6d476b3613bf8944367f04c3113f9d8fc4caeac77d9e1fddcebce3d80ebd08e9348e700bf8e0311ceb3f72d4fa5ffdf37c4f178fed5d09d131845bddb9fb4ca7610e010b7fdb1fcf2b062b58a263093783d7eb572d97ffb15fb9dd5caa1225cc11d8ff143b352530c44621e08fc59b948410865b2380cbaddd2d29413c64b680bfa4ebb628e9aa266c950bf84fbab2ff5c66dbc6c0250a017f4ad77876b15da4e02d84fccb3b0c9836dd82970bfa5bea364b2a9dda8affe50a8bbff8ffb48a7f014914488f"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="32">
+      <shapeBounds type="RECT" Xmax="623" Xmin="24" Ymax="617" Ymin="18" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="2" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="65535" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="0" translateY="0"/>
+            </item>
+            <item type="FILLSTYLE" bitmapId="31" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="6" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="24" translateY="18"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="2" lineStyle="0" moveBits="6" moveDeltaX="24" moveDeltaY="18" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="32" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="33" forceWriteAsLong="true" zlibBitmapData="78daed935d4c536718c7cfe9b150ce794fbf69818ab4b3b4140bca776b41502832109c452ac30a030405f99813b515b5245bb22cbb224bb631659a18b31032270a5cb8fab11b1c896884a9440dc404dd97c6d84497f5e6bfb3ec8295b8264b96dde893fcf35cfcdee7e37ddee7a5280a7f5ae8da1006629438cff2188c21f886950b5e86cf055d90ab31d8d1854fbc3e7c259cf954a240808bc528abc239568d3382066354f84250bfc03e96c8e18b96e124abc49702f3447138c66b30a0d2e144bc01dff67d80da640b3e6b68c679fffb5846d188d368c13022047d3a3c3fee46e8c6193c6d97e199d784e08776bc387b04bf8d7f84d0f4389e3449f1b43301bf4f9cc6cfbbe2f1acaf004f3c523cf639f0cb561e3fb978fce88ec5afad163caa94e2a193c74c31c17c4d121eace7f1b0a500df6573987326603e87c79c9dc7dd5c82db590457d2395cb072b85766c2429d0d136dd5b89f41309b4e70374b8a599b1a775611dcb110dc4c25b894c261dcc4e15632c1b491e0a29ec39881c5889ec5f726821f52e5b86520b8ae27b8bc9cc348228baf752c6656104ce908ae267018d6b008a8853c829f30eb30ab1698a071198b737216436bac18e3585ce5094e1116c31c87689a46addb8da9c9498c8e8c20140a21180c62616101814000fdfdfda8a8a880c3e180d56a85d1688452a984442281582c062dc4537f195eebd5953fa251d47fcf6b22f3756f45e45bcccd117989392a126f3467cb23f11da2c2daa608dc9d569a5bb4fb9fb9c7569a92ef6a7f39777bfc1dae4d964db69d3151cb766d158bc3b8db692ef1fb65aebc0291a5a2bec89e230e8faf491375fafd8afaca3c515661ba25d719969f5190b5db8992d1ee694d5b539a912c5a17569fd9b65eae28df50e5228ad6b7ebf3458e2d8bfde97886d9966bdd98975e955955def9ce9e86eacd9ec5fed95e6f82b63c63356db5a65465e737ed564677342ede2ff1606fcff2bacc549a5ed5a68dce6fd9ce84cf37d17bb83baeda6e5a9ddce6eb3e18bfa17909d7f7acec62eaec6663077560df119f5ab5647f92e837ba9896cacc9c62436ff7616f2cef6f743aff3e5f8edecb3071392dcd06ea28b55fcdb7dbcc6bc3e69fb442d35616f566e3dea387de7b37bea95eeb5efa7e3a15696d90703d748f5e237dd97e308c52c5a893f4faffe17ffc3bfe072c48fc37"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="34">
+      <shapeBounds type="RECT" Xmax="645" Xmin="46" Ymax="620" Ymin="21" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="2" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="65535" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="0" translateY="0"/>
+            </item>
+            <item type="FILLSTYLE" bitmapId="33" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="7" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="46" translateY="21"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="2" lineStyle="0" moveBits="7" moveDeltaX="46" moveDeltaY="21" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="34" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="35" forceWriteAsLong="true" zlibBitmapData="78daed937b4c8d611cc77fef799d7a23970ee9141d97f026a583ee27ea5427744222a914723a4a27154ebae9d53f66ccace11f9bb9ce98dc35b75ce73221b719a3d9583666636243cbbe7ee38f9c96b3d9cc3f3cdb6fcf7edfcff7f93dcffbfc9e9788f07dbcdf835d9104511480a77d8097c9c08783f87a8ff39620e0959df313e8b8c5fe3bae40736fe0a137ebb5e8b8c25a530fe0fe58e0dd71749ce7fcba06b8ed8f4f0d84afc7081feb094fb6b2dee885b65d8437db089f77129ad7103e1d90f17633e1a6c27c3bd7dea7c3972d84571b08adccaf9513ae96115eafe5bc96f0a882706339e17209e73584e7d584675584bba5848b05847356c2d93cc20bf6b5b0af89b533b9ec5b467858c86b2d849339bc5f514fcc4d9f83161be10ae717b3090d195c93fd4fd8ff986bdc60ed5a26e1d22caecb712899f0803d0d66c2798ed3898403f184bd46427ded626c50cad09444b86062cefad938f6709c627e3486707812617f34fb79dec9f3f608c2a610822412ee345dc73e03b328c26eeec50e665bc308ab83b82f02c122bba0be2405f7d659d1bc7129aeae2f829af586a347a0f5f4447b7b3bdadadad0dada8ac6c646d4d5d5c16c36c3603040966568341a489204b55a0d4110403f06fec7bf1b8ad341f4e77988733e74ac531e2cc53be57eee29ce7882a44d77c627a986e8a738e1611e23bc65f3af7994cfa8bebaf0a4ee7968a8923c6e8cdb701f535aca8ca4c8d454071e1a20f929ca9cf081c3546eb251f6d5a63aae0f71574d57944c63e06095d7a8de6e9e010ef5c5cc2c5d64569e689996e8a119d1df45e5e7b0bf3861787a86bfac0fcfca4c34187c55dec19de7b32c10c5206fd79183fbe83df4fed3a3a71923c647759edf5655919d1dd85f250ce8d557afd5c599f37292133abf6f6979953d23c2a3a720f49b3c3347679a283ade6f514575ac65bcafabca25ad32b6bc508eebc28bed3d72c5685f493d9356ae5855996fedf27e6cc2b25cd114e8a9959754c556572c5cac248c0ef8f97e6709a5a268d19ae24ba886caf21724f948831ceedf565810332c654c42694de5f24585530dd9615dfb37cf9a35d9387fb65db01717a4cdede67d88629e55ccb71517ff85ffe3f7f837f8c31796"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="36">
+      <shapeBounds type="RECT" Xmax="630" Xmin="31" Ymax="630" Ymin="31" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="2" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="65535" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="0" translateY="0"/>
+            </item>
+            <item type="FILLSTYLE" bitmapId="35" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="6" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="31" translateY="31"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="2" lineStyle="0" moveBits="6" moveDeltaX="31" moveDeltaY="31" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="36" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="37" forceWriteAsLong="true" zlibBitmapData="78daed94c94e1b4110864bb3d8cec48e4dec304e8c6dbcaf638ff765bcc68e8317bc24960071e40807248e3c0170e300376e3c008fc29d47e0c40bfc9981446082468a14458a44492575d7d755d55ddd5d44044dd2e93412890462b118ac562b789ec7dddd1d6e6f6f71737383ebeb6b5c5d5de1f2f212171717383f3fc7d9d9194e4f4f71727282e3e3631c1d1de1f0f010070707d8dfdfc7dede1e767777b1b3b383eded6d6c6d6d617373131b1b1b98cfe798cd66984ea7984c26188fc7188d46180e87180c06e8f7fbe8f57ae8743a68b7db68b55a68369b68341aa8d7eba8d56a501405d56a15954a05e57219a55209c56211854201f97c1eb95c0ed96c16994c06b22c439224249349c4e37144a35144221184c361844221048341040201f8fd7ef87c3e78bd5e783c1eb8dd6eb85c2e389d4e88a20887c301bbdd0e9bcd068bc502b3d90c411060329960341a410f82577dd5ff41e7ba42f4f739e9f321afcb0d31832e5f8febc6a7545a9f9bb32cafc7e544aa4c3abc5008311cbdccd51935ea2b4c9e5b2732f0daf409a76f8a9a99b8f0aaf513dba9c8122dfa1baa0ecdd2e082effce5a42b355b88afde6587d73acfe04b222907dc4be385fc346a127d66598ea8cb364ab68ae1717ff75ecde57834d1966b0af5d7bacd2e3dee3fa0f11eb362b52fc55be9c2ecbebf3d9ee80391403d4efaf8de39242a29fcb3fa2e6bcbdb2daf2f3cd146ccf7675c1454eb1ac33244ae374f42ffe231a36a53d85cb1f5b3b5ce693a7b5a5f8f7149b5a66a060d5ad4c26662dd85fa4b6afc1562c84a647a4b538e7ebb3fd5f16b972282511069fad2fb78c82c89e23ff81f7fc67f009c6e29d7"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="38">
+      <shapeBounds type="RECT" Xmax="625" Xmin="26" Ymax="625" Ymin="26" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="2" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="65535" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="0" translateY="0"/>
+            </item>
+            <item type="FILLSTYLE" bitmapId="37" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="6" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="26" translateY="26"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="2" lineStyle="0" moveBits="6" moveDeltaX="26" moveDeltaY="26" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="38" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="39" forceWriteAsLong="true" zlibBitmapData="78da8d93095cd36518c759599665879d766a876591652666a6625e6978231482a021859ca26022a120128a40084c6e06ca927314e31ae74054060c183018db60638c1b44509270fc7a282cb451bd9fcfffffbeffe7fb7f9fe3f73eaf8e8e0efe1873e642326f3eb070116e2f5a8cb1a5cb8065cba15ebc0458b90a58bb0ed86880d6f51b806ddb81ed3ba0a279d0d8049a3d7b01cb7d68dc690cecb302acf7a3c5d40cd86f834c834d808d1d606b078d8d2d60678f9b64c70127e0e021e09033e0ec82515a6b5c0e83437ee5f42fdc8f21cf6c3770dc0338e1855bc78ea38d38bc7d009f53c0695f0c789d04fcfc9146b1c10c85262c1c888cc2e8f81c150db062d14f769cbf8096c0b3a8a67ddd312cb0c76373d280ec1cb4c5b37135340c6afa962526a19f970b09cd28af002a8580a40963521978b171b8e01f802eb2498b4b803635da8555d074764159558dbe5615841595a85db102d8ba05303141ddb6ad28343040d42a7dc09e6a72b087c8cc14c5c6c648243b73f56af077ed02fcfd50686b03d19123c8b4b545d15157547879a12d38187c7777b01d1c30964439a5a6a22d2a0a0a7a98d6d6406626584e4e688a89c130ad7bd2d2c03b7306e0f3911f18889eec6c94c7c5e16669297ac986da5a28727280ba3a54a5a420d6c707c56c362093a1bfb21292820270a3a3e1666787babc3c54f17848a5efeefa7ab40a498bee6e84fafae22af91debed455551116c2d2d91121b0b766424e22322101b1a8ab2c242f428146827bf8db42f8362f1296e7a723234376e804f7e59e1e168a27c785c2eb8545732e5111d1686207f7f289b9a809111549797a3946270c66b1f1d85866c6aa51222f2994b3970c85fbd488418d2031a0d5ae472482512606c0ccc90103269c8cd08868787313434848181015cbb760dbd947b37d5d2d5d585f6f676a8d56a28c96f737333492183542a85582c463dd55d4b39d6d4d44048312b4923814080b2b2329492a625252524351f05a45b7e7e3e72737391437572a9a6f4f474a4d17970381c24539e495443424202e2e3e3c162b1104dba46926611a4592869c66432114ce71d141484403abb808000f8f9f9c197f4f6f6f68617f583a7a7273c3c3ce04e3de1e6e606575757b8b8b8c0d9d9194ed4078e8e8eb0b1b1819595152ce95c2c2c2c606e6e0e535353181919c1d0d010fafafad0d3d383aeae2e7474ee5cfea9c63d5cf91fbc4da9ac165c299d9243559bc360f0caa45371a8e48da24ab1f2c29968ed5cda78852f68eb3bb97c6d9c568eceae3e7aff68bfc893a3954f0c97f7977aa7fe0bffe18d05ab430e4dc5055fb09e7a5ddf7daf76aeb89290f6fcabef1c36b5d0ca53b8995cf3f716af3f68b84f1b8fe0fe9ceee8ecfb0bdbf66b2f2d3ce8a7e0f4b35b180c4651fc45c53ff8575f0686c5ec5eb03292c1e0731bfaeee6d66f19ef39ea73dc6cf62b7357f82695083aeeaaffd8c26767cdfd3e60e3372646f3dffe70ffe9b296eb9378d8aa371f9b31f3a57797d9ecdce5e0f1b9f3c72724bd93f43d7fe0b599d3ee7bf0f1279e9eb73291c1c8dabe29b66364f40eef946df9e085e9d3ee7fe09159b39e5bc266f0f24bcb95377f554df01e59d606dd471f9afef08cd9ba2f3ea9b7b9b0e472b96af086f44efc8efa2cff4f5f7e668eee47ebdcec2cd79cbb2c6a5063a0a15f3cc11bea1223b71ef9ccd5605bc6c570bfa81d62d578d0aeead63fb944c8fc6e8dd3b96406a3542ea912899be5f979b993fa4f9ce1fbc9b756a18582664d7b5d6347775d8d5058fe376faa61646c3e1552a3b83576edbaba7b909f95973db9bf1575050c467145b3aa39b367f0ba4c2612fdb57bc27ff5a5eadadf3a3a87866bebc5f5572f5dbaf7fec8e52dcaf6dbffe7fe69e1bf03c498cebc"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="40">
+      <shapeBounds type="RECT" Xmax="625" Xmin="26" Ymax="620" Ymin="21" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="2" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="65535" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="0" translateY="0"/>
+            </item>
+            <item type="FILLSTYLE" bitmapId="39" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="6" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="26" translateY="21"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="2" lineStyle="0" moveBits="6" moveDeltaX="26" moveDeltaY="21" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="40" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="41" forceWriteAsLong="true" zlibBitmapData="78da8dd37b3416761cc7f1e7b4ad356b5b6b4bf78b4bb26add35154a84a2522c534fb9468c49a2f688e49610b5944b657834891e5d9089485422322bcf8321221b956aa695794f6775564ddbbee7fc7ee7777eaf3fbee7f73b9faf4020e069d99b09890f8fc4cb4544dcde58325232104726636a6485de0263c276c6927ba6044d75236c845b48397a1e2787102e5f92121e964642c279949475898ec92739e52a79e7ebb1758ac7cbef244b4c02d97d209fa4e357100c5e8357701e824f2f23182f61967e087ae662d66c2ac0cd2f9f982419e213f508665e4349fb300a1afb30b43e8ebdf725bc23aa088c9621c9bdc79bcade0c9895cc20d50d28aeace4bdd18b91939fcde00916a81ae7306d75399397a531c7ae0e1db787d8f85ec7215086835f391b43abd925fe85c4ec2e92f31e93987e93fc2bcdbca5f503fde79c434ee73a721ab90c9cb11f79fd628619553058fd20f2bad9c86b89196b2265f4923c144ca58cd44d63946e0a8a26a5289b94a16256c50473192aab2a505e5184d2b27c54cd6fa0625adabb4a50362ee8bdcb4569e959148db25034cc4461c929c6e9a7326a7e142335f63274a627f2d33d1832d51505030963171d61ccc2384669ee63e4bc3046cc0966f867017c3cd98189aba58c5910c308f59d0c99e2cc64a19419f67799b256cac4cf0b99662163ba65352a86c9a8d9d430dbb606f5f5d5ccb5af4173830c2dc75a16ba34a3ed5c87a65d05ba1b1bd175a9c3c0ad1103d76a968b5a59216a66755037c65b1b58ee518b81533126a20696b95562e6731ba17f3b665e0d988aa4acddd180857f233641ad58053421dc2ec531bc03bbe0166c831ab1db598773d82d3645b4e111d5817b4433a298764491b7f08c6a26e0c86f84a6fe41a0b89db0945f094ebc4df419084b6e2742f280c8539dec4bbd4b545a1b89394f38947e879397ba9968554decd91e520a7b48eacdc7b1fc0e12b36e5154f990ec92bb145e6b4552789b9cca2eca9a7aa0398aee0b8650ea082d99d4274ce93dbbd053e6c6a3926d501b0bedc574649ac2453b2876a6eddc169acb53497257e5fa013532fd66d3926cc89d53e63c2a70a525c3853bf93e502f2127683e857bf4290a5f4cf7e51d74c66bd075d400b2ed28895e434b9637356782e99466703f4a8d2e8990344f6d6ac5d69cf637e649ae3b71db4ce9bcb887c30eb3684ab0a0f5843b6de922765ba861be40154f6b43ca927ca9cf8ba72a2392ddebf5c88af241567092963a29fe16ba141eda4ea08d31a599a9c478ba202d2ea2a6ea0649e1c10804cf86ffb5f58aaffb0fb75cf7c59ce0bdfb5feb58aa1f493f1d1faaf63ac7d2c4dd7dc774d581ef0cefdb577dbe277ac7d4291fddbd3aa04f6785917eef3e6a6099b45f9ffeacdeabaa28bff72faed4ef72c1d57baf73bf28c5db7979e50ffbf665e1e2a39f54165eb8d1b7fb1d9f74e2930715e764cdbff7e52bb5e64a76f7fff1e2f5fe4f86f7e10671e15afb26d55f3cdf5f6ee867ff703dd3c5db0e86662c6cb8d43079de6cd7977dc22aff6392c55ebe2772727feb1e7f20c4faa5f7bf3360d8f1f9da4315466be7e4e67e3f44334c68fb820fef6a7afc69da7cb99faf9594fe917532451c61eef8c2ff8e6baafe413e3d29664447495171f1fdf713f66fdd60eff2dc576cf95596df2aaf345839f3fbec419d753ff56884ae75b3b37ce64b569e69bd72f3edc76dedf7179e4e4e4f9d346c62a8a5db57ab9ef79f7aea6ccbcd5fde6d6faca97deb5bf7f8d888ed1badf872b3abc733d759ae7cabfad1a48fdf7ee381a27fa06f8887edd3a60e3eebfe7295a5f33e90fef4616cda82982d1b7dbd37db7c1597207e217f2af1ca4feebc39377697d90c2b4f73eb4d229f80805d7ffb984589a923e514b7afb59b39cbd6cac1e9b056dc772fe67baccedea463f3760a2d85168e4eb66b567b7bfb07bd947f9da5215f6f9db6c1da79bdd7d6cd5f7f1379e0d5f9d1d53334349ef17fe6af0fff1305e05494"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="42">
+      <shapeBounds type="RECT" Xmax="620" Xmin="21" Ymax="630" Ymin="31" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="2" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="65535" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="0" translateY="0"/>
+            </item>
+            <item type="FILLSTYLE" bitmapId="41" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="6" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="21" translateY="31"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="2" lineStyle="0" moveBits="6" moveDeltaX="21" moveDeltaY="31" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="42" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="255" bitmapFormat="3" bitmapHeight="30" bitmapWidth="30" characterID="43" forceWriteAsLong="true" zlibBitmapData="78da8d53095ccf77187e9d336973e568683157b91635c4cc3d672447a2cd51a831e42a154aa572a61cd53a90528afe548e8ad041519454524de4c851c3caf9ec69da67b17fdb7e9fcfd3efd3f7f97fdff7799ef7fd8908fe7cca2c80275640b913f0682df0d40578a600ee2c049ec7017943802253a06405610b3cd8c4dff91281bc7790f78f0099ba40f630a0c09cbc27f0388c88e0f9609e4f056ece23e603b7d8a7701550cc1ec5eeace7013c648dd25020590748d503d2c700570d798f3db379276f09efad616d67e0ae3f702f00959182b250c113227bafe0d27641bc8b20648d60df0a41c07281be16fd45d505a21b002789532aa8885645ae9f2ad276a9c27fa50a10db1a07ac9b2266530b205e0348d00412a9216920f223fa0129c3a9691c9036859a4c808cd94016bd649af1cd7cb2170339f474839e726da8d59e3e1d81fc8dd4ec46af5b99dd0e40412d47046f2204af8817c1d47f40f078bfa0c05b90e521c8d82648db2a085d2908b212f8580ab6cc1338cf1638180b4c870a8cf4057d34592bb21eebd5671cf5e9b11170a22932f7a8d163277aea0a9ce9099ceb4b702e0903f8e60c938612ccf6e204fa31022e4d278c81cbf4944e4f199c5d8e1d102e78c75c2ba8ad3c5070d74750e8458dd476ad0a5b083741aaabe0bc8340c1cc15d41c41cd61cb04c14b057e8b08eaf73213b851bfb5a160fe70c115d73ac0e17a28dadd10086b0c1c6b0e1c6f0d1c6dcbb73abdb4e719e710c75d384dfdf19c45bc3e776332b08fbe83985f952e3f412973bbef29286676859c7fde66412e75a53b0a12d709ceda730fcc05deccd095f9598e1018ea0a26f61554fa53c7216a08a18650556aaad2d199fdb58100f6f125d8e3e92ec123d6becddaf9f49be32cb8ee24b8602b88a5df63f4ab582c38642138b850b0d344e03849603e4430a1376b0470ffc2380f665849adcf76b21e33ccb423a831cd5a904c2472677d4d059ed305f6e305267acc78357781da3da70a36333f179e4fe923889a2bf0e0ff83b907ee63041b986bfff68212ea31a3b7562ad4c53ade63055a2d050b7a0a4675e00c74045d1a0bd4ea0844fefaf86b7b3ee275ff83ff4657b7f790ef86d5ca43efeb49538dc67fbba0361e7afd74fa0c9cbb67ef6e0fe57c5f9d91a3cd4edf7b9c61b55d298f4596b1fcfbb6749ded16a57cf55360f395d59c7fe1c3e7b53a6fe2561b9ff420b2f3275fe8ffa09c7fea727b965bafba6d07b928e5634c4a979f9aa951bfdda04dcaf828fdcca19ed3b49a3558352b4a097f7dd6ce913b468fefd8a8dd88a487ffe0cb6f65b98f3033eed6f1b32f139c8b5f7fc8bf797ed3c1c96b76bfe9eddbd45399b034f9d507fe5f55a4ec9be2f4f3fce1ab7a3669d87c72604af9db1a7c65c54d83169a5d575bf5e8d1abd1a7add704873f795d23dfdf526cdb7edec4d0dace69a6b66a9b0e06c167efbfa8e2def32faf054d6adcacd52803a3ceea1a9d3a76b10f3997fce8ddbbebd57cd9d5f517345a769b61acaed649535d6b63c8fe84a492672f4fc455f325c7d75f183d799ab65ad3363663fc4313cf5dba5d829ccdbe73abf96885c306c7b0bceeddbf9f167026373fa528bbaaa98fe982f77cf1e1d5e16bc3426d66cc58e1159354f0ebdd3b216bed6aec5fe1588703d101074303cdc552911e7bafe8ca31f7657ff319b7266a1b1cfae5c89e25f253dce91b6541f6d6e36aeef7c3d4c1da5a2bfd76ed355fe8139f73f55a6a5aa4eb07fb7ff9e28088a3bf5b582cee3f676b4cfab61f4d3efe7e32b34e9ef296fff3fd29e1ff0016904d4c"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="44">
+      <shapeBounds type="RECT" Xmax="620" Xmin="21" Ymax="630" Ymin="31" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="2" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="65535" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="0" translateY="0"/>
+            </item>
+            <item type="FILLSTYLE" bitmapId="43" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="6" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="21" translateY="31"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="2" lineStyle="0" moveBits="6" moveDeltaX="21" moveDeltaY="31" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="44" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="0" bitmapFormat="5" bitmapHeight="30" bitmapWidth="30" characterID="45" forceWriteAsLong="true" zlibBitmapData="78dadd56494f5b57180d2d98b9cc930dd810332366338888d998d90c0697b994590c62b0cb20c4e024288baed8202414e8268b2c82942c22a8aa64c1a28dd8c336f923a7ef7c11a8a60c11aabde893aeace7fbde3df79cef7ce7be478ffe3f177c7c7c2e875b31fdfdfde1ededed56ae616161080d0d455454d4bfe60203035da1016262629099990987c381cece4ea7b9b8b838d1c115b8e1e1e1282a2a42737333d46ab513a6c562414444844b70a971494909aaaaaa10191989d8d858c16c6b6bc3dcdc1c828383e1ebebebb2fa565757cb6f6b6babec233d3d1d090909c47599afc8b3acac4c342f2f2f178f91674848884bfd4c5ce2353535c1cfcfcf2d3d44dfe4e6e6627a7a1a56ab15068dcb7b98fd2a5cf57a3d767777313e3e2e3d55f7d8c9bfdccf7fdab7858585d22b494949a8a8a8c0cccc0cb2b2b250127bc559b41f1919b977bd8080803be7993fca33ec55e1bbbcbc8c8d8d0d9c9d9d21232303393939c88e51c9b3dcc3e1e1e1f53cb90913a7a7a7b7614b9f1c1f1f43a552090f629037eb7b71710193c9241a30af59f7eded6decececb0afeec55d595911bd88919d9d2d5954505020fc969696641097d960b7dbb1baba8af3f373c90ba3d128f9c1f9a0a020141717233535f55e8db936b5519e95baf5f4f4a0a3a3035d5d5db287f5f575f4f7f74be6d6d5d509f6fefe3eeb27b941ccb7bf4421ee87efbfd9274a96a1a5a54572967c17171785dbdada1a6c361bfafafaa0d3e9d0dbdb2b984a9f62727212292929b237faeac8a6e4e4ed98d4e4468dcd66b30cf603fd323f3f8fe1e161343636a2a1a101f5f5f5484e4e466d6ded95a60707075213e6c6912d02269dea324be4975a0c0e0ede842d5c3d3c3c64c4c7c7636a6a0a0b0b0b9205cc58eaca39e620bd434ceabab5b52598e4fa66211c46ad97ac171d1d2dfe624d4e4e4ed0dddd7d9db7f405759a9d9d953394fba74fe8cfcdcd4dd178747454b4255f72ada9a9915a5077f2e450077c77e5f9d2d252c1dcdbdba3476eed477a686c6c4cf851636acb7b9e651c971a139bb8d43a3131119595955febba2867ac601a0c064c4c4c480f29efdc5667a96b7b7bbb0c62509fb4b434c93ffa8c7dca39ee7f686848ea406fb3b6c4e5b9e3e9e909ad568bfcfc7c0c0c0c480d9475eef396bc4b5f72bdd70d56bccb2ac37b83111a8d467a2a2f2f4fe6d837bc37ea7df0c7cb5114ea54f0f2f29241ddb8d73bce3ebeefc4b9365f8da35fcdf8fde5cff8f2e939befcf50c9fff74e0e36f3fe1c3413fece678d85bb5b2feab177d583105f2dbf1a1df8f4ef896520d3a9e68b0697d8c8dae44ac772ac39280a73d7a387efcfadf9c5927d8fff86e148e377c477e0be683f6acf4ca5df7aec2bd3c0bafe7acdbbed9dd88f5d0eb6f1975603c"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="46">
+      <shapeBounds type="RECT" Xmax="625" Xmin="26" Ymax="630" Ymin="31" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="2" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="65535" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="0" translateY="0"/>
+            </item>
+            <item type="FILLSTYLE" bitmapId="45" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="6" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="26" translateY="31"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="2" lineStyle="0" moveBits="6" moveDeltaX="26" moveDeltaY="31" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="46" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="0" bitmapFormat="5" bitmapHeight="30" bitmapWidth="30" characterID="47" forceWriteAsLong="true" zlibBitmapData="78dadd967d4c536714c681525b2a8e415b0bb6850ea850b1ba2141e9c70861c9dc0c5869abd06c7510a430e2c7063a84924836eba64321d251943ab36996001a65c96646c5c1b2c418475cb6b925ba0de26cf7871396550889f1d97bdf8e3bab3008b1fcb19b3c79d37bdafb7b9f73ce7b7ac3c2fe3f179284b1535a50e6f278116471310beaf555553cacab97214b99f4588cd94f92e889e700d52bc4f8bd510fff45371c96dca09866b902c9126148b86dea25183dbc19fee395a8cf10b2f74b5409b8be470f7d7a6248b81dea6896fbe12a01956b65347e7a4b07bfa713f9e97228e34521a9ef49c262b86faf2539b7eb026ad0e1b77a1df4cac490f515c31d6d36b3dc136a0155dd8ab890f633c39df259258d5c9033b4981386fe8a4cf88fd930fabe09272a052167aaa223c08d0887481089cb2e3bfc1d15f0d56be1b605b1f14d63f11363a60822485ef5f0bd6744ca538b10c3e7e2f3da02caedac8862bfe7a935e2cfdee6599fb72b3172b638364b3810f1389013f6c4a91a4c76d931f6fdd7784e2cc08d9ab5535c7c52960bef9983b87dba69d6674efe3c34133b10ff7110eb63c3e98cca4f7a9ae4390cb2183e868706a957df5e0decea281c3767e3b2a30ca39f36e36cf54bb372274ed7d2b3d8a0163e2626c6e8e5b870e8443c8c382b89d7068cddbc06752c0fb7eb3418d9bd0eb6e4081c3566e1634b0e0ebfa89cd379e837a6a1e779095da73468cdc6d93c2926bbed7436ed24fbbb419ecfe384e38ee724fcae6dd4ebafe4de85f655306471e6dc27d6f8089a3b4653be184d7637d21a32bc6e9d98aecc39dd218fc42fce6aac59ba18770f99687e7d1735d89637637fc064324d9be3e9b88c98be0d4887be0d323a037d0da496641dbf720eee9551f0911c7b3d39e8280ff4d4f64c095daf366ec10ffbb74ec7a65ee3f9011dc97f268879482b8139814b63f63c05655191bc8e5f398fce8c2878eb7228d35516606ecd10a1e585647c77e475dcbfda83a126cba3be490f2c617d32626af860cc8b07fe3f023388ccdd5b7bb5413c46f7884f9649f48a96e61715a4ffba2c991876d7e1fea01b43072ba6cd799932ee5faefda1f59f79fb288fa9638d9ccb327de43fc7d7af43791a1f073442f46fcfc79d1e07ee795c38637f6da63aa344290ae2b6e788b127898b03a93cb68e77c9dc9df8e80dfc45fa7647861803c569accfd6f5c9d8a95e044f95169efa2df8aa7517baf6d9b0af70dd6cbd852a1917a5cb387857c9c370530b46acbb71cbd6080761dba491b02a04b048f9e41d4a81cfcc4a38ab1270aad70b47b91825293128d5aa60cd5d8dd2fc3528d664cca59fa9e7fd6f16e0e6c03bf07edb8e716f2fd1792aef3527511b2e1c2dc017ce423c2b5b8aeb036e5c6a51202f558aecf4d479cdf687f92efb06b413793e30c0e334a0cfb9117d6d85b8d451842f8f15917513ceb59aa152c861346c647f57545404d326c37c98f3da33e1fdd7e75071a7651b8dc6057b675f40d67cafbf01d4bb1f99"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="48">
+      <shapeBounds type="RECT" Xmax="620" Xmin="21" Ymax="620" Ymin="21" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="2" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="65535" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="0" translateY="0"/>
+            </item>
+            <item type="FILLSTYLE" bitmapId="47" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="6" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="21" translateY="21"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="2" lineStyle="0" moveBits="6" moveDeltaX="21" moveDeltaY="21" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="48" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+    <item type="DefineBitsLossless2Tag" bitmapColorTableSize="0" bitmapFormat="5" bitmapHeight="30" bitmapWidth="30" characterID="49" forceWriteAsLong="true" zlibBitmapData="78dadd96594c545718c77d6dfad4d7f6a125f8a020d4985a281122941928162dcbb04959048c202e5028108a856113599d61676608cbc0b0db6241826c02198665c6300e94a54a1d822c038858d328f5df730f642a0a422a90a637f9e7dcb9e7cef99def3bff73eeb76fdfffe7c227078f139933ed9e32f53fb787ce418b3d8d95e5140b966d10582783dfe83b627a1afb0dd83bce74f3e7a1b6e137c806d408fdb17c5d9fd7f9eb70740f257930df716e744a1d640a0d64f26984c796689ffb87e4a0a9fd016aeafb77851bc22d47679f06ca91659c0f13c0c6858b8b1142b4744de2fec33f50512b236befb02beb1b91588d01d51344c61423a75889d6ee590c0e2fa1ab7706a73c9376cd5727dcafe1d69d69b87ac743543102df60212e4589c1399bb1ab7efeca2d09594543c82c52e190b1d39eec216bd74464150fa3ad671e350d6af23b694f981cbf2c5c88aac6e4dc0bb412762689dbd3e7d2baf7f285921d635ab924802fbc87ca9b13f0bc28407a411b8979017cd110bc7c2e6bdfcbe08bd0d8dcb9e578878c386fed37f8c299cac1870fdb6f5320552c4231fc14cc15f84315320b55f0f2a55c70e37978b2fc1ccd2dd2ad985878fc6c333679ee84a5e5157afe67142810125b0b5b8f64445ebd49b97cc264c4cccb9ee381f1fb33985f7c86d088c42db94d1d13f8a9691ca66cdf35f9c1d48a887d166dd2476897cd4047cf82c6dbd53f0fc5d06aacaefeb934c73925bfc2c5cd1bb1f1a948e7152230e8ca9639b6748cc6b9ef4be178268db462f887312a4378421d3987b321956b50766394c4e382f47c059ccf6561767e052dd2399a5fbe4845bc3d84e3965f6fdb27ba866c5ccbea4172960ccd9d0f71bb4b4dce3a35896906add229886b47c1f1e5a3ac6e8c320d4d5c70a777967ab9b27e827087c0132971cc8cfdb6b836cc31c34cce96e176a79aaa95e4b5b57b0aa9b97d48cb1b405abe1c3e41a5c4bb0ab2be77c11328b1b0b4026be26d9e5085aaba1678fb06d1f1fc02c2699b53500e6171f5466c1aeb7bef7f40f58d6bd46aacdd93743dadedc3a0ab6f41fb6c4e5da66c9e5089eb824168165ed03dcc63f6534d333cd77cec1710860bc1d1f8b9a103cf575ee26a72e61bebc9783425bb775539bde8ec9dc6ca5f2fa9577e6955435c378ad49c3e925b396532394ecb9353a6954b3c8d5d52750b26a6965a66525a017afaee6171e94fe40bc41b7bd8783d97516a6e3f19bb1fa98ce8fd00cd2bc363d8878f7982ed1c4fe7525ed908497513c365728b52493d66354f21bf3b8c2bd1891bd7279c18e81db5d3f2189d708e26e37ac0841da865321eee90cda2b17d12a6ac33e45b53ad9d83e5c9607c7cc00cbcec12744907d1dd2347062f0f0181df6dc6d4deeb1db5c7fe4f6d286b2a2e13d3dee1980be4c2c42a107aa45ed3ffcc16078ed8c08ce58e805031ecbce231a15ea46bafa3670e83c346f892650b1b5b47d8399cdebc0e7b85c9c41c19c545df8012a3630fa0997f8c39cd226dc7c67fa72a10114f1655e0235d63a8461e91bd2da1f3d435b4fa7775e02bfcb884642a61910482c2f2b5568222710d8aa9aa211095e1435d235872b8daffb19db94471db665a3ac6bc5bedca8979ed9b98b04d6ef4bbd7cdafb1c9bedabb9afd9f9cff57afbf013bf5a646"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="50">
+      <shapeBounds type="RECT" Xmax="610" Xmin="11" Ymax="615" Ymin="16" nbits="11"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="2" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="65535" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="0" translateY="0"/>
+            </item>
+            <item type="FILLSTYLE" bitmapId="49" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="6" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="19.96666" scaleY="19.96666" translateX="11" translateY="16"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="2" lineStyle="0" moveBits="6" moveDeltaX="11" moveDeltaY="16" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-599" deltaY="0" generalLineFlag="false" numBits="9" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-599" generalLineFlag="false" numBits="9" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="PlaceObject2Tag" characterId="50" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+  </tags>
+</swf>

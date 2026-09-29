@@ -81,15 +81,18 @@ export function soundFilesOf(files: { path: string; file: File }[]): Map<number,
   return out;
 }
 
-/** fonts/<id>_<name>.ttf → FontFace "swf-font-<id>" (best effort; returns the registered ids). */
-export async function registerFonts(files: { path: string; file: File }[]): Promise<Set<number>> {
+/** Font family of an embedded font: "swf-font-<id>" (main movie) or "swf-font-<key>-<id>" (a loaded SWF). */
+export const embeddedFontFamily = (id: number, key?: string) => (key ? `swf-font-${key}-${id}` : `swf-font-${id}`);
+
+/** fonts/<id>_<name>.ttf → FontFace embeddedFontFamily(id, key) (best effort; returns the registered ids). */
+export async function registerFonts(files: { path: string; file: File }[], key?: string): Promise<Set<number>> {
   const done = new Set<number>();
   if (typeof FontFace === 'undefined' || typeof document === 'undefined' || !document.fonts) return done;
   await Promise.all(files.map(async (f) => {
     const m = /(?:^|\/)fonts\/(\d+)_[^/]*\.(ttf|otf|woff2?)$/i.exec(f.path);
     if (!m) return;
     try {
-      const face = new FontFace(`swf-font-${m[1]}`, await f.file.arrayBuffer());
+      const face = new FontFace(embeddedFontFamily(Number(m[1]), key), await f.file.arrayBuffer());
       await face.load();
       document.fonts.add(face);
       done.add(Number(m[1]));
