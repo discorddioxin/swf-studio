@@ -1,0 +1,4 @@
+node_modules/
+dist/
+as2ts-out/
+ffdec-out/

@@ -85,6 +85,54 @@ export function ingestFiles(fileList: File[]): AssetBundle {
   };
 }
 
+/** A loaded FFDec export: its document, files and asset cache. */
+export interface SwfPackage {
+  doc: SwfDocument;
+  bundle: AssetBundle;
+  cache: AssetCache;
+}
+
+/** One FFDec export inside an upload: its .xml plus every file under the xml's folder. */
+export interface PackageFiles {
+  /** the export's .xml */
+  xmlFile: File;
+  /** folder of the .xml inside the upload ("" = upload root) */
+  root: string;
+  files: File[];
+}
+
+/**
+ * Split an upload into one package per FFDec export. A game made of several
+ * SWFs is loaded as a folder holding one export per SWF, e.g.
+ *
+ *   fish-full/bassken_game4.21.xml, shapes/, scripts/, …      ← main movie (shallowest .xml)
+ *   fish-full/external/bassken_scene/bassken_scene.xml, …     ← loaded by the game at run time
+ *
+ * Every file belongs to the deepest export folder containing it, so the
+ * exports' shapes/1.svg etc. never collide. The main movie comes first.
+ */
+export function splitPackages(fileList: File[]): PackageFiles[] {
+  const rel = (f: File) => ((f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name).replace(/\\/g, '/');
+  const dirOf = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
+  const xmls = fileList.filter((f) => /\.xml$/i.test(f.name));
+  if (xmls.length <= 1) return xmls.length ? [{ xmlFile: xmls[0], root: dirOf(rel(xmls[0])), files: fileList }] : [];
+  const depth = (d: string) => (d ? d.split('/').length : 0);
+  const packages = xmls.map((xmlFile) => ({ xmlFile, root: dirOf(rel(xmlFile)), files: [] as File[] }))
+    .sort((a, b) => depth(a.root) - depth(b.root));
+  const within = (path: string, root: string) => !root || path === root || path.startsWith(root + '/');
+  const byDeepest = [...packages].reverse();
+  for (const f of fileList) {
+    const path = rel(f);
+    if (/\.xml$/i.test(f.name)) continue;
+    const dir = dirOf(path);
+    const owner = byDeepest.find((p) => within(dir, p.root)) ?? packages[0];
+    // several exports in one folder share its files (older single-folder uploads)
+    for (const p of packages) if (p.root === owner.root) p.files.push(f);
+  }
+  for (const p of packages) p.files.push(p.xmlFile);
+  return packages;
+}
+
 /** Expand one or more ZIP uploads into File objects with relative paths. The
  * rest of the importer then treats archives and folders identically. */
 export async function expandUploadFiles(files: File[]): Promise<File[]> {
@@ -146,9 +194,13 @@ export function resolveAssetFile(bundle: AssetBundle, reference: string): AssetF
   }
 
   // Last-resort basename matching is intentionally restricted to scripts so a
-  // same-named image cannot be mistaken for ActionScript.
+  // same-named image cannot be mistaken for ActionScript. JPEXS names *every*
+  // frame script DoAction.as / DoInitAction.as, so a basename match on those
+  // says nothing about which frame it belongs to (it used to attach one
+  // sprite's script to every other timeline's frame actions). Those are
+  // resolved by owner + frame in resolveActionScriptFile instead.
   const base = ref.split('/').pop();
-  if (base?.endsWith('.as')) {
+  if (base?.endsWith('.as') && base !== 'doaction.as' && base !== 'doinitaction.as') {
     const matches = bundle.files.filter((f) => f.ext === 'as' && f.name.toLowerCase() + '.as' === base);
     if (matches.length === 1) return matches[0];
   }
@@ -180,21 +232,28 @@ export function resolveActionScriptFile(
 
   const frame = frameIndex + 1;
   const initFirst = /InitAction/i.test(tagType);
-  const names = initFirst
-    ? new Set(['doinitaction.as', 'doaction.as'])
-    : new Set(['doaction.as', 'doinitaction.as']);
+  const preference = initFirst ? ['doinitaction.as', 'doaction.as'] : ['doaction.as', 'doinitaction.as'];
   const spriteTokens = timeline.characterId == null
     ? []
     : [`definesprite_${timeline.characterId}`, `definespritetag_${timeline.characterId}`];
   const frameToken = `frame_${frame}`;
 
+  // Match whole path segments: a substring test made `frame_1` match
+  // `frame_13` and `definesprite_1` match `definesprite_10`, so frame 1 of
+  // the main timeline picked up sprite 10's frame-13 script.
   const scripts = bundle.files.filter((file) => {
     const path = normalizeAssetPath(file.path);
+    const segments = path.split('/');
     const base = `${file.name}.${file.ext}`.toLowerCase();
-    if (file.ext !== 'as' || !path.includes('scripts/')) return false;
-    if (!names.has(base) || !path.includes(frameToken)) return false;
-    return timeline.characterId == null || spriteTokens.some((token) => path.includes(token));
+    if (file.ext !== 'as' || !segments.includes('scripts')) return false;
+    if (!preference.includes(base) || !segments.includes(frameToken)) return false;
+    if (timeline.characterId == null) {
+      // Main timeline: never a script that belongs to a sprite/button definition.
+      return !segments.some((segment) => /^define/.test(segment));
+    }
+    return spriteTokens.some((token) => segments.includes(token));
   });
+  scripts.sort((a, b) => preference.indexOf(`${a.name}.${a.ext}`.toLowerCase()) - preference.indexOf(`${b.name}.${b.ext}`.toLowerCase()));
 
   return scripts[0];
 }

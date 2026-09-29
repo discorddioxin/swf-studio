@@ -11,9 +11,10 @@ export function NetworkPanel({ network, onClose }: { network: NetworkApi; onClos
       <div className="mx-auto grid max-w-6xl gap-3 lg:grid-cols-[1fr_1.5fr_1fr]">
         <div className="space-y-2">
           <div className="flex items-center justify-between"><b className="text-emerald-200">Room connection</b><button onClick={onClose} className="text-zinc-500 hover:text-zinc-200">close</button></div>
-          <p className="text-[10px] text-zinc-500">Optional guest room. No authentication. Use the same server URL and room on each machine.</p>
+          <p className="text-[10px] text-zinc-500">Optional guest room. Use the same server URL and room on each machine. Enter the access token if the server sets ROOM_TOKEN.</p>
           <div className="flex gap-1"><input className={inputCls} value={network.serverUrl} onChange={(e) => network.setServerUrl(e.target.value)} placeholder="ws://localhost:8787" /><Button className="py-1 text-[10px]" onClick={network.connect}>connect</Button></div>
           <div className="flex gap-1"><input className={inputCls} value={network.room} onChange={(e) => network.setRoom(e.target.value)} placeholder="room" /><input className={inputCls} value={network.username} onChange={(e) => network.setUsername(e.target.value)} placeholder="Guest name" /></div>
+          <input className={inputCls} type="password" autoComplete="off" value={network.token} onChange={(e) => network.setToken(e.target.value)} placeholder="Access token (optional)" aria-label="Room access token" />
           <div className="text-[10px] text-zinc-600">{network.status} · {network.connectedCount} connected</div>
           {network.error && <div className="text-[10px] text-amber-300">{network.error}</div>}
         </div>

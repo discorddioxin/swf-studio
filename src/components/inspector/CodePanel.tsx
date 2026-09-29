@@ -1,18 +1,21 @@
 // ---------------------------------------------------------------- code panel ----
-// Extracted from Inspector.tsx (Phase 2, step 2a of 8).
+// Inspector "Code" tab: Code Inspector + ActionScript + TypeScript sub-tabs.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { normalizeAssetPath, resolveActionScriptFile, type AssetCache } from '../../lib/assets';
-import { analyzeCode, type AssetDescriptor } from '../../lib/codeInspector';
-import { buildFramesForContainer } from '../../lib/exporter';
+import { useMemo, useState } from 'react';
+import { resolveActionScriptFile } from '../../lib/assets';
+import { analyzeCode, buildAssetDescriptors } from '../../lib/codeInspector';
 import type { ProjectApi } from '../../lib/project';
-import { CodeInspector } from '../CodeInspector';
-import { defaultActorCapabilities, type ActorAction, type ActorClassification, type ActorCombatMode, type ActorFacing, type ActorLayer, type ActorMirrorSide, type ActorMovementSlot, type ActorSequence, type AssetBundle, type CharacterKind, type FlattenedSprite, type Project, type SwfDocument, type Timeline } from '../../types';
-import { TWIPS } from '../../types';
+import type { AssetBundle, SwfDocument, Timeline } from '../../types';
 import { cn } from '../../utils/cn';
-import { charName } from '../Sidebar';
-import { Button, Chip, EVENT_COLOR, Field, KIND_COLOR, TagInput, inputCls } from '../ui';
-import { Empty, fmt, Head } from './shared';
+import { CodeInspector } from '../CodeInspector';
+import { scriptKey, useScriptTexts } from '../useScriptTexts';
+
+type TimelineEvent = Timeline['frames'][number]['events'][number];
+
+/** `actionBytes`-style attributes, or values that are nothing but hex bytes. */
+export function isBytecodeAttr(key: string, value: string): boolean {
+  return /bytes/i.test(key) || /^(?:[0-9a-f]{2}[\s,]*){4,}$/i.test(value.trim());
+}
 
 export function CodePanel({
   doc, timeline, selectedId, api, assets, onSelectAsset
@@ -21,43 +24,25 @@ export function CodePanel({
   onSelectAsset?: (assetId?: number, assetName?: string) => void;
 }) {
   const [subTab, setSubTab] = useState<'inspector' | 'as' | 'ts'>('inspector');
-  const [externalTexts, setExternalTexts] = useState<Record<string, string>>({});
-  const loadingRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    // A new folder can contain a script with the same relative path as the
-    // previous folder. Never display stale source from the old project.
-    setExternalTexts({});
-    loadingRef.current.clear();
-  }, [assets]);
-
-  const scriptFileForEvent = (event: typeof timeline.frames[number]['events'][number], frameIndex: number) => {
+  const scriptFileForEvent = (event: TimelineEvent, frameIndex: number) => {
     if (!assets || event.kind !== 'action') return undefined;
     const refs = [event.externalActions, ...(event.externalActionCandidates ?? [])].filter(Boolean) as string[];
     return resolveActionScriptFile(assets, timeline, frameIndex, event.tagType, refs);
   };
 
-  useEffect(() => {
-    if (!assets) return;
-    timeline.frames.forEach((f) => {
-      f.events.forEach((e) => {
-        if (e.kind !== 'action') return;
-        const hit = scriptFileForEvent(e, f.index);
-        if (!hit) return;
-        const key = normalizeAssetPath(hit.path);
-        if (externalTexts[key] || loadingRef.current.has(key)) return;
-        loadingRef.current.add(key);
-        hit.file.text().then((text) => {
-          setExternalTexts((prev) => ({ ...prev, [key]: text }));
-        });
-      });
-    });
-  }, [assets, timeline.id]);
+  // Every external script referenced by this timeline. Loading is scoped to the
+  // asset bundle, so switching folders can never surface stale source.
+  const scriptFiles = useMemo(
+    () => timeline.frames.flatMap((f) => f.events.map((e) => scriptFileForEvent(e, f.index))),
+    [assets, timeline],
+  );
+  const { texts: externalTexts, failed: failedScripts } = useScriptTexts(scriptFiles, assets);
 
-  const sourceForEvent = (event: typeof timeline.frames[number]['events'][number], frameIndex: number) => {
+  const sourceForEvent = (event: TimelineEvent, frameIndex: number) => {
     const file = scriptFileForEvent(event, frameIndex);
     if (!file) return undefined;
-    const text = externalTexts[normalizeAssetPath(file.path)];
+    const text = externalTexts[scriptKey(file)];
     return text != null ? { file, text } : undefined;
   };
 
@@ -72,7 +57,14 @@ export function CodePanel({
             lines.push(`// Source: ${source.file.path}`);
             lines.push(source.text.trim());
           } else if (scriptFileForEvent(e, f.index)) {
-            lines.push(`// Loading ActionScript source: ${scriptFileForEvent(e, f.index)!.path}`);
+            const file = scriptFileForEvent(e, f.index)!;
+            const error = failedScripts[scriptKey(file)];
+            if (error) {
+              lines.push(`// Could not read ActionScript source ${file.path}: ${error}`);
+              lines.push(e.detail);
+            } else {
+              lines.push(`// Loading ActionScript source: ${file.path}`);
+            }
           } else {
             lines.push(e.detail);
           }
@@ -81,22 +73,24 @@ export function CodePanel({
       });
     });
     return lines.join('\n').trim();
-  }, [timeline, externalTexts, assets]);
+  }, [timeline, externalTexts, failedScripts, assets]);
 
-  const charActions = useMemo(() => {
-    if (selectedId == null) return '';
+  // Character attributes that carry actions. Raw bytecode (`actionBytes`,
+  // hex dumps) is shown in the ActionScript view but is not source code, so it
+  // is kept away from the static analyzer.
+  const charActionAttrs = useMemo(() => {
+    if (selectedId == null) return [];
     const ch = doc.characters.get(selectedId);
-    if (!ch) return '';
-    const lines: string[] = [];
-    Object.entries(ch.attrs).forEach(([k, v]) => {
-      if (k.toLowerCase().includes('action') || k.toLowerCase().includes('bytes')) {
-        lines.push(`// Asset Attribute: ${k}`);
-        lines.push(v);
-        lines.push('');
-      }
-    });
-    return lines.join('\n').trim();
+    if (!ch) return [];
+    return Object.entries(ch.attrs)
+      .filter(([k]) => k.toLowerCase().includes('action') || k.toLowerCase().includes('bytes'))
+      .map(([k, v]) => ({ key: k, value: v, isBytecode: isBytecodeAttr(k, v) }));
   }, [doc, selectedId]);
+
+  const formatAttrs = (attrs: typeof charActionAttrs) =>
+    attrs.flatMap(({ key, value }) => [`// Asset Attribute: ${key}`, value, '']).join('\n').trim();
+  const charActions = useMemo(() => formatAttrs(charActionAttrs), [charActionAttrs]);
+  const charSource = useMemo(() => formatAttrs(charActionAttrs.filter((a) => !a.isBytecode)), [charActionAttrs]);
 
   const allASCode = useMemo(() => {
     const parts = [];
@@ -120,24 +114,18 @@ export function CodePanel({
         sources.push({ label: `Frame ${f.index + 1} · ${fileLabel}`, source: source?.text ?? e.detail });
       });
     });
-    if (charActions) sources.unshift({ label: `Character actions · ${selectedId != null ? `#${selectedId}` : timeline.name}`, source: charActions });
-    return sources;
-  }, [timeline, externalTexts, assets, charActions, selectedId]);
-
-  const assetDescriptors = useMemo<AssetDescriptor[]>(() => {
-    const out: AssetDescriptor[] = [];
-    doc.characters.forEach((ch) => {
-      const names = new Set<string>();
-      if (ch.className) names.add(ch.className);
-      if (ch.exportName) names.add(ch.exportName);
-      const label = api.project.characters[ch.id]?.name;
-      if (label) names.add(label);
-      names.add(`${ch.kind}_${ch.id}`);
-      names.forEach((name) => out.push({ name, assetId: ch.id, assetKind: ch.kind }));
+    if (charSource) sources.unshift({ label: `Character actions · ${selectedId != null ? `#${selectedId}` : timeline.name}`, source: charSource });
+    // Two actions on one frame (e.g. DoAction + DoInitAction without files)
+    // would otherwise share a label; labels are user-facing, so disambiguate.
+    const seen = new Map<string, number>();
+    return sources.map((s) => {
+      const n = (seen.get(s.label) ?? 0) + 1;
+      seen.set(s.label, n);
+      return n > 1 ? { ...s, label: `${s.label} (${n})` } : s;
     });
-    api.project.clips.forEach((c) => out.push({ name: c.name, assetKind: 'clip' }));
-    return out;
-  }, [doc, api.project]);
+  }, [timeline, externalTexts, assets, charSource, selectedId]);
+
+  const assetDescriptors = useMemo(() => buildAssetDescriptors(doc, api.project), [doc, api.project]);
 
   const codeAnalysis = useMemo(() => analyzeCode(codeSources, assetDescriptors), [codeSources, assetDescriptors]);
 
@@ -147,73 +135,83 @@ export function CodePanel({
     const clips = api.project.clips.filter((c) => c.timelineId === timeline.id);
     const containers = (api.project.containers ?? []).filter((c) => c.timelineId === timeline.id);
 
-    const clipLines = clips.length
-      ? clips.map(c => `this.registerClip("${c.name}", ${c.start}, ${c.end}, ${c.loop});`).join('\n    ')
-      : `// No clips defined yet. Create clips on the timeline to generate registrations.\n    // Example: this.registerClip("run", 0, 15, true);`;
+    // Clip ranges defined in SWF Studio (0-based in the project → 1-based AS3 frames).
+    const ranges = [
+      ...clips.map((c) => ({ name: c.name, first: c.start + 1, last: c.end + 1, loop: c.loop })),
+      ...containers.map((c) => ({ name: c.name, first: c.startFrame + 1, last: c.endFrame + 1, loop: false })),
+    ];
+    const clipTable = ranges.length
+      ? ranges.map((r) => `    ${JSON.stringify(r.name)}: [${r.first}, ${r.last}, ${r.loop}],`).join('\n')
+      : '    // No clips defined yet: create clips on the timeline, e.g.\n    // "run": [1, 16, true],';
+    const labels = timeline.frames.filter((f) => f.label);
+    const labelTable = labels.length
+      ? labels.map((f) => `    ${JSON.stringify(f.label)}: ${f.index + 1},`).join('\n')
+      : '    // This timeline has no frame labels.';
 
-    const containerLines = containers.length
-      ? containers.map(c => `this.registerAnimation("${c.name}", ${c.startFrame}, ${c.endFrame});`).join('\n    ')
-      : `// No contained ranges defined yet. Highlight timeline cells & right-click to "Contain" animations.\n    // Example: this.registerAnimation("jump", 16, 24);`;
+    const scripted = timeline.frames.map((f) => {
+      const actions = f.events.filter((e) => e.kind === 'action');
+      const sounds = f.events.filter((e) => e.kind === 'sound');
+      if (!actions.length) return null;
+      const original = actions.map((a) => sourceForEvent(a, f.index)?.text ?? a.detail).join('\n').trim();
+      const commented = original
+        ? original.replace(/\*\//g, '*\\/').split('\n').map((l) => `   *   ${l}`).join('\n')
+        : '   *   (no decompiled source available)';
+      const soundNote = sounds.length ? `\n   * Timeline sound(s) on this frame play automatically: ${sounds.map((x) => `#${x.characterId ?? '?'}`).join(', ')}.` : '';
+      return {
+        index: f.index,
+        method: `frame${f.index + 1}`,
+        body: `  /**\n   * Frame ${f.index + 1}${f.label ? ` (“${f.label}”)` : ''}. Original ActionScript:\n${commented}${soundNote}\n   */\n  private frame${f.index + 1}(): void {\n    // Port the original ActionScript above.\n  }`,
+      };
+    }).filter((x): x is { index: number; method: string; body: string } => x != null);
 
-    const sourceActions = timeline.frames.flatMap((f) => f.events
-      .filter((e) => e.kind === 'action')
-        .map((e) => ({ frame: f.index, source: sourceForEvent(e, f.index) })))
-      .filter((entry) => !!entry.source);
-    const sourceMap = sourceActions.length
-      ? sourceActions.map((entry) => `  ${entry.frame}: ${JSON.stringify(entry.source!.text)}`).join(',\n')
-      : '  // External .as files are loaded when available for this timeline.';
+    const frameScripts = scripted.length
+      ? `this.addFrameScript(\n      ${scripted.map((x) => `${x.index}, this.${x.method}`).join(',\n      ')},\n    );`
+      : '// No frame scripts on this timeline.';
 
-    const activeCases = timeline.frames.map(f => {
-      const hasLabel = f.label ? `// Label: ${f.label}` : '';
-      const acts = f.events.filter(e => e.kind === 'action' || e.kind === 'sound');
-      if (!acts.length && !f.label) return null;
-      const triggers = acts.map(a => {
-        const source = sourceForEvent(a, f.index);
-        if (a.kind === 'sound') {
-          return `this.playSound(${a.characterId == null ? 'undefined' : a.characterId});`;
-        }
-        const fallback = source?.text ?? a.detail;
-        return `this.emit('action', { frame: ${f.index}, tag: ${JSON.stringify(a.tagType)}, source: this.originalActionScript[${f.index}] ?? ${JSON.stringify(fallback)} });`;
-      }).join('\n        ');
-      const labelCode = f.label ? `this.emit('label', ${JSON.stringify(f.label)});` : '';
-      return `case ${f.index}: ${hasLabel}\n        ${labelCode}${labelCode && triggers ? '\n        ' : ''}${triggers || '// Trigger animations or state changes'}\n        break;`;
-    }).filter(Boolean);
-
-    const switchBody = activeCases.length
-      ? `switch (frameIndex) {\n      ${activeCases.join('\n      ')}\n    }`
-      : `// No frame actions or labels found in this timeline.\n    // (Add frame markers or labels in the timeline bar below the stage to generate triggers.)\n    /*\n    switch (frameIndex) {\n      case 0:\n        // Play frame specific audio or execute scripts\n        break;\n    }\n    */`;
-
-    return `import { Sprite, Animation } from 'game-engine';
+    return `import { MovieClip } from 'flash/display/MovieClip';
+import { Event } from 'flash/events/Event';
 
 /**
- * Modern Type-safe wrapper for ${className}
- * Extracted from SWF: isolated from Flash timeline engine.
+ * ${className}: class for timeline "${timeline.name}" (${timeline.frameCount} frame(s) at ${doc.header.frameRate} fps).
+ *
+ * Written against the AS3 API, so it runs on SWF Studio's engine (Execute tab)
+ * exactly like the game's own transpiled classes: put this file in the loaded
+ * folder and it is linked to the symbol through SymbolClass "${className}".
  */
-export class ${cleanClassName} extends Sprite {
-  constructor() {
-    super();
-    this.totalFrames = ${timeline.frameCount};
-    this.frameRate = ${doc.header.frameRate};
-    
-    // Register animations
-    ${clipLines}
-    ${containerLines}
-  }
-
-  /** Original JPEXS ActionScript, preserved while the TypeScript port is authored. */
-  private readonly originalActionScript: Record<number, string> = {
-${sourceMap}
+export class ${cleanClassName} extends MovieClip {
+  /** Frame labels on this timeline (1-based frame numbers). */
+  static readonly LABELS: Record<string, number> = {
+${labelTable}
   };
 
-  getOriginalActionScript(frameIndex: number): string {
-    return this.originalActionScript[frameIndex] ?? '';
+  /** Clips defined in SWF Studio: [first frame, last frame, loop] (1-based). */
+  static readonly CLIPS: Record<string, [number, number, boolean]> = {
+${clipTable}
+  };
+
+  private activeClip: [number, number, boolean] | null = null;
+
+  constructor() {
+    super();
+    ${frameScripts}
+    this.addEventListener(Event.ENTER_FRAME, this.updateClip);
   }
 
-  // Frame event trigger callback
-  onFrameUpdate(frameIndex: number) {
-    ${switchBody}
+  /** Play a clip range; it loops or stops on its last frame. */
+  playClip(name: string): void {
+    const clip = ${cleanClassName}.CLIPS[name];
+    if (!clip) return;
+    this.activeClip = clip;
+    this.gotoAndPlay(clip[0]);
   }
-}
+
+  private readonly updateClip = (): void => {
+    const clip = this.activeClip;
+    if (!clip || this.currentFrame < clip[1]) return;
+    if (clip[2]) this.gotoAndPlay(clip[0]);
+    else { this.gotoAndStop(clip[1]); this.activeClip = null; }
+  };
+${scripted.length ? '\n' + scripted.map((x) => x.body).join('\n\n') + '\n' : ''}}
 `;
   }, [doc, timeline, selectedId, api, assets, externalTexts]);
 

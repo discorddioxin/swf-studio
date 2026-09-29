@@ -1,0 +1,1094 @@
+<?xml version="1.0" encoding="UTF-8"?><!--
+WARNING: The structure of this XML is not final.
+In later versions of FFDec it can be changed.
+Make sure you use compatible reader/writer based on _xmlExportMajor/_xmlExportMinor keys.
+--><swf _xmlExportMajor="2" _xmlExportMinor="1" _generator="JPEXS Free Flash Decompiler v.22.0.2" type="SWF" charset="UTF-8" compression="ZLIB" encrypted="false" frameCount="1" frameRate="12.0" gfx="false" hasEndTag="true" version="7">
+  <displayRect type="RECT" Xmax="4720" Xmin="0" Ymax="2760" Ymin="0" nbits="14"/>
+  <tags>
+    <item type="SetBackgroundColorTag" forceWriteAsLong="false">
+      <backgroundColor type="RGB" blue="255" green="255" red="255"/>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="1">
+      <shapeBounds type="RECT" Xmax="180" Xmin="-180" Ymax="121" Ymin="-121" nbits="9"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="1">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="0" fillStyleType="0">
+              <color type="RGB" blue="255" green="102" red="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles>
+            <item type="LINESTYLE" width="1">
+              <color type="RGB" blue="255" green="255" red="255"/>
+            </item>
+          </lineStyles>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="1" moveBits="8" moveDeltaX="81" moveDeltaY="-72" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="true" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="4" deltaY="-38" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="57" deltaY="-5" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="38" deltaY="-6" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-6" deltaY="58" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-2" deltaY="69" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="115" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-69" deltaY="-4" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="11" deltaY="-187" generalLineFlag="true" numBits="7" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-34" deltaY="-2" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="7" moveDeltaX="25" moveDeltaY="-49" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-27" anchorDeltaY="20" controlDeltaX="0" controlDeltaY="44" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-56" anchorDeltaY="0" controlDeltaX="-26" controlDeltaY="21" numBits="5"/>
+          <item type="StraightEdgeRecord" deltaX="-8" deltaY="0" generalLineFlag="false" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-14" deltaY="-1" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="85" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-33" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-42" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="2" deltaY="-233" generalLineFlag="true" numBits="7" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="53" deltaY="5" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="13" anchorDeltaY="11" controlDeltaX="19" controlDeltaY="5" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="20" deltaY="23" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="6" deltaY="27" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="8" moveDeltaX="-122" moveDeltaY="-70" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="-2" deltaY="58" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="76" deltaY="0" generalLineFlag="false" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-57" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-26" deltaY="-2" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-19" deltaY="0" generalLineFlag="false" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-23" deltaY="1" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-6" deltaY="0" generalLineFlag="false" numBits="2" vertLineFlag="false"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="2">
+      <shapeBounds type="RECT" Xmax="202" Xmin="-202" Ymax="125" Ymin="-125" nbits="9"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="1">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="0" fillStyleType="0">
+              <color type="RGB" blue="0" green="0" red="255"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles>
+            <item type="LINESTYLE" width="1">
+              <color type="RGB" blue="255" green="255" red="255"/>
+            </item>
+          </lineStyles>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="1" moveBits="8" moveDeltaX="47" moveDeltaY="-96" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="true" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="31" deltaY="-22" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="42" deltaY="-7" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="21" anchorDeltaY="21" controlDeltaX="39" controlDeltaY="0" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="37" controlDeltaX="22" controlDeltaY="21" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-13" anchorDeltaY="16" controlDeltaX="0" controlDeltaY="28" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-33" anchorDeltaY="13" controlDeltaX="-14" controlDeltaY="17" numBits="5"/>
+          <item type="StraightEdgeRecord" deltaX="-33" deltaY="11" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-17" deltaY="5" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-2" deltaY="2" generalLineFlag="true" numBits="1" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-1" deltaY="8" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="2" generalLineFlag="false" numBits="1" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="5" generalLineFlag="false" numBits="2" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="4" generalLineFlag="false" numBits="2" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="11" deltaY="0" generalLineFlag="false" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="21" deltaY="0" generalLineFlag="false" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="44" deltaY="-1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="34" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-2" deltaY="21" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-1" deltaY="21" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="7" generalLineFlag="false" numBits="2" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="10" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-59" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-37" deltaY="-1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-33" deltaY="1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-38" deltaY="1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="3" anchorDeltaY="-20" controlDeltaX="0" controlDeltaY="-45" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="7" anchorDeltaY="-12" controlDeltaX="3" controlDeltaY="-20" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="19" anchorDeltaY="-9" controlDeltaX="8" controlDeltaY="-12" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="69" deltaY="-24" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-58" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-45" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-1" deltaY="50" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-60" deltaY="-1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-1" deltaY="-13" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-9" generalLineFlag="false" numBits="3" vertLineFlag="true"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="3" anchorDeltaY="-8" controlDeltaX="0" controlDeltaY="-16" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="9" anchorDeltaY="-9" controlDeltaX="3" controlDeltaY="-8" numBits="3"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="9" moveDeltaX="-138" moveDeltaY="-65" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="-6" deltaY="0" generalLineFlag="false" numBits="2" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-2" deltaY="58" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="76" deltaY="0" generalLineFlag="false" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-57" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-26" deltaY="-2" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-19" deltaY="0" generalLineFlag="false" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-23" deltaY="1" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="9" moveDeltaX="-154" moveDeltaY="-114" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="53" deltaY="5" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="13" anchorDeltaY="11" controlDeltaX="19" controlDeltaY="5" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="20" deltaY="23" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="6" deltaY="27" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-27" anchorDeltaY="20" controlDeltaX="0" controlDeltaY="44" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-56" anchorDeltaY="0" controlDeltaX="-26" controlDeltaY="21" numBits="5"/>
+          <item type="StraightEdgeRecord" deltaX="-8" deltaY="0" generalLineFlag="false" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-14" deltaY="-1" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="85" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-33" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-42" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="2" deltaY="-233" generalLineFlag="true" numBits="7" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="3">
+      <shapeBounds type="RECT" Xmax="205" Xmin="-204" Ymax="128" Ymin="-128" nbits="9"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="1">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="0" fillStyleType="0">
+              <color type="RGB" blue="51" green="153" red="51"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles>
+            <item type="LINESTYLE" width="1">
+              <color type="RGB" blue="255" green="255" red="255"/>
+            </item>
+          </lineStyles>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="1" moveBits="8" moveDeltaX="83" moveDeltaY="-35" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="true" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="-60" deltaY="-5" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="23" anchorDeltaY="-23" controlDeltaX="0" controlDeltaY="-42" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="43" anchorDeltaY="0" controlDeltaX="23" controlDeltaY="-23" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="22" anchorDeltaY="20" controlDeltaX="40" controlDeltaY="0" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="35" controlDeltaX="22" controlDeltaY="20" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-10" anchorDeltaY="11" controlDeltaX="0" controlDeltaY="20" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="-33" deltaY="20" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="13" anchorDeltaY="15" controlDeltaX="26" controlDeltaY="6" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="23" controlDeltaX="13" controlDeltaY="14" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-25" anchorDeltaY="20" controlDeltaX="0" controlDeltaY="33" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-43" anchorDeltaY="0" controlDeltaX="-26" controlDeltaY="19" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-22" anchorDeltaY="-16" controlDeltaX="-46" controlDeltaY="0" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="-36" controlDeltaX="-21" controlDeltaY="-17" numBits="5"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-5" generalLineFlag="false" numBits="2" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="-7" generalLineFlag="true" numBits="2" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="69" deltaY="1" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-2" deltaY="38" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="47" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-3" deltaY="-57" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-50" deltaY="-5" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="3" deltaY="-44" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="39" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="5" deltaY="-52" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-46" deltaY="-5" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-2" deltaY="42" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="9" moveDeltaX="-148" moveDeltaY="-10" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="76" deltaY="0" generalLineFlag="false" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-57" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-26" deltaY="-2" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-19" deltaY="0" generalLineFlag="false" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-23" deltaY="1" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-6" deltaY="0" generalLineFlag="false" numBits="2" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-2" deltaY="58" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="8" moveDeltaX="-110" moveDeltaY="-118" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="53" deltaY="5" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="13" anchorDeltaY="11" controlDeltaX="19" controlDeltaY="5" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="20" deltaY="23" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="15" controlDeltaX="6" controlDeltaY="12" numBits="3"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-27" anchorDeltaY="20" controlDeltaX="0" controlDeltaY="44" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-56" anchorDeltaY="0" controlDeltaX="-26" controlDeltaY="21" numBits="5"/>
+          <item type="StraightEdgeRecord" deltaX="-8" deltaY="0" generalLineFlag="false" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-14" deltaY="-1" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="85" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-33" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-42" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="2" deltaY="-233" generalLineFlag="true" numBits="7" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="4">
+      <shapeBounds type="RECT" Xmax="211" Xmin="-211" Ymax="130" Ymin="-129" nbits="9"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="1">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="0" fillStyleType="0">
+              <color type="RGB" blue="0" green="204" red="255"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles>
+            <item type="LINESTYLE" width="1">
+              <color type="RGB" blue="255" green="255" red="255"/>
+            </item>
+          </lineStyles>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="1" moveBits="8" moveDeltaX="92" moveDeltaY="-35" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="true" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="-27" deltaY="47" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="55" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="-89" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-29" deltaY="42" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="9" moveDeltaX="174" moveDeltaY="-122" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="141" generalLineFlag="false" numBits="7" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="37" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-3" deltaY="48" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-35" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="63" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-74" deltaY="0" generalLineFlag="false" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="-62" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-93" deltaY="0" generalLineFlag="false" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="-19" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-12" generalLineFlag="false" numBits="3" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-8" generalLineFlag="false" numBits="3" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-1" deltaY="-11" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="48" deltaY="-73" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="53" deltaY="-74" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="32" deltaY="4" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="34" deltaY="3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="8" moveDeltaX="-124" moveDeltaY="-67" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="-23" deltaY="1" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-6" deltaY="0" generalLineFlag="false" numBits="2" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-2" deltaY="58" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="76" deltaY="0" generalLineFlag="false" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-57" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-26" deltaY="-2" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-19" deltaY="0" generalLineFlag="false" numBits="4" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="8" moveDeltaX="-117" moveDeltaY="-116" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="53" deltaY="5" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="13" anchorDeltaY="11" controlDeltaX="19" controlDeltaY="5" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="20" deltaY="23" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="15" controlDeltaX="6" controlDeltaY="12" numBits="3"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-27" anchorDeltaY="20" controlDeltaX="0" controlDeltaY="44" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-56" anchorDeltaY="0" controlDeltaX="-26" controlDeltaY="21" numBits="5"/>
+          <item type="StraightEdgeRecord" deltaX="-8" deltaY="0" generalLineFlag="false" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-14" deltaY="-1" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="85" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-33" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-42" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="2" deltaY="-233" generalLineFlag="true" numBits="7" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="5">
+      <shapeBounds type="RECT" Xmax="207" Xmin="-207" Ymax="125" Ymin="-124" nbits="9"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="1">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="0" fillStyleType="0">
+              <color type="RGB" blue="0" green="153" red="255"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles>
+            <item type="LINESTYLE" width="1">
+              <color type="RGB" blue="255" green="255" red="255"/>
+            </item>
+          </lineStyles>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="1" moveBits="8" moveDeltaX="98" moveDeltaY="-36" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="true" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="28" deltaY="-3" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="23" anchorDeltaY="21" controlDeltaX="36" controlDeltaY="0" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="35" controlDeltaX="22" controlDeltaY="22" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-26" anchorDeltaY="25" controlDeltaX="0" controlDeltaY="36" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-39" anchorDeltaY="0" controlDeltaX="-26" controlDeltaY="25" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-25" anchorDeltaY="-20" controlDeltaX="-43" controlDeltaY="0" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="-35" controlDeltaX="-25" controlDeltaY="-20" numBits="5"/>
+          <item type="StraightEdgeRecord" deltaX="68" deltaY="-3" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="36" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="5" deltaY="1" generalLineFlag="true" numBits="2" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="9" deltaY="0" generalLineFlag="false" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="17" deltaY="-1" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="13" deltaY="-2" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="-67" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-57" deltaY="-2" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-5" deltaY="14" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-48" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="2" deltaY="-31" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="-30" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="-4" generalLineFlag="true" numBits="2" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="5" deltaY="-82" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="149" deltaY="0" generalLineFlag="false" numBits="7" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-4" deltaY="30" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-1" deltaY="24" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-15" deltaY="1" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-9" deltaY="0" generalLineFlag="false" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-38" deltaY="-1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-41" deltaY="-2" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-2" deltaY="49" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="24" deltaY="-13" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="8" moveDeltaX="-113" moveDeltaY="-121" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="53" deltaY="5" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="13" anchorDeltaY="11" controlDeltaX="19" controlDeltaY="5" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="20" deltaY="23" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="15" controlDeltaX="6" controlDeltaY="12" numBits="3"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-27" anchorDeltaY="20" controlDeltaX="0" controlDeltaY="44" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-56" anchorDeltaY="0" controlDeltaX="-26" controlDeltaY="21" numBits="5"/>
+          <item type="StraightEdgeRecord" deltaX="-8" deltaY="0" generalLineFlag="false" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-14" deltaY="-1" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="85" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-33" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-42" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="2" deltaY="-233" generalLineFlag="true" numBits="7" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="9" moveDeltaX="-149" moveDeltaY="-71" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="-2" deltaY="58" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="76" deltaY="0" generalLineFlag="false" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-57" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-26" deltaY="-2" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-19" deltaY="0" generalLineFlag="false" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-23" deltaY="1" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-6" deltaY="0" generalLineFlag="false" numBits="2" vertLineFlag="false"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="6">
+      <shapeBounds type="RECT" Xmax="207" Xmin="-206" Ymax="128" Ymin="-128" nbits="9"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="2">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="0" fillStyleType="0">
+              <color type="RGB" blue="0" green="255" red="204"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles>
+            <item type="LINESTYLE" width="1">
+              <color type="RGB" blue="255" green="255" red="255"/>
+            </item>
+            <item type="LINESTYLE" width="1">
+              <color type="RGB" blue="255" green="255" red="255"/>
+            </item>
+          </lineStyles>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="2" moveBits="8" moveDeltaX="90" moveDeltaY="-15" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="true" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="23" deltaY="-13" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="24" deltaY="-4" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="19" anchorDeltaY="19" controlDeltaX="31" controlDeltaY="0" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="30" controlDeltaX="20" controlDeltaY="19" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-24" anchorDeltaY="24" controlDeltaX="0" controlDeltaY="44" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-43" anchorDeltaY="0" controlDeltaX="-25" controlDeltaY="24" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-22" anchorDeltaY="-11" controlDeltaX="-27" controlDeltaY="0" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-12" anchorDeltaY="-21" controlDeltaX="-22" controlDeltaY="-11" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-3" anchorDeltaY="-20" controlDeltaX="-6" controlDeltaY="-10" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="-4" deltaY="-47" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="25" anchorDeltaY="-34" controlDeltaX="0" controlDeltaY="-68" numBits="6"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="50" anchorDeltaY="0" controlDeltaX="25" controlDeltaY="-34" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="22" anchorDeltaY="22" controlDeltaX="38" controlDeltaY="0" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="37" controlDeltaX="21" controlDeltaY="21" numBits="5"/>
+          <item type="StraightEdgeRecord" deltaX="-52" deltaY="1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-1" deltaY="-27" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-57" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="62" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="9" moveDeltaX="138" moveDeltaY="19" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="-61" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="57" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="57" deltaY="4" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="3" deltaY="-61" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="1" moveBits="8" moveDeltaX="-112" moveDeltaY="-118" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="true" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="53" deltaY="5" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="13" anchorDeltaY="11" controlDeltaX="19" controlDeltaY="5" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="20" deltaY="23" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="15" controlDeltaX="6" controlDeltaY="12" numBits="3"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-27" anchorDeltaY="20" controlDeltaX="0" controlDeltaY="44" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-56" anchorDeltaY="0" controlDeltaX="-26" controlDeltaY="21" numBits="5"/>
+          <item type="StraightEdgeRecord" deltaX="-8" deltaY="0" generalLineFlag="false" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-14" deltaY="-1" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="85" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-33" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-42" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="2" deltaY="-233" generalLineFlag="true" numBits="7" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="9" moveDeltaX="-150" moveDeltaY="-10" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="76" deltaY="0" generalLineFlag="false" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-57" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-26" deltaY="-2" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-19" deltaY="0" generalLineFlag="false" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-23" deltaY="1" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-6" deltaY="0" generalLineFlag="false" numBits="2" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-2" deltaY="58" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="7">
+      <shapeBounds type="RECT" Xmax="201" Xmin="-201" Ymax="124" Ymin="-124" nbits="9"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="2">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="0" fillStyleType="0">
+              <color type="RGB" blue="204" green="204" red="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles>
+            <item type="LINESTYLE" width="1">
+              <color type="RGB" blue="255" green="255" red="255"/>
+            </item>
+            <item type="LINESTYLE" width="1">
+              <color type="RGB" blue="255" green="255" red="255"/>
+            </item>
+          </lineStyles>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="2" moveBits="8" moveDeltaX="41" moveDeltaY="-65" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="true" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="5" deltaY="-59" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="155" deltaY="4" generalLineFlag="true" numBits="7" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-1" deltaY="22" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="28" generalLineFlag="false" numBits="4" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-34" deltaY="71" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-18" deltaY="45" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-20" deltaY="77" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-78" deltaY="1" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="33" deltaY="-80" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="26" deltaY="-63" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="27" deltaY="-50" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-28" deltaY="0" generalLineFlag="false" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-37" deltaY="1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-30" deltaY="3" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="1" moveBits="9" moveDeltaX="-137" moveDeltaY="-70" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="true" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="-6" deltaY="0" generalLineFlag="false" numBits="2" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-2" deltaY="58" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="76" deltaY="0" generalLineFlag="false" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-57" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-26" deltaY="-2" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-19" deltaY="0" generalLineFlag="false" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-23" deltaY="1" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="9" moveDeltaX="-153" moveDeltaY="-119" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="53" deltaY="5" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="13" anchorDeltaY="11" controlDeltaX="19" controlDeltaY="5" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="20" deltaY="23" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="6" deltaY="27" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-27" anchorDeltaY="20" controlDeltaX="0" controlDeltaY="44" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-56" anchorDeltaY="0" controlDeltaX="-26" controlDeltaY="21" numBits="5"/>
+          <item type="StraightEdgeRecord" deltaX="-8" deltaY="0" generalLineFlag="false" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-14" deltaY="-1" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="85" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-33" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-42" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="2" deltaY="-233" generalLineFlag="true" numBits="7" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="8">
+      <shapeBounds type="RECT" Xmax="208" Xmin="-208" Ymax="128" Ymin="-128" nbits="9"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="2">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="0" fillStyleType="0">
+              <color type="RGB" blue="153" green="102" red="102"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles>
+            <item type="LINESTYLE" width="1">
+              <color type="RGB" blue="255" green="255" red="255"/>
+            </item>
+            <item type="LINESTYLE" width="1">
+              <color type="RGB" blue="255" green="255" red="255"/>
+            </item>
+          </lineStyles>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="2" moveBits="8" moveDeltaX="92" moveDeltaY="-27" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="true" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="42" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="-52" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-45" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="2" deltaY="52" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="6" moveDeltaX="31" moveDeltaY="-26" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="-20" controlDeltaX="-11" controlDeltaY="-15" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="24" anchorDeltaY="-18" controlDeltaX="0" controlDeltaY="-31" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="44" anchorDeltaY="0" controlDeltaX="24" controlDeltaY="-18" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="24" anchorDeltaY="19" controlDeltaX="41" controlDeltaY="0" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="30" controlDeltaX="25" controlDeltaY="18" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-13" anchorDeltaY="16" controlDeltaX="0" controlDeltaY="21" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-22" anchorDeltaY="8" controlDeltaX="-12" controlDeltaY="15" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="14" anchorDeltaY="14" controlDeltaX="26" controlDeltaY="4" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="25" controlDeltaX="13" controlDeltaY="15" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="-3" deltaY="24" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-10" deltaY="18" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-34" deltaY="21" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-44" deltaY="8" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-27" anchorDeltaY="-18" controlDeltaX="-52" controlDeltaY="0" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="-35" controlDeltaX="-26" controlDeltaY="-18" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="12" anchorDeltaY="-16" controlDeltaX="0" controlDeltaY="-22" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="25" anchorDeltaY="-9" controlDeltaX="13" controlDeltaY="-16" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-11" anchorDeltaY="-14" controlDeltaX="-20" controlDeltaY="-6" numBits="4"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="9" moveDeltaX="136" moveDeltaY="17" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="-57" deltaY="1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="59" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="57" deltaY="-1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-59" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="1" moveBits="9" moveDeltaX="-144" moveDeltaY="-68" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="true" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="-6" deltaY="0" generalLineFlag="false" numBits="2" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-2" deltaY="58" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="76" deltaY="0" generalLineFlag="false" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-57" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-26" deltaY="-2" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-19" deltaY="0" generalLineFlag="false" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-23" deltaY="1" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="0" moveBits="8" moveDeltaX="-114" moveDeltaY="-118" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="53" deltaY="5" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="13" anchorDeltaY="11" controlDeltaX="19" controlDeltaY="5" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="20" deltaY="23" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="15" controlDeltaX="6" controlDeltaY="12" numBits="3"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-27" anchorDeltaY="20" controlDeltaX="0" controlDeltaY="44" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-56" anchorDeltaY="0" controlDeltaX="-26" controlDeltaY="21" numBits="5"/>
+          <item type="StraightEdgeRecord" deltaX="-8" deltaY="0" generalLineFlag="false" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-14" deltaY="-1" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="1" deltaY="85" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-33" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-42" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="2" deltaY="-233" generalLineFlag="true" numBits="7" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-3" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-1" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="9">
+      <shapeBounds type="RECT" Xmax="90" Xmin="-91" Ymax="126" Ymin="-126" nbits="8"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="2">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="0" fillStyleType="0">
+              <color type="RGB" blue="51" green="153" red="153"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles>
+            <item type="LINESTYLE" width="1">
+              <color type="RGB" blue="255" green="255" red="255"/>
+            </item>
+            <item type="LINESTYLE" width="1">
+              <color type="RGB" blue="255" green="255" red="255"/>
+            </item>
+          </lineStyles>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="1" moveBits="7" moveDeltaX="16" moveDeltaY="44" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="true" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="-59" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-64" generalLineFlag="false" numBits="6" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="66" deltaY="-1" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-1" deltaY="-56" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-51" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="34" generalLineFlag="false" numBits="5" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-62" deltaY="0" generalLineFlag="false" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-6" generalLineFlag="false" numBits="2" vertLineFlag="true"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="22" anchorDeltaY="-20" controlDeltaX="0" controlDeltaY="-37" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="43" anchorDeltaY="0" controlDeltaX="23" controlDeltaY="-20" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="26" anchorDeltaY="19" controlDeltaX="40" controlDeltaY="0" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="25" controlDeltaX="27" controlDeltaY="18" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-17" anchorDeltaY="20" controlDeltaX="0" controlDeltaY="43" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-37" anchorDeltaY="0" controlDeltaX="-17" controlDeltaY="20" numBits="5"/>
+          <item type="StraightEdgeRecord" deltaX="-3" deltaY="0" generalLineFlag="false" numBits="1" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="25" generalLineFlag="false" numBits="4" vertLineFlag="true"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="2" moveBits="8" moveDeltaX="-44" moveDeltaY="68" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="true" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="14" anchorDeltaY="0" controlDeltaX="11" controlDeltaY="-10" numBits="3"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="14" anchorDeltaY="9" controlDeltaX="18" controlDeltaY="0" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="11" controlDeltaX="14" controlDeltaY="9" numBits="3"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-10" anchorDeltaY="11" controlDeltaX="0" controlDeltaY="18" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-17" anchorDeltaY="0" controlDeltaX="-9" controlDeltaY="10" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-12" anchorDeltaY="-10" controlDeltaX="-21" controlDeltaY="0" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="-18" controlDeltaX="-12" controlDeltaY="-10" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="10" anchorDeltaY="-9" controlDeltaX="0" controlDeltaY="-11" numBits="3"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="11" hasEndTag="true" spriteId="10">
+      <subTags>
+        <item type="DoActionTag" actionBytes="0700" forceWriteAsLong="true"/>
+        <item type="PlaceObject2Tag" characterId="1" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="0" translateY="0"/>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="PlaceObject2Tag" characterId="2" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="PlaceObject2Tag" characterId="3" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="PlaceObject2Tag" characterId="4" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="PlaceObject2Tag" characterId="5" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="PlaceObject2Tag" characterId="6" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="PlaceObject2Tag" characterId="7" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="PlaceObject2Tag" characterId="8" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="true" ratio="0"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="RemoveObject2Tag" depth="1" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="FrameLabelTag" forceWriteAsLong="true" name="unknown" namedAnchor="false"/>
+        <item type="PlaceObject2Tag" characterId="9" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="0" translateY="0"/>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+      </subTags>
+    </item>
+    <item type="ExportAssetsTag" forceWriteAsLong="true">
+      <tags>
+        <item>10</item>
+      </tags>
+      <names>
+        <item>fisher</item>
+      </names>
+    </item>
+    <item type="DefineBitsJPEG2Tag" characterID="11" forceWriteAsLong="true" imageData="ffd8ffe000104a46494600010100000100010000ffdb004300100b0d15110b0c1811191c1911100c0c0e15191c27302519211c10110d182120202040404040302019191c191c25304040404034271c28344040404030404040ffdb0043011110121616101216171d201c1712131215161c2028362f25281c121612162831312c40404040362c251c1c1c202f363f40404031282028314040404036404040ffc0001108008a00ec03012200021101031101ffc4001a000002030101000000000000000000000003040102050006ffc4003a100002010204030701060407010100000001021100030412213141516105132232718191a114234252b1c13372d1f0061534628292e1b2f1ffc4001a010003010101010000000000000000000001020300040506ffc400321100010302030605030305000000000000010002110321123141045161718191223242b1d113a1c1e1f0f152627292a2ffda000c03010002110311003f00d055e7445526b9564f4a6114015c2b8004364802a56d13146559347548ac9c0414b502a4dbd28f15568024e9bfd056470a01b5ae95c2d81bd14dd458cd30434758e438f1f8359d8aed3b4b66e3ab24839550c97274dc0d845087130d049e0b6071c87536164fac70e744cb591d9d8ffb435cf10947b42008196e1600c6f20e51bee6b5ed12666b105ae870836b1e28105a403171223991f853dd8ab04ab48e15d3bf0d353c28ad0aa072ab65037de97b18fb57188b4657bceebbc3194b721ce781a60efaef425185c473a8cbcf6aecdae95320013bd1421572713a0a82df15249275f6a1b6f5902a73574d5469522b2ca40ae531535075359652ce63e07cd346d14b6a39281efc7eb4adb467bf642c0556ef5c9e4a4401d4b47c1ad27d54cf2aad316277d8745d149be12779b7458d79335cb879151f03ff006aaab14712649dd98b7c9d3e95c56a5aa91173cd2ce277a0320a759684c95a1290916b7ad51adeb4e32d0c8d6824211974d051ada4d02d998a72c89745e1e227ae51b7bd109d82481bd5d2dc0a205abb5b194e5d1a0911cc555da17ac4fc5122158b70c4eaaa489008209989e95d946691bedf357c55c0f865741aab0661c400181f8dfd297968e3b687e35140c059e003c089090eda7cd96d83b10587139d5b4f4037fe61590f871af8441f9ad2c789b86e2b03972861c46688f507583d0d22de29af53610dfa208ccb8e2e7fc428d424401947be7f74be15ce12fdc644256e5a6b4d1b80594c8ff729008a7bfce2ddc475bc5c066299728cb9487d5b8ef966384d2e7350aed80e3ad5aa6cb4ea3b138198891c12b6ac4020189891bd7a0b58a4ee559fc074b6c386651b03c74323a1a43b771c6de1ace52329b82e5c5fcc8bc2794c13cc52b63b4f1787b4114ab228ca0301e500f849de35d2880d9c4585442c43dc625089b96d8cb40e6844891cabccabb33e95c896ce61521a44b093172dd60eee4836bb5f0d7d3121985a3dc640a048300c1adac362b276661ee5f04304b56c8e2493947fdb43ef58f6bb230e19189053562481cf81eb4f62f1086caa787bb75b6e01d7301236e1cc7a573c02406c99280979f0df0ddc72809ab9da889900b6c59ae0b6008249240f0f38dcedb5379753ad60601add8bf9bc44db0d906ea05c3e28f6e75b47129ddb34821519b5220e5f7fec567b1cd225a4730896389b09e57442de28aa35d001d2480741bcf2f53597da98862f6ca195501ca83009d74278c687855cdeb62cd9b9869b8a4adbbf1a32cea491f99356ea26299d4aa35a1c4100e4b7d2741820b9a27085a6be21236d46bd2a639552c3f8135952aa41e041a388f9a517531055429e3b548009d2a49f8ae0699380a2d916af673e5655473c8296208f4933ff0095a0ea4db70bbb5b60bca4831489d411c2a6d6316cda02f78552155f7046c01ebc2a8c7458e5a2b5377a4f44bab10d95959584483b8d37f4357331d74a7afda5bc8a54ea35561afb1e60f1a45948660da32efefc474348e6c1e1a25730b79283d686d5666a193414ca0b9a1d5ae1d684cdad2a4251ec45376bce847e703fec08a56d5b3fd68cce2df74788bb6c81cc861fad1198e699861cde6168a4b300379140c77dddd26084b9398f00c23e247cc517edd654c9244c0f29e24718a235e2c4c447f5aa1b85d861c0807a85e771f8c7b77ed5bb4e12d5fb64c95d4e77eec907971d293b37197306920a924abb02d9557aefa8f8d699ff0017599187c45bb83bdb76c59163f30ef649cff872ebeb15e73edd75081dd659049869f342cf4da861313a7f09db1001b9165e9addfbd7b328d56dfde383e2f0a395888e2418e94bdeb654aba8ca8e04a80404d3f31d0a9dc1078c4565f67e34e26eb5996b57af62b00f6d9660a58b970ba93a68ca59b918af457d9d6fb07750a48369340a142892dce08951ccc6c29a9d5751782d805c0c8233008fba8d60d2e6300f3026dc0c5bef9ee59cca413b13c7a473aa11d299bb7bbc6f02e4b36e624ea4989663cd801e8001412470da7857bb48b8b1a5c21c4490bcfa8007100c806250b63e2db5a1ff000afdab961b2dd532b1e9fa11a1a39f7d2a1000663ac70a7201041820d8cee41ae83215931c1922fdacceaad9594c296d619d362c099246f029755f1b162496dcee76da997604784475a140e02a54f67a6c2e2d6c1767d3d93baa9220f3ea54a04076357841c0cd42472ae7300e512791354c29311571702ec24719de844b5aba2ee1ce571b8de66674e208dc54a16204a81ef357f603d281602082241cfaa21e419d429c1769dbb56ac27960b0b8a64a19332a7752388820d691ed5b01d00321a3c43ca3d46ff4acbee83799411ce2a7ec463c001d418ae1a9b0d3325a4b49ea154540e3e217399163f0b7cdfb79901612e254fe1333b1e352e42eae4004c09ac3b16ee5db9dd5b90ef88644d0409b24b6bd06633bc8d2689fe2037ecfd9d705765c8b786209ca732303995b84651b7233335e77d338883e925a79830ba5ac04d8db7f3bad90640820822411a83ef5cc819483b1a4bb212e2f66e116e79f2331ff009bbb6bec453c741d6a635e04a91893c091d8a2767984b8877b6c187f2bcc7c106bb1822e58e67bcffa8027eb968587bcb6f12dde1005d4455276f096247aeb23de9bc4e1d2f5bcafeaac37074323a538b8576f8a946b1f94838a136957656b3952e6ad0486e0c24eb3d388e1542d3bd215cceb120e612ee2804eb4ddc5d26976de954ca72328eb510ade700edf4d6a0b1275ab5b1ce993aeb8b9ad900684111d2817bb49f0f6ed2100981e2da743a9f583f14037addec7e2d4c97b164aa2cc1cc173165f6e35cf8438c5c2bb1d0e0ec163c4986927d098f7a7a6d0ea8d697610e304f494ec25a73370490380948de74c529576006704c125a64f1ae380b1f7a2dbdc50f685ae04c0e249e3fd2b4d30562d5b80013ac9aa2e1d7f09d8ed5ea3765a404412389d506d52df298b93df9a5ad5954c9018adb5550069216224ef4464ef1dc801558e6f4803eb4d2d9554962052f79830d18c721b55594298707068c435cd23aa982273cd2b72dcf104033b554241dcfb510e9b6bf1425b819b4226ba805ce4a974603c264cf1ae5cc40e1aebc6a8f74ab795a39d596fc804663d38d15914023533b1fad566a3bd1a93cc0d6675a880a5b2af8b7ac8292a0ef9bd8d7222acc0d0ebd7e6b91c91e210794d4b31074524456b2d75c06bb57012761431709610ad13049d22aea5a76d3873ad6591953d69ac369757d452833f09f734452fc4d2916288289da371b0d794dbfc38a17c65d080d6ca303d486241fe958a31fdee290dd302d59bb614b1df3a14ce7796ca491d6b5af86bb9c311f78814c899ca0c69cc6f4aff00972c242095d8f53c7debcd76cd531be088738b838ef75cdb815dccaad0c19cfc003f098ecfedf6b97d92fdbc8bf7aaaa8ac593bb26331d983a78811b475ad95b81d011f88061ee26bce771730f7c3e519865920c36846b3ce246ba6bad69d9c62b5d62ceaa2153291c60106784c90474deb8368a0fa4418961198ca54dc26edb802e351fbfe568112083b75a9b0ed64c5bf213aa1f2fb729a1a5c052588cb94b66e10275f4a1dbc40bd1dc415033176060f2ca38cf3a8876e5984ccb734f62c0bb8524820641757982baff00e1e959db53d6713dee0afe650a12e7d9c11e53a289f698a50a8a67e9c42a56b9691a8284cc4d50ea6886d9a5cdd4fcc0fd7eb4aa29b51b51ed0e740068cadb538442c7ed2ecab8d8a46b4d22e92a4cc30cdbcffb6b4ee277762da8d025a5b600d8856b423fbe54c88cbaed4be247dcc80582b29ca378d0183cc0f17a8a66901f4dc7d0e69ec42a0b91d47fb02dfca5ae399da82cedc07c534eca64ab4827424113ebd696b91ae9a738af769bdaf12d20ae67b5cd30e0425ee3371524473a087b849ca8a069018d3255780a0b44e9355849286d3a1b813d0093f3542ec09caa06db0d4d109aa1b8c7653239e946109506f30fc3278c6d53f6a20f97fad74bc126147ad57310491a90226b1e6b74454be58f90c469576bb036d636e34b0bedf967d0d477ce3ccb03a6f5a78ad1c114decdb2493035a34e9c26294fb469e533cbff006aad78b150146ba106b48deb423b390e72a83aea41a2ab1813a13c2964bca0430084188a2663c0e9f34473e8814c86ab66823d29486d22e3283ceaf9582f41ac9ad3bd684d0711474b8ac8c0e8c174eb59e8e080411146524f114ae129818466cac093334bdfb01ed81c0b89f4993afa4d119a06f547c405b0da6620830763fdfeb51a8d269d400492c70038905569ba1edd06213dd695eb59f077d4293df597054ee73ae53f4af2e31389b17ae59b40b5b1946be600281949e077af59d98eb8b5b2498fbbccca0ee540d01ebbfa0a6aee0b0bf78f7ad282173336bf847d6bc0a6d80710d72d642bd2a460cd84e5c925d961c6019dd7bb189ba0adb998088c0b1eac63d80a3e554505c800f3fd851478c2980a8aa1117801a7d4f1ac2edfc4b58c42dc45219542827cac17972dcfad1224db288083ae6d901013768b6217102e3155ef9932810726631aefe21bfad0312ed6ae6552b9400403b81ae9ed49603b585e662ed91e181f6e1473783412a18900c9a522eb12321632b4b2821675860c3da6882840c9d288f716d59777d9167a9248007b9205324088aeaa48660081244ebf1564beac544152de5cc227d3af4aceb37addbcff0068701ae30c4003993235e31b51afdc37702ce9a1565bdd4776c0c0eba5054006f47b964670c34607461a1a5ee9bc2f264606d85324c670784691eb4de70e8ae20a3a8752393091f4ac9ed7c4bd9b27212a56d1bc60496860b13c00904d0124803326020d73f106b4c4ceb6b0253a50e462189686600c7013a8acdc4df4388655056154b03b0cc14883d419f7e34a5aeddcab26d3919e645cd812b20483cbeb406c577f8a72a9dda3e50a09930a0eff00de82057a5b152ad4eb1c60869075b4e892a791d2e0e32dc26f222653371db801076d7f6a05ebc740786bd2bae5d510276d0c555b1007900260098af509e2b980e0859b40249a80c3ad71633a01539988f289f4d691329cfcbeb55cdd2bb51b8aed79015915d9ba54f78d006689d3a5448dbad748d20ebd05641319657c41498e1fd6aa0388e004ec687e21b123d74a95ba41d4c8a6908414743132266af9c9e022856eeab301113d6a1482e32b12a092470a3234420a324f784c9d771c29cb7240d2829a7eb4ee1acf7ea0ab78c1690741009020f324546b556526e279804c753253b5a5d395849277480a15398150b86ccc73689a173c84fea761ccd3a70e143187895000652758e838eda8a9c2da65b8cee083195566637d4c718315c9536d6e07609c46c246ff0085614e20ba081a0d51f058755745b08552dbdbb801d081e199ea75a77b450b611e3f05cb5727a23827e95d801e0bcc77670beca07f5aae25992e38cdf77711743c38100f5ae0021b27d524f32ba5b6a6e71f5c931c6ded0847451f34b620ab2c300c39309146b8740070114adc1ad21c97395818eec404bba1e510483af01d4566f71885d34f0e9a920fc457ac2f1d351b555da58990069fa0a01da1ba13363a6f45b743c7a9b983ba9061b24e5f346606475060fb54dbb884908cac46e01048f6a976277a59ba0179dc459b96ee2ba92e01523c30c003a4eba8e062a2d1c55fbc514b05bac034680003ff00c15e85ad0baa034e9b11b8a3e16c0b7264930049e0390a691bae9edd772b64cb6d546caaaaa06d0a00140bd6bbc0574cc51d24edf78a5489ea3f634d1d2b3bb62f0b56eddc40accb6ee650e332139ec0d57e4cf4a0d69739a06648039941a3c42f11267fc413f85917307f67b8a8e06aa594ee23330fa110680f985cd40de34a9efeeddbb9ee11e53940d14499d07ad7390408686e3c8d7d1b03cd36e3f380314652a0f2dc6709b4da543850ec3344731fbd50fbc554a9e7e29d8fec6ab9882646b410579352a09da879e77a6f0afa91c209adac2d2abdddcd343fad45db571541274e95a9d9f6dae209569372e2e6054080c471e9488c41364962415b97167f95d97eb151a7558f7b98dc52c06663d270fbaad4a4f631ae310e22227d427d92594f33510799a25cba09d3313cf81ae4ccdb466d7c3049f8abc294aa4373ae2a789a92aea7c4bc036dc0f11d2a2472a08ca25a91aac1e1d4535660025b7df4da94b2017e47f0c5304b0006ec480071d4e83de99a94a3a36662003a8d4f00399e95add95875b365c024bbb9693c01d6239ee7de8dd9dd996edda42f0cda318982cac753cc29d146db9d669b602491cebc6daebfd621adf234983bf8fc2b86e11139c62e9a74f75493b758ab0102b809d6ad2018ddc810a37d4c0f4ae44e01299c198671c0aab8f6d0fed538f53ddf7806636918951a9237d3a8a59af8b305fc2c1c003812634cdb788694fa3874565f2b0d8fe9ed566105b057436ecc2774159ac65548e201f914b5c9a3ddb7dde22e2ae88d6c383f960050a07482695c405b76d9eeb90aa9a92606fbfa9d00a91dcb99d6246e427fa50cef516b156aeb116da48131a8d0513bb2763a52148a987c05a088574b82183f191fb74e545bb6eedb2ac4874670b9408619a620f18e342c2d9be9644b09ca000758a3a61c780b312e0e60499009e9b5695502c2ca6d1b9de0570baa92a566348907e77a69748acf46457bad8c62ac85c201214a91ac46f3c4553b32f8b9f6a655cb6daea2a0e108ba91d4ec7d2b040c7e8b4c996a5717864c423066008172d911c1b2e806931a7bed465714412c7a694dc4662e109bc8cd6261fb28365224202da31264690556070de4d68be0ac2e16e28b56d8b00096539fd981907a8a766a86589076daa8fad59d12f75b2ba5169200ec179e3d8ee5251b2366032dcd6d9d771707ee39eb59d7eddcb37596f02ad310448313b1e234af66d088da062411076349ddc28bb69d0ae5b6e35407324825b4046864982237ae8a5b7546c0a803dbff0043afca0434cdb09fedcba8f85e5ad06b8e422831c4683dc9d0535630179dbca47975827cde9a6839915e8707d996ac0584258124163a09e4a34fde9e0cc2389240a3536fa849c0d6b5ba4893f0b06b789e26c3b7eab0b0bd8d8f4b64da2854dd6b96c9622558c8240d89148bf64632cf859433c9670baa82c66073dfa57b6ecfcc2c41f2e76eeff93481ec663a452ee02e23111a13714faca21a832b3d84bd860b8f8a467327dd75d6f152648b0c30377861798c2f63dfbbfc61904ec7909e133fa56d59ecfb76d02acf94292be19e6246b078c934cb120efc26acada08dcc4d255ad52a9f1bcc7f48b0ecb99a63cbe1e59f749627b283848d94410c649049301b711c2b3bb4bb1eda59cc81adbebc4b29304ea60469a7ac5763b1a89dab705e21d32b04cde55015410179e6dcf19ad4ec1c5362700ccc3eed5ca5b62233201f58da78d6a6fa8cb35ce005e34baa6298c50e8ce45e39af336b0d74aa8500284ce5c9f000799e73a46f35a786ece402c9132101776f316275c8bc1636275adab96ed03e1500cefc7da85004c73d6ab576aab51a1a480dd70ebcd4fc2d2708827537ecaa14e752aed0ab902699634fae913f4a282749e5afad501d7d2b8ebe95cd284a22b491cab1fb4d312af8fb9699d6d916c183a4a400c3e86b5d533365492d1ec2789a6bec65b282e63665006561c47bf3a204dd5a9b5c6f165e73b3f1788c62ad9bca56c000dd69f13059e3c2789af45817ccb7c8fe197408799504123a6c27a55d3016d48001eec1cd93f0ce9a9e262adda1894c2612e5dbb24200028dd89d028ea4d3810aad6e125c4e40f64a768dc5b6f71d9805b787b6ce4f019ae47c9d075ac1c563f0f79b0be22cbf685665ca76860247100907da8bda588bd8bc386b96725b37f0f70a869212d6626440d4ccfb0a62dddb402f7401010469b48e1484de7f79283a1cf274b67d9278ec3e6c4d938794f038765d3431f5acbc461bbbbac031d618c93327afb56edeba7bb853267cbfbd64620dc370931a89fd6802523ad70b7171005bebc2947c61179624804e6a567c27f94fe953d96030b99b596133e9421362260266fdd4bef690e8036633a703a5731fb3e270d651a6d386403f2e5566001e5c0cd2373f8be970c7b4d06db13da386924fdea8d7d0d102e949bc6f7012bd15a5258534345a15be1eb463e5345310a9989302aeb00551763eb52680c92aab6a64d11469543fbd5c6c3d05041115abad117310abc154dc6f404003dc9f806a87cad57ece3e3c4f29b5ff00c9a61a7755a425e01d013d93d76e2dab5276195401ccc00052597cc4eacc4b31f5fd86de828f8e00a5a0751df0fa23d0cef4c6ea958de384a0b1a89aeb9e63e9551b8a9eab97d495c5766dbc4df0d7751249103681a7bf3a78425a5441088b9540db4a8a87f29a692aba2131a8aa9d8d5471fef9d2a94dd10d76681fa7a9d87b9d2aabfbd170ff00ea6c7f337ff0f5b320266097346f2027f0f645ab3e2236372e375893ec361d052188c53622c3aa2844b80431273e530761107df4a7bb43fd1deea147cbad67555e62005d159e5b8436d20fc2a31ee6c3b06b82dd947ba5558c95b6ae63f7f5ac7c3d8b3770cd7af3137ae9eff56260dce03d069ed5b83caffc8dfa1af16a60803696fd4d20cb3d42e7c462f7e6bd62366c2b6d19586be943c2222e1c80000ba01cb4ac9727b8df97ea298b662cdc8fcdfd295362cb8085d76f1ef80b6a492083ed59d8957ef9b3a904c1ad1c119bf7279a0fad338d03ed2fff001fd05698484489e3f2bfffd9"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="12">
+      <shapeBounds type="RECT" Xmax="4720" Xmin="0" Ymax="2760" Ymin="0" nbits="14"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="11" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="14" moveDeltaX="4720" moveDeltaY="2760" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="-4720" deltaY="0" generalLineFlag="false" numBits="12" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-2760" generalLineFlag="false" numBits="11" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="4720" deltaY="0" generalLineFlag="false" numBits="12" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="2760" generalLineFlag="false" numBits="11" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineBitsJPEG2Tag" characterID="13" forceWriteAsLong="true" imageData="ffd8ffe000104a46494600010100000100010000ffdb0043000604050806040409060b0c0a0606050405080a0c0f130e0c0c0b060605090c10100c1c20201b130c0c0a0b0a0c0e131b20201b140f0c10141c20202013202020ffdb0043010707102018070d1a2020202020150c0d112020202020202020201518101a20202020202020202020202020202020202020202020202020202020202020202020ffc0001108008a00ec03012200021101031101ffc4001b00000301010101010000000000000000000203040105000706ffc4003a100001030204030702040503050000000001000211032104123141516171051322328191b1a1c106d1e1f014233342925282b234436272f1ffc400190100030101010000000000000000000000000102030405ffc4002211010100020202020203000000000000000001023111213241038122715191d1ffda000c03010002110311003f00f808088095e02e98d1653184090b4365186c94c0d4d45b58b4b53216181af3400645e0d1ba2ced6c4e97fa7efe8a6ad8a68638b48e006a49fb04870a046c88851e1711de17dc4b5cc100459c48f980ac67347b1eda1ba2dcab656cebe8a88202d88ea974f12c7b8e4f2e6c99b62534f341b0af42f4dd6c8004ea80ccbec8495a6e501d504d95e42b501a178185e5e28378b951932b5a3800914da5d56981e5073bba0d07a9f8563ae0abc35578e9cfa825ce3cc0fa2c0213359e6495842cd25b84a596a79080841272dbac2dba79080852918e498d096cbc27d312e68dae4fa2a8a8d6b518088b6c62c750849b7354bac3a89b1591709959c1d4439ba8209e8267d926e95148c71cd0de0448e3981f81f2a475317b05457f397033100f113a7a251bcae9f87c3ed1913489a351e5a2ce6961e8483ee08909ff00c635cd707cc125b10220876beb13ea84ca5be9cf555963cd2957b2a8eec17784d987a8da54fda3882da54e0d8bb3387168e7c252998aad49a1a20b45ae36136945e0ab4c35a49cce712d8f130993eade7c9737c98d90cb66369546d592187bbca00de0157d2ab970949d52410d6348e26607ba85982a60b4982dd65515aa02c0db65706b84ee3a6cb29b1b39f8b03280d24970688bcc91a718dd3a2eb9d862da7526e4b6728d40cdac7a2bfbd6e5278349d46c9d87c349bc2173e0713752e2ea12e6e5b810e236fd5117b453a6ea3e20486d4d889be9c45ca7659391c29171eeb610d33e16ee08053022263002bdaa2d5106184d40610ca92742035dca0920fd6eaa7096b80d4b5d1eca7734eeb69d714d9152c1b0d0796debb2bc6ab124120c104386a0fef45a5555182a35a41bea0fef6533810483a8536158c284ad250929101c816b8a126ea503a7b27d3f337a81ee92c694ccc19938873481d0a7158ee2a6dca5623c0f263c2e99e123f30983114c1def1b1dd117c9b42d2e9afa72f135dcda8c6b0e565469371ae6765f649a6e2241b882490e22600fcd37b6e9c8a355aef1b5a298a7c46799cdb42e5ff10f69032c482759d6cb3aa8eab6a3ea481a37c4edecd71085c220810d205a0dadc748dd4586ae6abcb2eca8fab857348dc53738b8742093e8ba5509150873800482c168000133d08909e378a8cf721247aa14d73f31f08cac6cc4ebb493ccc040792f431f18c2ecbd0df8943e4a8c75330f064233aaf36015af1d226de6d7047f31b2e00c116137b96f1e696d1e224dc9d4a738c8b0410a31c64b556f4f372cee8bc3cd605e71898127aabe0b910701a5d0dd8fcf4ece1a85e69245c008829b3f1397b7a8621ac6526e904e606e2fb8e1d155fc5530e6817062e341d54d941d403e8aac1f66d5c49030cc73dd9848689ffe05cb960b97b594435cf609bba23819e6bf4382ec4a95290738436d72aefc25f8271389aecefcb6934d4b4f89c2597b69c77d57d67f1053ecefc3ff0086bb9c39ef7b4f1745987a25ce0d2c208f18e111039cae0f9396d8cedf0fed1ecc34c4ec4483c7d570aa53f34e8bf678fa91d9f403e33e57bcff00bdef76bd085f94af1e3e7297c37afb45270a61af69d5a4387474fe4b311e6a7c4e6f681f784149e1955d9ad9c35a0ede19b27d6a62a361dd41e0ba66953c53140e4441a70d76ba83c50ca8ace96e1aa59374e70b251d54d4d3fca16403e6be8b09944d1c551bce12d88b1b4207e29d4dac6da6d7f74b2f6d4c4d71fdd4d84344c5c09242d147bf145c4eb429927de67d6dea9e3e515369df15843881e204dccadfe169f8f2b9c333326c74e7c558da14d8d8df8a114c6c742baa613829496520dcbae568681b691ba3c999ce8100dfa4278600dba53c83a1b7d15e38ce4ade897b677b4ac0de68888421e09b15aa02e0468775e13658e790e362bc2a5ad2b440c08592b338df90ba26532e2723492986113acac6b40d02bb0d817be3bc21ba585caea617b3e936e5a5e78b8fd920e0d2a2fa8629b49e815d87ecaa8f233c3448e65775b4c9003410d9e807a2b6860c8ca62d375395e953693b33b16835ec2f69a8e9feed3fc57d03b230a1b4d8d2032900086b440f65c0c339b4a2d7b2b0f69f7142b54acecb4a934b89f80399d00e2b0ab8ea76f7e21a7d8984754dc3e293058b9c5a4474dc9d82f95633f156271fda0fab8b7cbcb6ad304e833b0b2c39349843dbddab53b571951f5ad4e0d3a6cd435a34ff0071d49e2b9830f4c06c0b8d0ae6cb0bcdfedacbd3a27b6ea622a39b5440f1800032dca4c49de5b7b21aaf05a23700fbae7ba693e40b88b837b47d910ae1d51c5ce00406c1e3120cfac472585c6ca9a79beba2da6e2c3e1f2ce874f4e085ae19649b4133d10b6a7791dde82f274f44e528a6b80fa24ed9738e208ba9152cab9f0f53300035ddd0e06c12084f2f4acfd01c509ba32d4a2f6f152cce1b2360e2801460e8ae2a22c5611c6b34b0c87983c44fd9591958c02d95a1bec5899b2554f24c1201698e5a5be7d139e53f70d8e7724b2e3c139ce69d0db64a72efc6f2cec2dc4ee0a5873af0d00734d2070406255104cdb386f41aa12e37ca00d3646b413b0bf3411599d26d26f28c38cdc47ca2975e6cbc099e3a2bf493299048f0fbaae9d5e5eca5a5245c2ae8c8f304726b30fe288124c2eb51a4435b3b85cbc3d4b585d59df986853c9ae61cae040048548c4c0d6f62b8c71b90106c745ea555cf220d92ba0ef36bf7809790034124ec005f93edeed638cac194c9186a44e51fea37198fdb920edaed12e69a145e437feebb891b741bf12b8f040e5c4a50e9d982635c0b4ceb0a50e0458d91829d10d3041e2935a98753e4489e928c981aa17541dd386a6c60e8a32f1bfaaac770fa8ccd42a089cec7020ebe211f0b91ded5a751ec64968817d408d17670845714e6de1923a009cfa147c4e7b008124f45e7633a5e308c266186739c32f7af10de4d6904faa64068198c229cd0621ad01ad1c07e6b9fda354d3aa1cd105a0013a18e1c354e8bb3984d515838c0cee6c447866d7e612ea92c7c0222042461b199cb8b8c3a083e88cbe60913235524aa2c27632882117289ce0c639ced1a27f2f754040804c91c5135e0902e09d2444a9a9bd8ccddeb84b8f7a0753fb08ea38bf0ee737505afff00120a0cc733c408b11b8d529e6a07b7291940324c4fa593b3666823cae01c3a10a3c6547318729208697f5f101ec1213679072920926e6fd122a5569a8e001101b33cc053b31d03ca4f8a7cdc63921ef7bcaae8195ae889b9801747c12cccb2d535ee3b217543607642f781bac3540f28bc012bad90869ee8d9094d71e038a6b1c78202aa66c2139ae5231fc9301280e8d0a8022ab5ce5806140da804ac7559d120ab3e6378252f178b751a7929daa384123607ee54f56bf734c9fef3668fbfa2e7778e2e25c731324aaba10d6db5eab73140d7873805e065d6320492918da0e6278ec9ecb840db27536e71e13704c83c890a33bc4fb38d0de2b3bab99f2d893cbf7a734d2c893075102415ea4d398b9d63e503defd565967f8f4b90cc3d301cd148435a58fbeb16faeaa8c5b7350747f6b98ff00f17059851e1a84eee8f60b2b1735ce13e17b45be9f558cf15cf12f403dd2aa10441008e698e3611b24b85d45d22b9d88c04e62dfd6ea5eeea8b705d8cd0b1c649ba921b76438905d41e38e598d751f0b5af692729048e0579c502399569b9ae04498236b8fd1630d6a950b44c3c807842e996078877a14ca54c326f262278041b621ad0340001e8212dedcd23fb88737fc841f709c54d8c7e46b1cd82435d1371e6a7b27c684da4751eedcd69e12386a47ca5ba735f8c59687b9ceccee06380f45e7411add7a18f8c45db1c0071131d5095847bcfeeeb2489b5d04269ba7364e8a6cd7baa70efdb6895708f607d913f301aa3c3667346b25ce122220149156699cda873c7b121678d972b3f6bca71204bcde178bb2b497207d51b4a49739e6d1bc0895a7080bdce7b892b20af10e1a8e057a75537426c6c91a41d93a9f3d5229c13c0ec9b262353a7ba2198d324c7af25560e98631d132e717749fdca3c3e15ad682e826c7d41f81b7ba71d4c2e3f96f357c0492b468bc04add39b8c40dee566a3b0c60bc6c4070f4b7e4b714df066024b03a4711cb9a49a829c66b10408fd79aa9ae0e6823421698e97348c99683c403ee129c9951992ab80f2968703c3603ee935406b497bac1b73a2ceb3a1285632b31e4869931308b2f0509652c33035a47985c144f6bd994921cd2e88d0df9a1a2ca8d60b8d00bec98da43c24939819079f442de6176701c05c1208e5c5345a14ed2d0e79ae60b7365d81117f74384a99bbe20434bda00dac35fcfa2212a372955a936a34c9123337de36f6f5461c884bba2a08a9e16622cd04ebb8b682ca975160a4f195a49117067d0ec79a721d499556dfe49cff00e11c5b630640875dbe8efcc29aa35cc790f10781b8f42bb47c2d36999b6c92ea41ec2d88691e5171333a1e64e8af1cecdf61c96cb9c4344fd3dca751a0f2ed38713aae8d0c2b29c4024898276f44f0488eaaafc94b8494705880d2585b94b8bdb78904c89539c257a7e120175c98b8b99fbaeee127babe999d97a6df7f44aa9e1a956352e1f56b5672f1dcf6d73f19f4e4b30952a79fc2277e4ac6619ad68038016b7d471dd34933f5440d82595b6f759c4f570921b1a0b5f849dd4d8ac1b5ac96cb5dd644dcfe9d616622bb5b8d7f79e26c10d9d040136e33bab3b3aa9ab8624f9038b5a4eed1f9689637b5396ca6e2044019736626deff0045553c38f01be83313a933b0d84693756b9ac06c2e82358579e56c264190438c0111b6c8813bf058179664206e1478b6d50ec4b985c1a728b7fe3a15606c986ebf09ddc4c4b8c6840d08448b91cbc356a95c0654114c4171dc81cd7530ce96d523c92dcbe933e9a2d6e19a0dbcb339769e68b1355b468bdefd1bb0d493a00ae2a118a706b9ce260369b4bba4bbeeb9d5b1149e685c91de02441e047ebe88f1751f5a902f64333d271133e164fd6f29ad7b046483e111ca56776ceed3e229cd5a7dd5acecc4705255a591e4026f75d1a8ff0005b59d145573177a292ae80a8034243ab90f11a0265276f43f0b70770e9bdd066d578a8ea6d3a4cfd179c7baab469b4cb1c0b472804ebc14eef3f47140d24e2a8cff00ac7dd05feba6d12534582166dfbe08ce8ae186510b043b2f1fba213c6e510d166cb4681006d2bcc21d540d80ce7dc7c9fa213e528b0be6adfecf829cdc563b52e78a6c9e800eb60a78d49bb9c649ea998812d64ffac7fc5c80ebecaaab3d809592bcfd4ac1b28f6cbd955b0adad5017e924e83927d9ac6b5b66b4400bcb1da26a012b17b628549096cd908474bfab4fa9ff8947b136a6953c94efb02e71fdec14f56b1ab4dc1a32b5d173ac6ba6c5518bffa7a9d00fa8527eab4c9a67584f774c99765635cf201370d06ca1a54e9be897d424bde7bcb99bbb87c2e80d1dffa9f82b843f3f92b3ba66ecb4cd13c2084345ad148c580b2889fe5fb7ca637fa6eeaa4daf7ff00306512483f452560eef0c8baab0ffd47751f29d881fcd77a7c20bd3fffd9"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="14">
+      <shapeBounds type="RECT" Xmax="4720" Xmin="0" Ymax="2760" Ymin="0" nbits="14"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="13" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="14" moveDeltaX="4720" moveDeltaY="2760" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="-4720" deltaY="0" generalLineFlag="false" numBits="12" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-2760" generalLineFlag="false" numBits="11" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="4720" deltaY="0" generalLineFlag="false" numBits="12" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="2760" generalLineFlag="false" numBits="11" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineBitsJPEG2Tag" characterID="15" forceWriteAsLong="true" imageData="ffd8ffe000104a46494600010100000100010000ffdb0043000604050806040409060b0c0a0606050405080a0c0f130e0c0c0b060605090c10100c1c20201b130c0c0a0b0a0c0e131b20201b140f0c10141c20202013202020ffdb0043010707102018070d1a2020202020150c0d112020202020202020201518101a20202020202020202020202020202020202020202020202020202020202020202020ffc0001108008a00ec03012200021101031101ffc4001c0000020301010101000000000000000000050603040702010008ffc4004110000201020502040305050801030500000102030411000512213113410622516114327107428191b1152352a1c11633346272d1e1f0245383f1081726a2c2ffc4001b01000203010101000000000000000000000304010205000607ffc40035110001030302040405030207000000000001000211032131044112516171228191a10532b1d1f01342c1142343626372a2e1f1ffda000c03010002110311003f00b1043a8ea7fafe58bb4f034a458594f7ff009c7b4f097905b651dbb738374d12a20b0b9160063c06eaad0a8cd4fa51001bec063b86899d9411b5bfeef8294f0995d8fe17fa60ac14ea806c31202b94369b2fd2bf811ffc62592914adad603054a851f5e315ea192352d29d208623df4a96361ec05f1242aee84b5059869037db1d25122ef2738b8f9952530533ea11b24c55adf3140a7cabcb5fcf72361d36b9c24f887ed02820cbeb2782582eadd086070cf33c9e56bb229b247a2e41dee6db8e303e025d00137576b49dbccd87a94e14fd3d434017d5fed8be61d437df753f86f8cd3c0fe32fdb751583aa85e0aacbe2e9c71e8431d7493468d63760cb2749092d6d4c761718d372d6666612822d73707d2e71ce696d5e1758c043aade12262e26c646eba146b71704137d86fdb132d3155f281a7d46271226e50dc1dc11e9b7ea71ef5376dc282aa5989b2a8b1deff4df060021aaea82f64173720e26e8aa58beee785c03ca7c6796e61532265ec5a9c567ecd1584a88a49c9002a6f7656360ad6b1245bd7076404336b3e6f5c71b1eaad18ed2bd75240d43b6c3b0c706104ddbe5038c702760c557726f73db13978d110b9bbf2076bffdef896aac284d28f9d8e98c026d88a59ec2ca2ca2e2feb6db1d4acd2b02c76d2da476e06294c4ea0076d8e21dd174298cc2db5fbfe38e4926d7e3100057496e7b0c4aaa58dcedbf18a852bb55b836d940c7d138424f7be3bd4028f71dfe98e24f337b7a62cb9755356c616b7ded283eac6c3f3240c30b65ed4b454c877e9c3129238d416ec7e8589385fa1a596b339ca63874ad3c13ae6356cc2f78e9d94a20ff0034929537eca8d87caa01e0943f0141c6afc39934de4ef00794ca6290f0772b2acca9ccf5d5cf6b9578233f45894fff00d620820280dbb6e305a2d4e2466f9a6965988ec03b1d23f04b0c752420fb35bf5c64384b89ea571c9406aa3d57d5c9c099e955835c776fe78689a0bdc1038b7e581f3d2d89ec2d8a10b9285465e44a0a8f2dec7f138af350b073b76186a961b0f60714a48c16dbd2d8e9427351184055554161b60a5153961bfd302a858b98efc1b5cfaef866cae31255d2447fbb633cafbeec21406df4248bfb023be2d4c4b80eb08805c2b14749a145bfedf1763840617ee7f3c599e8d4c52746e932ab3c7a4ec59412011c1527623d0e20aa974d39d36d651594fa1522fbfb30b1c34f6f0ae78823aa8cc919745915a37732050c2c5b4efb1dc7172073618e4c49d65741e6034ee780c4703d4d87e58b3e20af8eab20a5a9a451ae19d6699786548d27596deba09b9f5506d8081e5287672a57cac4ec4dd4820db7db7078c56bc077700a97b7dc255fb5298d5bc3401b68e484d4203e76f898a7d80eca91d8b9bee65503bdb3fadf0f463ab78a3d325977f98e9b77e47e1872f119033192b21995c47f0d14e0d83a1942f4c9beed1b80c158edb3fa6004e0d4bca77660c7511c038f5bf000dfe80464b9dc5ce7ff0022156b986b46dc3f5cfbfb4254c92493c339bd6cd494ee60aca29f2f9c293a955e78250ebc8eb45244ae97d8fe386cff00ee5d2d6d155c599b542c72cad4a6231462130bc75475ccc0ead9fa21c291e5d6462abfc4850b7214797723b7181799e44b568596c1fe62bdf6001dfb836c39aad231f53888bc44a132a40160609c895ad65f9fd2fecba69aa6d4d2fee68655372bd4814108b25ac4056d49ea8c0f7c287db1f8b24a3c8f295a7917a52d6a55d5c3627e26961172a5c03e412682c3ef2820fa10795f8c7c459265f15342d0cb4b1a2c08b2c684989164023670012a0310b7248dbb0c4c4e599e64d0d253b4eeb5357512b5314d553432b879480bbf5295975a865e192c46fb794d4695d49ed26ede2bc72fa8fc8328dc20825b33331bc5f1dbcd0ba2fb43c9b35a2cf454b2e5f21cb3e0e38d143ab88e3974b5ed6d5a9883b0b6d8d5320cfcd1fd9f641599d2ba4cb4d9750ba12353c8ce208c93d84d647df80dbe332cb7ecd3288e6a399a4492858195ddd540f2907caf7b053c5fb11eb870f126734f2e574f468b1fc154c5433c6af72668d35280231ba0520382772013b017c67560d75468607197827e903ba8602e2378b9da3bec8ed77da053d37c3247493bcd515915146a8caed233ba026202e5c4609692fa74853867305a43a9b7e4fe78c73c1629327ce5670b3cb2d1ad4fc3c40978a25ac63d528bdce836b137b13be3516f10519a19a6b865869a7a8f33c603f4881606fee08dbe53b629aaa65ae68e170ce410a5f4cf1081cb0655e69cf5ba60db4f1b1b1d8f7fe6715aa2bd62497ca6474590e95b121801652390cc761db637b5b085e3ecceaa59a91e9583431ac752f02b14563b90ac4025c0f2b00748b8e0e3a39a5243976575791135714af0d166c14149613259d894dcf569c9924db675660bdb167d07b690711138fcdba7356148f09b82409e11f7fb2d069ed347ad41d04ba1d42c6e8403b7a5ee2fed8904649509b0df9c55c9aa40a3a32184904b0c12a303a959594104377b8dfdef8329a3622c75588f4fadbdb02a570940642ae9138b16d97d4e3b55591805d8704e3b9a4dc03ba8b9b7b76fc31f2c82c2c2c2e3fa618015c2e691d32ccd4d4b5fe1ea20828ea8927f76b0bcac8e07a2977ea0f420f6c3955c4d2d1572c247526a3a84889e353c6c14dfd2f6fc30a6e43c6ea7756163f423f4c7596f89a1ca32d58b363d28293a74d0540bba3a0b2c6ac06e243b201c136b1df1a3a3a804b4e0e3ec98a6703d1048256497a33452c553184592270032809b3137b682760472716242c56c080d75b122e3622ff98bdb0e39c65f0e6f494d2412012a79e09d2cc08bf994ff0014648b30bec4023718509a2749678a61a6a612a1c0dc10d7b153dd5ac6de96b1e30a6a29f0bb98382a1c2ea2941b79ac3736b629cfc1b736feb89e5989041e47fce29c8e4024f185495542eadb5136dac46299363bdafdf162b1fcf71cff00ce06cb39ea3601bae2516ca2c4293f31dce18f2f256a691d3761531c607b4aaea7f207f960065d46c02db9e58fa5b056a2ad28532f277952ba86589072ed1ca86c7d8f04f60705a567b7fdc1733e76f709c28cb4d32aa8f36b437f41a8604f8b6d41983c8159696b43759802635963602e47dd6910f3b0629bef827fdaccb299f5399103e85fee5ed7919458b816005f737b018b35198b4b2318f415014d86f70d6237f71bfd31ad500348804676ba6b2b16f18788eaa8b34a1a3cbaa169e8334a691f5491026435352691995890447704822d7209bd8e15b2dad9e012c7297788c4ed2491d4cc8f2886084b0b5c80de6502e4dec49c31ff00f51b411b4391e71055afc6d2d2c595265ba7519d457c92b3f5c1fdde82586e2cda2c0e3151e29ada7645149a35c6f2bd9cb802a008c136bdae57bf36c7369134c441b46d95aba7737f4c03988c656d9459ae659b0a8810eba7a35f8daa462253d0a6a878ac069b92c55b49b93603937c52a98a4a65a79d233151ce916b85627514e1a31cc8f64688901d595b60fa40d85d0fc17e21933bad9f2fbcb47996659df83e6a496126cd065f535ad508c76f2b4724b35c6ccd185c6c19e4f51066d3a5554c494f23c4f414c0a2c691470c5d433036d5d3910b44b70199b4ee148c529d4347522201734c8b991e1e5be6f3b1f34b57c26ab1a00b82eb5b16f5cccc081297e4a72bab494958160da6f752b6b8653b861718a6e8c49063254dbb60db56fc53b7462f85cba8f5b2b48de76766412c92b13bc9222c608e142841c6293b2310633a935b0baf987fdb5b1eff004c49a0c24412d048fcfa6cb06b802a3a3130845cc4d69d5446cce141f41f5f6df03e754a2ce32babca27e9e61139920287510421077dc5996ea41d88c1e9b4ab3170c550123ca7ef1f4c714290472ab693a75070a45d2f727e5edf960ce12d22c6445d0da60aa74f9f89a0e9e6d47d69e08e611cb1b148da7225d12cd4c4696994b5d9d48d5a576db14a8e94255cef292d2cd712c972cfa74d82f7b6dd86c3b619ebaa1658c982308174866502fbedf85fd7d70296145074235c92c77e493fae14d3e9dac7b8b447147e0e5e48d52a92d8ea4ffd9e6bda24a34977594a9b91c7a11b9c5c02896e744a5cd8961dadf8f3ef8e2902805595b6bf7b9c735f388a294d3c4249c0d91a40bcf637e3d70c90841c55a86ba2a60dd18cba359a4d67cdcf3b9e3026b11e8b30199646dd2a840c658879b56bd41869fbc8ca4864ee0e2d50c934f144d2d3c5131d5b070d6b6dcdbbef8b414dbe48d58774e76f6e0e2a5a0b08c8221583cca1fe15f1c526574193537f76524a91571387689848da83447e685d7ef2599586e37df0f67ed07294a9a489497599509990de38c93b6b52038d8826ca6c41078c29fecd8e7ff110248ac0a8768c123ebe98947835cc4bf051ab0eac52b2155171dc73f2ec3dc1dc718c0d47c3d85ce20904cf51f7f74d35e0bee33922c7bf2f65a5c99bd175e9a369d0354a0921724089f50620249c31b293b7a63eac956001eaa458e36608858fcc4916b0e4dee38c65b4797d6d666e72da00d1d4d566d3d2d29645291f572a6966d4e4103a7134ac1879b525d6e4db173ed91f34cae5c820f0ad7b3d4c91d1e432a9222712d2cb1c8248a536d2a1a255054eda64d44eac79c6503fa8e06d0f2c27a8e49e6d31c6003369ebcd69714a1d6331b2bc52286465219586fb861c8c7b514c93c4c92ee8c013c6dee2fdf9df0b1f66d4d5907823c331562ffe57c3545431b83fe2aaaa6552587aa3a9386d62225e6edc633c7ccede1c47a1493fe73d1c47a1563c185a2a6cc295cde4a49a3a98c8d874aaccba401fe464704f726f8f3c4aba730c9ec7f7929af1ff00b4b1216bff00ee18adf8e286539941419fd47c6bac6b985352d353c8c6c85a9da67642780c756b5bf2035b8c31f88327a7cd683a55438d32c132eed19ba302a7ba9b2ea1c1187e9f8b4d1cbee986dd9dc252a98ae4dbbdf036a0152d7efb7e98b73453e5bd1a6adbb4c11d925bdd6640e7cc1bd45c065e5411eb7c547984970db1ed8cca9671403941eaa33e6f5e7f5c079a421cfa6d865ab86c9a8f06eb80731b4876c0daa8f4d6ca29906f7637ff00bf862131c351fe25564b986ea45cf958b2edf5dc62379da56bb773ff007fdb166923bdcbf6e3d87fbe08159795f019a8dd163bc522bc5a2db056e45bd2dfd701f34f1a55e4b4996d2b2a3c8510096e119ac1c297276bb6960058dca9db01a7cd68f35f1a78a29d8b35464f967c3d1c1d431b09a380cd24b1fa1d2400ddede98b90f87ffb54be189eb243a66f0c64cf249b06690ab8919f8df5b08f6bff00797e2f87746c9d55369301f00f98247aa352b1f2718e71f97dd27e60b0789699a2a99e1853e3237902bbb4c58312496171df6b9e4016031761f03652a2b9296a6a6215548288155572446a2cc643cb1005c0006c3d0df4ccbfc1d93e55402348d5a425b5496f36f618ab06414e4fee25074b83a4ec6dc7eb8f6b474ac6b600247527a5d453aa44c5ae4efbf52494a397786e9a95698a999e0a28a0a68c2011ea583a6aa1a4beadedbdadcfb609ae50b555356f0c6b1a4cc93077b91104553717bdd8dbe63df8030e1065905351b354ba8555624b1db625b007399e1a840b0ccfd3d3b2a1023fcfbfb618a3a760aa1c1a246f73f5954a954f09be7cb9724a598e5bd77f3c8b24692332829c9b9e47f3c4515008d97cecbab721069ffa7fe304665119f216650a5be65f5c0aa6cce1a9aa2a93217b91a75027d2d6c6942cd2575594b511c61a9652cfa949ea5f4dbb8206e0fbe3aa7154e9112dd36ea02e079ee2c760c6d63c1c53accd26a7ab6d34f3b44b60645008db9205ef6b62c5367e5e08da213bb13ba2ab06517b5cff00b7389dd55168a278833b96d3a241636b9d6a40b0efbefec062b6ab0037bdedc8bdedfae216cce1657925b83d48e162e1c36a72001bf3738e1628e9dea5a9a13f12c19c82482ccd73b93c5c8e712a14b2d224da7589edb93a1cadfeb6fe58e68f2f829baab146da1cf50ea259cb7725cefc0b0f6c7b41572c8816aa36867b2b140e1afeebedd8e3ba89e58dcf4e19a44552c482a3f2079c7285daa0692c9181b77ed88d212d20055376b6c3df1421ccde4a94114151a7a852476b20416e7df7b0c5d80d4f5dbf7774bde301acd6b0e6fb6214a334b42d75f9ac2dc71865f0ea986be156365240bdfbed8568be2d82f4d596e40b3381ce0852c9577f3b9d4a411b8b8d36fe58870b2234dd53fb48afa8c833e865a316116794d9c45d23a5824d974b4b3a93bd9d849298daddff00ca7192c5e30398f88e91ab8e84cbf2dcc72882498962c6a691a95a663725a611348cb6b93291c5f1b1f8868a7ce3ad1d5491a9a8a61133941216112be9f21e4a96d407ae16dbc014c20a558e9d35c2069909604b1d409d370a3512380381e98f3874ce15aa5c417b9e0f5766d0775b946a814473c627000c93f854be11fb6096a737929736a55829d96bd208a9e195e5a53484b2895f712acb4e0bab201629b8b3038d3e2ac8ea692192324acd1c53adc104ac88186c7706c783c63199fc3b5f91e711d52c0ab5086125e394ab908d1f9831db518f52d9815218861be1cf2df11c3366b3b55d4c54f1f4a9e93a2ea779046b22481ef652c64646437dd56cc6f8f2ff0017a069bc103c3c22e2e27962479f2f3493d9625b700491b8f4dbafaa7165ea23ab80623c8617bdbd47e98fb2aa9972c72b4247c2b3ab353bdfa7724df41e6326fdb6246e315e9ab15e9449348869c44f37581f26940e4b5ff840049f4b607d1e7699994393e96a744eb3544cac118100a749362c1b725b6005ad7be32e9b8e46ca2966c9b3c4d1a661e1e92560c8a29d731889f9e37846b1fa156b72a4fae12cf9586e6e48c356599e1cc3c259c3544490474b58b9146e8498dc68a752c2fb829a8ab037008e79c2f3c4a45c7a6def8635c7c4c3cdb28f5723cff843e7999ad7ed716fcf155c866b91bec38f4c5f7a363723bee460236674a09b4eac0120150cc36246cc058d8dc6d851a8499225dd4fa5ec3f3c16cba3b8bbfa9fd302a37b5891f4fc304a9e65b4763b0b9fd30cd350b2df1ffd9cd74fe22a4a8cb65ea4798bbc3212c12688cbbb5cfde8ac001def618d1cd2fc0d3e49120e9a52524344a8bc32c52e5ea16dea3ca7eabef832194c0439ba824fe166efc8f6ef8079e875cb44912493ad3d452ccb0a8058202b1b686b6cc8a7aa09bd8a0c374dd15e813fb2a34fb8446197b7cc4f70429f30ac7d6da6224283ce9f7c06a9aea93f2c656d7034900fe783ad9bd1542b1128b336942e8cba8589dee2c0dae0efc836be03d7344355d3521018304b8b1b77b718fa269de1ed969052959a5a6f2100ccaaaa483ae19244d3a583484860471b7af1c1c0586bf3195e614f450c70a88d512672adc766e2c2dc7a5b0cf3d3d291658cea2baec14df73cdbd30126585656e9ea5617ed6ec30c45d2e4a1b50d35e393358e8cd8b5a28919e4504ec35f047738a9256ce8f21a4a78a1da3d2563bb38278236b5b9f7be0948e0063736fc37c539b30a9736869dd9d34ab1721069d361bf06dfa624854951c99d55c2a97a7d72f0e541d2771c0fa7f3c7afe2d789d4353100005831b3ef7fe58ed65ac28ef284823b0009752c4b70476b038adf17224f23a2899d2345694b01606e78f4076c71eea022b45e2192b2455f8491622aa51881626fea6c2d8b7559b88a363a354ea858c6b72c6de82fe985987c4151765687591b5d245fd3b0c4273cae407e2200884ad990d9be6bd8defc8c7715b3ecb9179f3a3503f7346d24f298d183ae9b056bdcf3b03b81836aecb12add15c47c03b0200fff005070a07c4a7a2da617ea6b50149dadb6e5bd7f0c55a8cea6a9969d22a6525ff76f1c9bea2dc58ed618e0e5c8ed456bd3d739a6a58e566601e447049b0dec3b1e706296a5c242d2e9491eec16e0e9049d8fbfae15a8739a7895a2ab8d69258e41188ee6de6fc36f7c153533328e8ca4456172007d8fa13c1f43896a829921a92d6b12c4df804f638b3f121590126e57cc3d37b0fc7be138c3395458abaa21471e62ccac0f3f776c5f104f0c0a75318914b349230e39249bfe206265484d4b5a9a06e41b820ffa4e0ed26610d4d1ceae42542c4c509d835803b7bfb633aa3af49e289e09119080430bdbbe0c53c8eda6eeb6dbfa628e4561476a452cf1bbb6bea9524df7076036fc0616bc4995453e464052236a88c48c76d29d4566f3761a43107d7046a2a4c7193aee46ddb923f5c53cc73987fb355d1ada5a8578e628d708c108d89039bee3b6a00e15d489d3d503269bc0ef0539a6745761ff00337ea131e6d406a7c2f9dc51c6cef99659591bc2e6cedf150749c12386284916ee063f3dc59ce77956635f96e58b24d4b17c3c5693fbd8e358821467d82b0b3004ee458e3f47780eaa1f13459533be8bd219e6815ac59e08d0e856f470757a8553df07abfc2be1fbd7d56674312324667a89753dc8852c0937f31036bf7271f3af86b0863e40209220ec442369d904cce76ca55fb3d8eaa2f07d454564268d73ccc226a7a42da8a252534b13ca4701a672b71fc2a2f833f0f4f4d0c6f56eb1c6c6c0b1b16b5ae157927d8608c16ab8e19742c34d4f125253403758e2015adfea6db51f6b76c63df6d79e4d92e7b495d4b03c73c11a5323b9d51cc9169dd3b2101db50fbd6df7c55ede2ac00e41a3f0aabccbcf20131514d3e750e7f1d64862a7fda1534a2048f433528958279cf9bf7a8be73e8c4018119e554d97d7186092010ac68d1ab0d2caa4b002d7ed6b0f6c2af843ed153339aa24ad9453d4b45287ed731e9007a7d3e982d2666950239248165692356d6c46e2e4771c6075185b50822112445968262575a63282592649d6c48dd43017f51bdec76b807b62dc601047724ff2c514935380a39b0dfdaf8b759590e5995d5d5d55cc54b107b0f99d9d955147bbbb2a8f4bdf03084adc5530c2f22cf2c6ac89d4652c3501a6ff002f2491c0e4f6c58a3cda9e69618d4490493ed4e26428242a09b29fe2b0be9363846cb333a1a0f8b19e54c69515928cf238d7cde69642ca355aec54d907b0db04736ac9331f08d4555212b2433d36682fbb2fc1cd1c9641b696b29b5fbdb173b7528a1a11bafcb11aa96604c7511b0d334674c80dcfe0473704106e76c04cc3f69c79b510a3915a822825eac8fa04eae5bca6301349245f55f720db0cdf10b55474f528564a6ab822ac81946c5275d487dbca45fbdef8cefed273ba8cae80fc2c8f13c5412e64da0066940a810e92df7523babb11ea2f61c8d926a868c9242ad12e2f0d0733bdac094ccd4b20a6a892396479d5669d43953f2c65b7500027622c6fb614b32f10d3cd9b54c51c6d1f461a769ba83caa658a175d2dcd8ab06ef60c00270a197fdab3d32dde96665f88ea5d6ac9d21da2d4a0346d75b29b5f737b1f5c0d6cfce6de24ab10d3fc2d355185615760ee1218a422f6006edaac0001405038c7abf8152a8cd63b8a784b4ef227691743d41fecbe48376c66466720265ccab6a15ef024651cfeed99c717eea371ec70033ace656e944eb668eee5883a5ae2dc6d75f4be24ccb34a689a38c4a2c96462bdb4f370077df7f5c569fc431c2ba68a257731247d465db4dc92ba4f3df1eb1c7375968434c5a3452ccc1438008d94137d876c711ca81ac035c7de22c7f5c726794b12b1a1b9bfca077ed89fe22a265d3d242e6c3e550dc1e0f73c602aebe6aaff00d31722ff0030dff3f4b620335c9f20b9bf071f33488c35c763bdefb7f2c79fbcb12caaab7ef6bfe5ce214afbafa48b2f02df362c266350d1c712cc515db400c4955dc5bcdd8718ae6546254017b8ded890ba008aac353596ca97dcff005c485c989697ad4e3e2920966d36d4a79b0b0f38fcf15d20ab8ba2146848832858d9ac43124923bb76b9fa6060f8982c52478caff10d006df88c4b4f9b4eb2069645990025978d873e6b0df0590a88f513344d233a3317656370bc8f563bdb8db170d74cebba2040d70a42def8139766f4d57571465190c81829d4185c0277fcb1e412ac95f1b4150f2d342ef2cc856caa55b600f736bdbe98bcd97017462891d7319660ee165035c4059090b607dbfe70dd97079154055bedf35c5f6181542163208f988d401b5b7207f2be18b2689b3517a474ebc32542c8b20b20092488a4303bb3321b8b6c05ef84f5b55b4e97138c0e28c4dcca628b667a09bf9057a9a8eea43aad8f6031525c9115e4eb055a6255e56b13a50b8b9d3bdd8d8841f79ec3079e99e99669192529d6802224913b9d414580d2b725afa6ec2e0018f325a6a86cc66adcc10a4ca9f0b4d06a04228ea79d88db5d988d89b5cdb9c636ab5cdfe9ddc33c46c244677f24e060024c18d81cfe6e88f84f27869a6a6872781a2a6a4a9a1ae8925bac8a80c1a8b137f3b5df6bdec77b61abc754ad51e1aaae9123e1eb32caf2c390b4d551331fa05b93ed738ebc1b1934f9b4ae49696a12000f658635fd4b12710678f51495d55119c8a2aea586cac00d172d1b2ab7f9ff003dfdb1874c468cb8cf8f889ee640fe115a6c4f33c5f443d874e9a350d70c3ac5bd7501fd30033b929e7a7314d1c73212a4acaa1d6ea46fa4f7c17ad61d28d630542ae91e9602dff185dac8c872791be33ea1f0a0058b78afeca86aaba9a0701414d2a090e751202aa8162c3b7b0c229caf368098db98894f31653b7aadb63ebef8fd22d5063b5895f3293a793a5aff00fce21a999a599d95d554e90058dc59579f7bdff0b60b4b50e020c1eea4b41b223457054faf3fcf14bc6d03d6785f34a70aec931a3d6b19fde9513a35d4f66460ae3e98968730a5999d296786592217748e45765b7aa83703b63aab9d9c1d5b0bed8cf69878e84152df982c333cca6b28aae9ea6077a858e489d434252545562ca4adcea4045988037ded8e32c7f10e7599c94d0b4eb06612a24ba432c6b1aa907db7d80fa93db1b75465c998c28951a874c828ea4065fc7d08ed829e1fca63a1323091e490a24419beea024d80f73cfae34456f06013102caee033ec3055b14c61a1a682324454f0c34d122ecaab0a2a28f6160301f38cb7f68452d39d3f10f4f5749a98d940ad81e3752dd83c64816dc1b376c31385526f706db30f73faf7fc3091f69d99ae5f4d95d552a45254454f56b1fc4209a162d59942ef11f98eecdab6f94efdb0a5361355801b97003b955a43fb836893313804e167755e1afd935d4f4d52aa4bc4d3c2c2ce8409e58ff1d3221561f43df00ab56a17310d3aa9d522c64c4002a2e05addb6e3169733aeaccc0d4553027a2fd25034c5196627c88381a896e49240b9db1dd6c427810c7332d5aea672cbe5726db0dcd80c7d3a8877f4ece2f98344c62567d68fd67462554ae829a2aca9896731e821bce80df5006da80e6c4607caac2f666280ec6dede9db113d2b8663a875f5b1d2fb1620fdd7e3e80db1c09254762c8355dafebef71fae38e5554a2465b1b9bfca09fa625863965b940ccddedf5c5433172ba80bdcd86c39b619fc2156c26785b78ba6f22adc6c432dedeb7ef8e195c555196e64550e8948edf7ed7ff2ef8f333ca731a7811a42446db796ddc5ec47ae1ffc1eb57534dbac8647acaea7ea21882858a79105ae39d20137e0e16d3c40d2e4f2b543b452435d98c5d5d98fee2a678813b5aec56fb71db0a69eab5f59ed132d9998d8c734e57a45b45ae24438b62099b82792491138623535c76b6f8f0c526f72ddfd7042beb9679418c4f24d7b9661656dee7cbe871d50d2d4ce03274c48cce56231b33596f7f2fa727e82f86e1268688e56b6e6dc727b63e689ae753594fbdf162a68eaa063d74b0289383a6d7493e5603f84d8d8fb62b6a420dd6fbfbe2a54ee8865426875c94c62949fdde936d6a76dedcdb7b61b3240ab1bb54e9121bbb05f92f65b5bf0184fc9d2396b34ee93d8184aed722f71f961904952a8913912ccecb1850006259805161f7892060d4b0aa728d5254f55e4e9ab312a4b3136544045d98f6506dbfb81c9c3e7d9de4f0e57955584690d4d5544951a981ba249660ba4fdfb977248b82f6ed825e07f0251d250d3cf5a52795fa73941ab499a9e66f3127e68e375d312d828219cdcb5c334ca9d4959001763723b9db1e1fe355ff54868f95ae2679f5edc93a04348e713e5b761bf33d9512e6da56e17515f73b9c59890a28bee40dbdaff00d7d71f222b1d76b0b8031334b1c6da3e7aa6588a42bbb9eabe95bf6504df73c004e315a15c5d1bf0abe8a9ae8b7e9cb1c354bb6d74211f7f520a5c7b627f1953b0a0f8d891a67cba9ea5a48546a778ec1ce81ffa8a40dbb8240ded85fa8ce63ca8a3d5de19e2a848d63dcabb3e9d204b6d3fbc53a6c6db9df8c39d255c755494f3437e8cf1d8a9162091ba91ea3838dcd290ed3169e51eff00c1471f28f448b330969e174d84914730fa48808fd7006bcb6e3b58ff004c16aea26a2ceabe9e9c15a59a923aa492e2d0854586389538b2e9675b8e39be17b3c486868a6a9cc2a5962a7a60af2b3141767dd881b6a63a55401b7039c6355f9a3ac21609542a815df95ff7be07b960c6d7b1dc5b1ce5be23cbb34a8922a298492ac6d2142aca4aa90091702f6b8bfd7174503bdcc4d65bf1e86c30b9b1bd956550c97c1b97c14d48f08295b168963a807ce1d581b81c69276d3c15363827985266143253ccf247554b3d52c1d00a23913acac50abdecda48f3dc7cb723033c3b9666d499646249d19fa2a8aae0b74ed7e0df900db05e9b268c352493c923d5c4ed3248cc582bb821888fe500f16b718b3cf88c99ca3347845a149964b58d5cb056471012c324b13c0cc56f195d6ae0f7b3021b83b8db0c74fe4d3e96b8f7b611e96a29e9aab319bc512b432d2b552d2052d1c6f0b47672ba7e62fc3293c01b621fb3dce16b47892686230d14d9853434d1f28569a0219c1e03b160b201b5d0726f89e1b13ca3b5d55df813fb309665ee2e41ec48ee2defdcfe1801e26c8e9b3ba5944d3224912d7d13a6926cb21841544db595010dc1043eea4f04ac354a3726e76b0c5d88bd4b2b5ad18d207e00dbebdede9738969b82322e1541874f259564fe0469cc0f18294ab254ea12976695018ca3470858cd8a9f36a7d89b76c3a54f86b2d83c3f5f1c7454f2493469117960715042dc792a158b44fdf5a836b6e08186c2c4102f7b0000ede9738ab2079a4656dd775b7636fe80f6c335ebd42412f75b17430609c646c3ecb197f00554b49aa37585c4aa852a7cf4ec19c80c958a0d80046ce83b92c2d84bccf2c9f2fcc278eb95e0995994c6eaaea4a6d746370ca6dca9231fa76709494931e9a4d2488ca226b046363b1faf04f6c2be61e1f8f31cbea29cc5d0a59d158d3c6fd5a73223b4c6d1b8f2b091e42ae854dd8f17c696935ee691c60387fc879efe72b9d0664476c7989fa7a2c068e99eaaa9d6250eca0b128a12de527cec4845045f9201ed839947846bea645d14eebe68416d2cd612920eeb75baa9b90cca2d6df1b5f867c0941952c46381e59e3779237998308cb9b9d310b283727720b1b9b9386949a64d0c49666755d3cdf57603b6c2f826a3e20e2e770b40106e4127eb1ecab03a9ef61e83eeb26f0ffd98f8aa1cbcbe5ef03412d5d557d2b99cc7d48aa666954b2a93a4b2b5ed736e2e70a955f67be23cae434f340934a249a79d612648d5a790cb61c9636706e42d89237c7ea3f05f58650564378054d40a4f6a71a420bf750c1c21fe0d3817508b066f9ff4fc92495b11279d65e9299db6ec016dfeb8036bb98d0f6e5c413205e64e2dba7f54fe2a2d04086f0c0bf28e6b07f0f7d9ee6d5da4d7a7c2217034c80fcabaae6c08241dac3cbee4634fcb3c174d474cb1216de28e16646316b0142b02e9e62ac3670cc6e09be0f4cf22ca417b92a5fea361c7a5f6c4f0cba523d23ccc1757b5ec7f9610d5577d479e2718178161ec926ba3103b67d73ee93f3efb3d150291a1215215e9b2c8c496466760a937ccb62405bded6006123c79f66d474d95acd4ab252d51d6a4191a78da42b249e762a9a415564523972a3938fbc65e2aa7a5fb49cc933565a9a558678e97aa498a9d56089645582d61275410cfb96561c016c68ff6319ed467de0eaa92a518d141572d1514f2205ead3c6a0588e18466f1861f301bee0e0da72f6c439c059dd0ccfe5d305f204c3a3322f1df2b04cb323ab686058551214a5f8a7a967021506c09697b1d67a645afab6b61f322f05c0532b914c8ba29a17a99e616779da425ba107dc8745846ce35dcf031a9d6d0e5e8e7a102ac9a89d609bdc83c7a607244a82411dfe7d4c49b9df6fc80db06d6eadef670d80c1e19bf7fc84210098117dee7cb97d7aa8a38a45aa86482aa530d3d3fc32537944257f77a7b5f580ba437001f94e2fc4ee42192d6d00b0bf0c74dec7b802e2ffef8acad676b7dd1b63e625f6df482318f36542ae45375245fe107618cbbed06933c82afc6b5941254c54320a18dd636b216a70aa920dafb6ccd6dac31a5c1034d37429353d4141bdbcb16a06cce7802fc77383ffd9b694c2b254c9d360a93428aa63963b82ca41b905b71a858db0ce9c12418e59c6426288bcac3fc13e21ce7c5915365b9b46d0e4f1aa4b5f505af24a900627ce49d218db536c6dc6f8dbbc235467873a922ff0000f514cb4c45eccd0ac8b215f54f91430d89538b14de10a5a7644895be0564130a636e9170ca417db53804704db8b8db1378d33ca4f0df872bf30ccb53454ea889127f792c9210a91a0fe266b7b00093b0c3f4dbfdc2719103aab8b4f64bfe36ada7a0a8aeaba89163869329a29aa59beea75aad50dbb97725540dcb580e718ef89bc6792e6b2f86544af2c033986a2a61313a9d222a845d4a459955d964eff28ef6c5ef1f673997893238e6adcbbe1a85b33c92ba5896a3a8eb4940b52cc0ae9505d8c85ceff7576b8c1aa1afcb82538cbd519129e329651e43229000db636bedf9e12aa4079373e276088c01d50489a87b037fc095bc61928973dca9b22d54c453d5a54cd0d92f1b6900036f98ee091b8db19e67f929a0cca68e29a4b48a93b6a672da9c5892c0ee4daf73bef8d8b36cc1d288ac0434a1cfee87205be623d0f03df199679256bd7b33151d44570011b025b9bf7f5c5f46e323a363bee81a91009137216bb1e6b1252aef76b796ddef7c2d55789648f35a6540cd1234a25006e7b7e40f1eb85d562206b137114847b794e25fb37459a2cc3ac03869d15b50bdc6863bdfdf7c2cd6785c7940f54c97789839cfb23d9cd7d3675559653497112ced3316f292551c05f606e6fed8f659bf62e7be1ccaa9a60f96d525453221dcc269e9e5994249ce863756d57b9237c26d7f9734217654ad95540e0052d6b0ed6ed81b412bcbe39c88c8ccc457d2a8d449b0b31c1d8cb46dc0f31d60a0b9de38ff0051ad9f45ba65f0b4b32df603f2dad8648bf75090be9cfa5b01e806d1ff00a9bf928c1893fc3b7fa47f4c28cc145a9955baccecca83636049f418b91158a3e3804ff3c55a5feedbfd6312372df55fd31cd3e19402a098f524d4fd8f9462dc0be4bf6e462ac9c0ff00537eb8b917c8bfe94c53f7282aed3cd61f417c45432c55b9dc14ff0072289abe736e51644454bf00bbb0b8ee8adeb88a43ff008d3fd57f41897c18c4d6f880127486cb481db785bb7e03f2c354af51a3a13e88d4078fb09fa26cafad8b2ea0691c5913a10451ad86a6919511147b9200f418594834f59e4bbd45448f3cafea5fb0f4502cabfe551827e2945929f2b590064398a1b117175a4ac236f63b8f7c5793e63f403f961aad73d80f756ad81e6874ce54d9b93bfe988964b30f6b7eb8fabffc449fe91fd310afccbf5c667f8a7a184a0f992e7893c0d43e21ce219f30b3c7d4777531a7cba631a41b5c9622e58ef6b8fa37218e8f2da7a6a4511525344b0451aeca1547a718e07fdfe5886abfb87fc7072e3c3e451f60a9492163cefce390c0a9d3ebbe217f95f15d49dfebfd5b0acaaeeadbf03fef18f8cba236f5b5947ab358281eecc428fae21889b0ff00562fe4bbe79935f8f8898fe54d5247e4710cbd568e64057a63c63ba6ec932c197659ff0090ca2c92d6d5cbc02c14b31bff000201a52fc228c29e759dcd9e64f570d2c4b4b4d5c910599d98d4749b4382116dd3978b798e9faed86ef1b8ff00f17ccc7665a58d8762af530020fb104823d30907bfe38d9d73b8385a39235474479fb42a939194651553acf54b4795d2d66612c314b216922a3a7a97d02e4d89f9b620970093ce32eca328caf32c865ccb3599e4ccabe47cd199e567092561b85417b79174c649ecb8d86300d3d583b834f5208f50626c7e4b818ab22a9210348401b0f2c8f6dbdbb601a405d4dd7221cdfe6c93a8fb5ef78bafd2104bf1391ce6e82368a543a88e0258edf4e3157c3d494b064ec91aac6910e9aa822eb61b6fea4ee4fae334aa91bf638f31e61efeaf15ff003c1da0765ca2bf4922d293b1b764c28e6c333fb938d749ecd1eebdcd333639ac4b4313caf224a8e383fbb6001fa7bfb610fc430d51cdaa4d544cb2b956b0b9005ac37fc30f3e1162f9be645c924b52adcee6c641b7d307bc568a33bab00000088016ff0020c3149fc3531fb47f052955bc54f3fb97ffd9"/>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="16">
+      <shapeBounds type="RECT" Xmax="4720" Xmin="0" Ymax="2760" Ymin="0" nbits="14"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="15" fillStyleType="65">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="20.0" scaleY="20.0" translateX="0" translateY="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="14" moveDeltaX="4720" moveDeltaY="2760" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="-4720" deltaY="0" generalLineFlag="false" numBits="12" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="-2760" generalLineFlag="false" numBits="11" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="4720" deltaY="0" generalLineFlag="false" numBits="12" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="2760" generalLineFlag="false" numBits="11" vertLineFlag="true"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="1" hasEndTag="true" spriteId="17">
+      <subTags>
+        <item type="PlaceObject2Tag" characterId="16" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="0" translateY="0"/>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+      </subTags>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="24" hasEndTag="true" spriteId="18">
+      <subTags>
+        <item type="DoActionTag" actionBytes="0700" forceWriteAsLong="true"/>
+        <item type="FrameLabelTag" forceWriteAsLong="true" name="day" namedAnchor="false"/>
+        <item type="PlaceObject2Tag" characterId="12" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="0" translateY="0"/>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="RemoveObject2Tag" depth="1" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="DoActionTag" actionBytes="0700" forceWriteAsLong="true"/>
+        <item type="FrameLabelTag" forceWriteAsLong="true" name="night" namedAnchor="false"/>
+        <item type="PlaceObject2Tag" characterId="14" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="0" translateY="0"/>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="RemoveObject2Tag" depth="1" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="DoActionTag" actionBytes="0700" forceWriteAsLong="true"/>
+        <item type="FrameLabelTag" forceWriteAsLong="true" name="twilight" namedAnchor="false"/>
+        <item type="PlaceObject2Tag" characterId="16" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="0" translateY="0"/>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="RemoveObject2Tag" depth="1" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="FrameLabelTag" forceWriteAsLong="true" name="sunset" namedAnchor="false"/>
+        <item type="PlaceObject2Tag" characterId="17" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="true" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="true" placeFlagMove="false" ratio="18">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="0" translateY="0"/>
+          <colorTransform type="CXFORMWITHALPHA" alphaAddTerm="0" alphaMultTerm="256" blueAddTerm="4" blueMultTerm="156" greenAddTerm="11" greenMultTerm="156" hasAddTerms="true" hasMultTerms="true" nbits="10" redAddTerm="86" redMultTerm="156"/>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="RemoveObject2Tag" depth="1" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+      </subTags>
+    </item>
+    <item type="DefineShape3Tag" forceWriteAsLong="true" shapeId="19">
+      <shapeBounds type="RECT" Xmax="57" Xmin="-55" Ymax="56" Ymin="-55" nbits="7"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="0" numLineBits="1">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles/>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles>
+            <item type="LINESTYLE" width="1">
+              <color type="RGBA" alpha="11" blue="0" green="0" red="0"/>
+            </item>
+          </lineStyles>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="0" lineStyle="1" moveBits="7" moveDeltaX="40" moveDeltaY="-39" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="false" stateLineStyle="true" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="1" anchorDeltaY="23" controlDeltaX="16" controlDeltaY="16" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-16" anchorDeltaY="17" controlDeltaX="-1" controlDeltaY="23" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-17" anchorDeltaY="3" controlDeltaX="-13" controlDeltaY="13" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="-9" deltaY="0" generalLineFlag="false" numBits="3" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-16" anchorDeltaY="-16" controlDeltaX="-24" controlDeltaY="0" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="1" anchorDeltaY="-23" controlDeltaX="-17" controlDeltaY="-17" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="17" anchorDeltaY="-16" controlDeltaX="-1" controlDeltaY="-23" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="24" anchorDeltaY="0" controlDeltaX="16" controlDeltaY="-16" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="23" deltaY="5" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="16" deltaY="11" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="1" hasEndTag="true" spriteId="20">
+      <subTags>
+        <item type="PlaceObject2Tag" characterId="19" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="0" translateY="0"/>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+      </subTags>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="21">
+      <shapeBounds type="RECT" Xmax="76" Xmin="-77" Ymax="76" Ymin="-76" nbits="8"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="0" fillStyleType="0">
+              <color type="RGB" blue="0" green="0" red="0"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="8" moveDeltaX="-1" moveDeltaY="-76" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="22" anchorDeltaY="22" controlDeltaX="32" controlDeltaY="0" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="31" controlDeltaX="23" controlDeltaY="23" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-23" anchorDeltaY="22" controlDeltaX="0" controlDeltaY="31" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-32" anchorDeltaY="0" controlDeltaX="-22" controlDeltaY="23" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-23" anchorDeltaY="-23" controlDeltaX="-31" controlDeltaY="0" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="-31" controlDeltaX="-22" controlDeltaY="-22" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="22" anchorDeltaY="-23" controlDeltaX="0" controlDeltaY="-31" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="31" anchorDeltaY="0" controlDeltaX="23" controlDeltaY="-22" numBits="4"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="1" hasEndTag="true" spriteId="22">
+      <subTags>
+        <item type="PlaceObject2Tag" characterId="21" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="0" translateY="0"/>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+      </subTags>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="23">
+      <shapeBounds type="RECT" Xmax="129" Xmin="-130" Ymax="148" Ymin="-150" nbits="9"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="0" fillStyleType="0">
+              <color type="RGB" blue="0" green="51" red="255"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="8" moveDeltaX="82" moveDeltaY="-74" numFillBits="0" numLineBits="0" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="StraightEdgeRecord" deltaX="23" deltaY="-12" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="4" deltaY="0" generalLineFlag="false" numBits="2" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="4" deltaY="2" generalLineFlag="true" numBits="2" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="2" deltaY="2" generalLineFlag="true" numBits="1" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="2" deltaY="2" generalLineFlag="true" numBits="1" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="0" deltaY="4" generalLineFlag="false" numBits="2" vertLineFlag="true"/>
+          <item type="StraightEdgeRecord" deltaX="-21" deltaY="20" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-17" deltaY="12" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-45" deltaY="39" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="15" deltaY="15" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="47" deltaY="47" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="17" deltaY="19" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-12" anchorDeltaY="32" controlDeltaX="24" controlDeltaY="26" numBits="5"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-18" anchorDeltaY="0" controlDeltaX="-4" controlDeltaY="14" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="2" anchorDeltaY="-26" controlDeltaX="-28" controlDeltaY="2" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="4" deltaY="-10" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-17" deltaY="-22" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-29" anchorDeltaY="-24" controlDeltaX="-22" controlDeltaY="-28" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="-18" deltaY="-17" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-73" deltaY="58" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-1" deltaY="1" generalLineFlag="true" numBits="0" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-18" deltaY="12" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-4" anchorDeltaY="-28" controlDeltaX="-28" controlDeltaY="14" numBits="4"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="6" anchorDeltaY="-6" controlDeltaX="-2" controlDeltaY="-6" numBits="2"/>
+          <item type="StraightEdgeRecord" deltaX="24" deltaY="-18" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="72" deltaY="-53" generalLineFlag="true" numBits="6" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-26" deltaY="-37" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-23" deltaY="-40" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="-11" deltaY="-20" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="20" anchorDeltaY="-20" controlDeltaX="-16" controlDeltaY="-26" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="6" deltaY="-4" generalLineFlag="true" numBits="2" vertLineFlag="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="10" anchorDeltaY="24" controlDeltaX="20" controlDeltaY="10" numBits="4"/>
+          <item type="StraightEdgeRecord" deltaX="7" deltaY="14" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="9" deltaY="14" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="44" deltaY="58" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="16" deltaY="-10" generalLineFlag="true" numBits="4" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="46" deltaY="-28" generalLineFlag="true" numBits="5" vertLineFlag="false"/>
+          <item type="StraightEdgeRecord" deltaX="9" deltaY="-6" generalLineFlag="true" numBits="3" vertLineFlag="false"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="1" hasEndTag="true" spriteId="24">
+      <subTags>
+        <item type="PlaceObject2Tag" characterId="23" clipDepth="0" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="0" translateY="0"/>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+      </subTags>
+    </item>
+    <item type="DefineShape3Tag" forceWriteAsLong="true" shapeId="25">
+      <shapeBounds type="RECT" Xmax="2062" Xmin="-2063" Ymax="1346" Ymin="-1346" nbits="13"/>
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="0" fillStyleType="0">
+              <color type="RGBA" alpha="0" blue="255" green="255" red="255"/>
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles/>
+          <lineStyles2/>
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle0="1" fillStyle1="0" lineStyle="0" moveBits="11" moveDeltaX="614" moveDeltaY="-352" numFillBits="0" numLineBits="0" stateFillStyle0="true" stateFillStyle1="false" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="235" controlDeltaX="254" controlDeltaY="167" numBits="7"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-254" anchorDeltaY="166" controlDeltaX="0" controlDeltaY="235" numBits="7"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-360" anchorDeltaY="0" controlDeltaX="-254" controlDeltaY="167" numBits="8"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-255" anchorDeltaY="-167" controlDeltaX="-359" controlDeltaY="0" numBits="8"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="-235" controlDeltaX="-254" controlDeltaY="-166" numBits="7"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="254" anchorDeltaY="-167" controlDeltaX="0" controlDeltaY="-235" numBits="7"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="359" anchorDeltaY="0" controlDeltaX="255" controlDeltaY="-166" numBits="8"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="254" anchorDeltaY="166" controlDeltaX="360" controlDeltaY="0" numBits="8"/>
+          <item type="StyleChangeRecord" fillStyle0="0" fillStyle1="1" lineStyle="0" moveBits="12" moveDeltaX="1458" moveDeltaY="-953" numFillBits="0" numLineBits="0" stateFillStyle0="true" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="559" controlDeltaX="604" controlDeltaY="394" numBits="9"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-604" anchorDeltaY="394" controlDeltaX="0" controlDeltaY="557" numBits="9"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-854" anchorDeltaY="0" controlDeltaX="-604" controlDeltaY="395" numBits="9"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="-605" anchorDeltaY="-395" controlDeltaX="-854" controlDeltaY="0" numBits="9"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="0" anchorDeltaY="-558" controlDeltaX="-604" controlDeltaY="-394" numBits="9"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="604" anchorDeltaY="-394" controlDeltaX="0" controlDeltaY="-558" numBits="9"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="854" anchorDeltaY="1" controlDeltaX="605" controlDeltaY="-394" numBits="9"/>
+          <item type="CurvedEdgeRecord" anchorDeltaX="604" anchorDeltaY="394" controlDeltaX="854" controlDeltaY="-1" numBits="9"/>
+          <item type="EndShapeRecord" endOfShape="0"/>
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineButton2Tag" buttonId="26" forceWriteAsLong="true" reserved="0" trackAsMenu="false">
+      <characters>
+        <item type="BUTTONRECORD" blendMode="0" buttonHasBlendMode="false" buttonHasFilterList="false" buttonStateDown="true" buttonStateHitTest="true" buttonStateOver="true" buttonStateUp="true" characterId="25" placeDepth="1" reserved="0">
+          <placeMatrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="0" translateY="0"/>
+          <colorTransform type="CXFORMWITHALPHA" alphaAddTerm="0" alphaMultTerm="256" blueAddTerm="0" blueMultTerm="256" greenAddTerm="0" greenMultTerm="256" hasAddTerms="false" hasMultTerms="false" nbits="1" redAddTerm="0" redMultTerm="256"/>
+        </item>
+      </characters>
+      <actions/>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="1" hasEndTag="true" spriteId="27">
+      <subTags>
+        <item type="DoActionTag" actionBytes="0700" forceWriteAsLong="true"/>
+        <item type="PlaceObject2Tag" characterId="26" clipDepth="0" depth="1" forceWriteAsLong="true" name="coastHitArea" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="13" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="2063" translateY="1346"/>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+      </subTags>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="1" hasEndTag="true" spriteId="28">
+      <subTags>
+        <item type="DoActionTag" actionBytes="0700" forceWriteAsLong="true"/>
+        <item type="PlaceObject2Tag" characterId="18" clipDepth="0" depth="1" forceWriteAsLong="true" name="bg" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="0" translateY="0"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="20" clipDepth="0" depth="3" forceWriteAsLong="true" name="ref_1" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="true" hasScale="true" nRotateBits="18" nScaleBits="17" nTranslateBits="13" rotateSkew0="1.799408" rotateSkew1="-1.799408" scaleX="-0.85879517" scaleY="-0.85879517" translateX="1274" translateY="2441"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="20" clipDepth="0" depth="5" forceWriteAsLong="true" name="ref_2" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="true" hasScale="true" nRotateBits="17" nScaleBits="18" nTranslateBits="12" rotateSkew0="0.685318" rotateSkew1="-0.685318" scaleX="-1.8749084" scaleY="-1.8749084" translateX="683" translateY="1896"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="20" clipDepth="0" depth="7" forceWriteAsLong="true" name="ref_3" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="true" hasScale="true" nRotateBits="16" nScaleBits="18" nTranslateBits="12" rotateSkew0="-0.25071716" rotateSkew1="0.25071716" scaleX="-1.977478" scaleY="-1.977478" translateX="326" translateY="1306"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="20" clipDepth="0" depth="9" forceWriteAsLong="true" name="ref_4" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="true" hasScale="true" nRotateBits="18" nScaleBits="18" nTranslateBits="11" rotateSkew0="-1.1510773" rotateSkew1="1.1510773" scaleX="-1.6244507" scaleY="-1.6244507" translateX="871" translateY="779"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="20" clipDepth="0" depth="11" forceWriteAsLong="true" name="ref_5" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="true" hasScale="true" nRotateBits="18" nScaleBits="17" nTranslateBits="12" rotateSkew0="-1.8181763" rotateSkew1="1.8181763" scaleX="-0.82476807" scaleY="-0.82476807" translateX="1091" translateY="244"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="20" clipDepth="0" depth="13" forceWriteAsLong="true" name="ref_11" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="true" hasScale="true" nRotateBits="18" nScaleBits="17" nTranslateBits="13" rotateSkew0="1.7281952" rotateSkew1="-1.7282257" scaleX="0.9936981" scaleY="0.99372864" translateX="2740" translateY="2437"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="20" clipDepth="0" depth="15" forceWriteAsLong="true" name="ref_10" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="true" hasScale="true" nRotateBits="17" nScaleBits="18" nTranslateBits="13" rotateSkew0="0.93374634" rotateSkew1="-0.93374634" scaleX="1.7652588" scaleY="1.7652893" translateX="3385" translateY="1972"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="20" clipDepth="0" depth="17" forceWriteAsLong="true" name="ref_9" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="true" hasScale="true" nRotateBits="15" nScaleBits="18" nTranslateBits="13" rotateSkew0="0.13839722" rotateSkew1="-0.13838196" scaleX="1.9891205" scaleY="1.989151" translateX="3787" translateY="1505"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="20" clipDepth="0" depth="19" forceWriteAsLong="true" name="ref_6" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="true" hasScale="true" nRotateBits="18" nScaleBits="16" nTranslateBits="12" rotateSkew0="-1.9690857" rotateSkew1="1.9690857" scaleX="0.31201172" scaleY="0.31201172" translateX="1792" translateY="418"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="20" clipDepth="0" depth="21" forceWriteAsLong="true" name="ref_7" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="true" hasScale="true" nRotateBits="18" nScaleBits="18" nTranslateBits="13" rotateSkew0="-1.5709991" rotateSkew1="1.5709991" scaleX="1.2277069" scaleY="1.2277069" translateX="2717" translateY="467"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="20" clipDepth="0" depth="23" forceWriteAsLong="true" name="ref_8" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="true" hasScale="true" nRotateBits="17" nScaleBits="18" nTranslateBits="13" rotateSkew0="-0.7514496" rotateSkew1="0.7514496" scaleX="1.8473816" scaleY="1.8473816" translateX="3218" translateY="897"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="20" clipDepth="0" depth="25" forceWriteAsLong="true" name="ref_0" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="true" hasScale="true" nRotateBits="18" nScaleBits="16" nTranslateBits="13" rotateSkew0="1.9520264" rotateSkew1="-1.9520721" scaleX="0.40771484" scaleY="0.40771484" translateX="2030" translateY="2225"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="22" clipDepth="0" depth="27" forceWriteAsLong="true" name="pointer" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="true" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="17" nTranslateBits="12" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.99998474" scaleY="0.99998474" translateX="-409" translateY="1257"/>
+          <colorTransform type="CXFORMWITHALPHA" alphaAddTerm="0" alphaMultTerm="256" blueAddTerm="0" blueMultTerm="0" greenAddTerm="0" greenMultTerm="0" hasAddTerms="false" hasMultTerms="true" nbits="10" redAddTerm="0" redMultTerm="0"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="24" clipDepth="0" depth="29" forceWriteAsLong="true" name="xspot" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="17" nTranslateBits="13" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.99998474" scaleY="0.99998474" translateX="-329" translateY="2097"/>
+        </item>
+        <item type="PlaceObject2Tag" characterId="27" clipDepth="0" depth="31" forceWriteAsLong="true" name="coast" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+          <matrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="18" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="1.0002289" scaleY="1.0" translateX="0" translateY="0"/>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false"/>
+      </subTags>
+    </item>
+    <item type="ExportAssetsTag" forceWriteAsLong="true">
+      <tags>
+        <item>28</item>
+      </tags>
+      <names>
+        <item>themap</item>
+      </names>
+    </item>
+    <item type="DoActionTag" actionBytes="8841000a007031006669736865720074686973006d6170006174746163684d6f766965005f78007265665f30005f7900756e6b6e6f776e00676f746f416e6453746f70000796100007c800000008000801070300000008021c96020008034e9602000804521796020008021c96020008034e96020008004e960400080508021c96020008034e96020008064e96020008054e4f96020008021c96020008034e96020008004e960400080708021c96020008034e96020008064e96020008074e4f9609000808070100000008021c96020008034e96020008004e9602000809521700" forceWriteAsLong="true"/>
+    <item type="ExportAssetsTag" forceWriteAsLong="true">
+      <tags>
+        <item>28</item>
+      </tags>
+      <names>
+        <item>themap</item>
+      </names>
+    </item>
+    <item type="PlaceObject2Tag" characterId="28" clipDepth="0" depth="1" forceWriteAsLong="true" name="map" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="true" placeFlagHasRatio="false" placeFlagMove="false" ratio="0">
+      <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" rotateSkew0="0.0" rotateSkew1="0.0" scaleX="0.0" scaleY="0.0" translateX="0" translateY="0"/>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="0" hasEndTag="true" spriteId="29">
+      <subTags/>
+    </item>
+    <item type="ExportAssetsTag" forceWriteAsLong="true">
+      <tags>
+        <item>29</item>
+      </tags>
+      <names>
+        <item>__Packages.map_engine</item>
+      </names>
+    </item>
+    <item type="DoInitActionTag" actionBytes="88d90131005f676c6f62616c006d61705f656e67696e6500737570657200746869730073656c656374506f696e740070726576696f7573506f696e740063757272656e7456656c6f63697479006d61726b6564506f696e74006d617856656c6f63697479006f766572766965774d617000746f74616c526566506f696e7473006d6f76654d61726b657200740063757272656e74526566506f696e74002e7265665f0063757272656e74526566506f696e7458005f780063757272656e74526566506f696e7459005f7900726566506f696e74007075736800636f617374006f6e52656c65617365006d61696e0073686f77526f64005f706172656e74007873706f7400706f696e746572004d6f766965436c69700070726f746f74797065006d6f7665506f696e746572004d6174680073717274006d61704765744e65696768626f75725265664964006d61704765744d6170506f7300666c6f6f72004172726179006f6e456e7465724672616d65006162730043536f72675800766965770043536f7267590066726f6d47616d65526f6f6d0074656c6c537573686941626f75744d794d61705374756666006d61704f76657276696577006d6170007031007363656e655363726f6c6c00415353657450726f70466c6167730096020008001c96020008014e12129d0200430e96020008001c96020008019b0500000000e901960b0006000000000000000008023d1796020008031c960400080408031c960400080508031c960400080608031c960b000807060000000000000000870100004f9602000400870100004f9602000400870100004f96020004004f96020008031c960b000808069999a93f9a9999994f96020008031c960400080908031c4f96020008031c960700080a070c0000004f96020008031c960400080b05004f960b00080c0600000000000000003c960200080c1c96020008031c960200080a4e48129d02007700960400080d08031c96020008094e960200080e47960200080c1c471c3c960400080f080d1c96020008104e3c9604000811080d1c96020008124e3c96020008111c960200080f1c960500070200000042960700070100000008031c96020008134e96020008145217960400080c080c1c501d99020070ff96020008031c96020008094e96020008154e96020008168e08000000000369008900960b0005000701000000040208174e96020008185217960400040108194e9606000807040108194e96020008044e4f960400040108194e960200081a4e9606000810040108194e960200081b4e96020008104e4f960400040108194e960200081a4e9606000812040108194e960200081b4e96020008124e4f960400040108194e960400080b05014f4f870100014f96020008001c96020008014e960200081c1c699604000401081d4e87010002179604000402081e8e1800000200212900096d6f7573655800086d6f7573655900800696020005008701001a1796050007a08601008701000717960500079dffffff8701000317960900060000000000000000870100021796060004020401080a4e48129d0200cc009606000409040108134e96020004024e9609000600000000000000004e0b9606000409040108134e96020004024e9609000600000000000000004e0b0c87010006179606000408040108134e96020004024e96050007010000004e0b9606000408040108134e96020004024e96050007010000004e0b0c870100051796040004060405479607000701000000081f1c96020008205287010004179604000404040748129d020014009602000404870100071796020004028701000317960200040250870100021799020023ff96100007ffffffff0403070200000004010821528701001b1796100007010000000403070200000004010821528701001c17960400040108134e960200041b4e9609000600000000000000004e960400040108134e96020004034e9609000600000000000000004e0b8701000c17960400040108134e960200041b4e96050007010000004e960400040108134e96020004034e96050007010000004e0b8701000b179606000409040108134e96020004034e9609000600000000000000004e0b87010012179606000408040108134e96020004034e96050007010000004e0b8701001017960400040c040c0c960400040b040b0c479607000701000000081f1c9602000820528701001917960400040c04190d8701000e17960400040b04190d8701000f17960400040e04120c960400040f04100c478701000a17960b00040a0600000000000000004812129d0200100196020005018701001a17960400040108134e96020004034e9609000600000000000000004e960400040a040e0c478701001317960400040108134e96020004034e96050007010000004e960400040a040f0c478701001117960400040108094e960200081b4e960400081004134f960400040108094e960200081b4e960400081204114f960400040c040c0c960400040b040b0c479607000701000000081f1c96020008205287010020179606000403040a04200d0b8701000d17960b00040d06000000000000000048129d02001500960600040d0401080a4e478701000d179902002100960600040d0401080a4e67129d02001000960600040d0401080a4e0b8701000d1796060004010804040d4f960200041a12129d02000103960400040108134e960200041c4e9609000600000000000000004e960400040108134e96020004034e9609000600000000000000004e0b8701001517960400040108134e960200041c4e96050007010000004e960400040108134e96020004034e96050007010000004e0b8701001417960400041504150c960400041404140c479607000701000000081f1c9602000820528701001d179604000415041d0d8701001e179604000414041d0d8701001f17960400041e04120c960400041f04100c47870100161796090006000000000000000087010017179609000600000000000000008701001817960400040e04120c960400040f04100c478701000a17960b00040a0600000000000000004812129d02005300960400040108134e96020004034e9609000600000000000000004e960400040a040e0c478701001317960400040108134e96020004034e96050007010000004e960400040a040f0c4787010011179902003c00960400040108134e96020004034e9609000600000000000000004e8701001317960400040108134e96020004034e96050007010000004e8701001117960b0004160600000000000000004812129d02005300960400040108134e96020004034e9609000600000000000000004e9604000416041e0c478701001717960400040108134e96020004034e96050007010000004e9604000416041f0c4787010018179902003c00960400040108134e96020004034e9609000600000000000000004e8701001717960400040108134e96020004034e96050007010000004e8701001817960400040108094e960200081b4e960400081004174f960400040108094e960200081b4e960400081204184f960400040c040c0c960400040b040b0c479607000701000000081f1c96020008205287010020179606000403040a04200d0b8701000d17960b00040d06000000000000000048129d02001500960600040d0401080a4e478701000d179902002100960600040d0401080a4e67129d02001000960600040d0401080a4e0b8701000d1796060004010804040d4f4f960400040208218e110000020005290003696400046469720066009604000403040447870100021796060004020401080a4e4812129d0200160096090006000000000000000087010002179902002b00960b00040206000000000000000048129d020016009604000401080a4e96050007010000000b870100021796020004023e4f960400040208228e0e00000100092900086c506f73001d0196090004080701000000081f1c960200082352870100021796100007010000000402070200000004010821528701000517960400040804020b8701000317960b000600000000000000000824408701000417960400040108134e96020004024e9609000600000000000000004e9606000403040108134e96020004054e9609000600000000000000004e960400040108134e96020004024e9609000600000000000000004e0b0c478701000717960400040108134e96020004024e96050007010000004e9606000403040108134e96020004054e96050007010000004e960400040108134e96020004024e96050007010000004e0b0c47870100061796090004060407070200000042960900070100000004040814521796020004043e4f960400040208258e080000000005690022039604000401080b4e960200050149129d02000e03960400040108074e960400040108054e4912129d0200d902960400040108054e960400040108074e0b870100031796090004030701000000081f1c96020008265296090006e17a943f7b14ae4748129d0200a2009604000401081a4e96070008100730f8ffff4f96080004010805040108074e4f9606000401080b05004f960b0005010701000000040208174e96020008185217960400040208174e9606000827040208284e96020008104e4f960400040208174e9606000829040208284e96020008124e4f9604000402082a4e960200050149129d02001700960d000600000000000000000402082b52179902000000990200f60196060004030401080a4e96050007020000000d67129d0200150096060004030401080a4e0b87010003179902003400960f0004030600000000000000000401080a4e0b96050007020000000d48129d0200100096060004030401080a4e47870100031796080004010806040108064e960500070a0000000d960b000403069999b93f9a9999990c0b4f960400040108064e960400040108084e67129d0200120096080004010806040108084e4f9902003800960400040108064e960d00060000000000000000040108084e0b48129d0200170096110004010806060000000000000000040108084e0b4f96080004010805040108054e960400040108064e474f960400040108054e9604000401080a4e4812129d02001b0096080004010805040108054e9604000401080a4e0b4f9902003100960400040108054e96090006000000000000000048129d0200160096080004010805040108054e9604000401080a4e474f960400040108054e9609000701000000040108225287010004179604000402082c4e960200082d4e960200082e4e960d00081004040600000000000000004e9609000600000000000000004e4f9604000402082c4e960200082d4e960200082e4e960d00081204040600000000000000004e96050007010000004e4f960400040108054e96090007010000000401082f52179902001d009604000401081a4e96070008100730f8ffff4f9606000401080b05004f4f9604000402082f8e1800000100036a0002706c61796572506f736974696f6e003800960400040108284e961700081006000000000000000007fd050000040207fd0500000c960500070c0000000d0b0b96050007f0000000474f4f960f00040208130600000000000000000824404f96080007010000000208001c96020008014e960200081d4e960700070300000008303d1700" forceWriteAsLong="true" spriteId="29"/>
+    <item type="DoInitActionTag" actionBytes="960c00006d61705f656e67696e65001c961500007468656d6170000702000000004f626a656374001c960f00007265676973746572436c61737300521700" forceWriteAsLong="true" spriteId="28"/>
+    <item type="ShowFrameTag" forceWriteAsLong="false"/>
+  </tags>
+</swf>

@@ -45,6 +45,23 @@ export interface SwfCharacter {
   attrs: Record<string, string>;
   /** #of frames flagged as containing something other than place/remove */
   specialFrames?: number;
+  /** DefineText: glyph runs (positions in TWIPS, relative to textMatrix) */
+  textRecords?: TextRecord[];
+  textMatrix?: Matrix;
+  /** DefineFont*: glyph index → character code */
+  codeTable?: number[];
+}
+
+export interface TextRecord {
+  fontId?: number;
+  /** TWIPS */
+  height?: number;
+  /** #rrggbb */
+  color?: string;
+  alpha?: number;
+  x?: number;
+  y?: number;
+  glyphs: { index: number; advance: number }[];
 }
 
 export type EventKind = 'action' | 'sound' | 'label' | 'other' | 'define' | 'place' | 'remove';
@@ -115,6 +132,8 @@ export interface SwfHeader {
   stage: Rect;
   compression?: string;
   fileName: string;
+  /** SetBackgroundColor, 0xRRGGBB */
+  backgroundColor?: number;
 }
 
 export interface SwfDocument {
@@ -122,6 +141,8 @@ export interface SwfDocument {
   characters: Map<number, SwfCharacter>;
   timelines: Map<string, Timeline>;
   root: Timeline;
+  /** SymbolClass table: character id → AS3 class name (id 0 = document class). */
+  symbolClasses?: Map<number, string>;
   warnings: string[];
   stats: { tags: number; unknownTags: Record<string, number> };
 }
