@@ -1152,17 +1152,37 @@ export class AS2Player {
   }
 
   // ------------------------------------------------------------ rendering
+  /** Draw into the mounted canvas (fills it). */
   render() {
     const ctx = this.ctx;
     const canvas = this.canvas;
     if (!ctx || !canvas) return;
-    const dpr = canvas.width / this.width || 1;
+    const scale = Math.min(canvas.width / this.width, canvas.height / this.height) || 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    this.renderTo(ctx, scale, (canvas.width - this.width * scale) / 2, (canvas.height - this.height * scale) / 2);
+  }
+
+  /** Draw the stage at `scale` (device px per stage px) with its top-left corner at (ox, oy). */
+  renderTo(ctx: CanvasRenderingContext2D, scale: number, ox: number, oy: number) {
+    ctx.save();
+    ctx.setTransform(scale, 0, 0, scale, ox, oy);
     ctx.globalAlpha = 1;
     ctx.fillStyle = this.background;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.setTransform(dpr / TWIPS, 0, 0, dpr / TWIPS, 0, 0);
+    ctx.fillRect(0, 0, this.width, this.height);
+    ctx.beginPath();
+    ctx.rect(0, 0, this.width, this.height);
+    ctx.clip();
+    ctx.scale(1 / TWIPS, 1 / TWIPS);
     this.drawNode(ctx, this.root, 1, undefined);
+    ctx.restore();
+  }
+
+  /** Advance by `dt` ms of game time (timers + due frames). For hosts that run their own loop. */
+  advanceBy(dt: number) {
+    if (!this.started) this.start();
+    this.last = this.time() - dt;
+    this.step(this.time());
   }
 
   private drawNode(ctx: CanvasRenderingContext2D, node: DisplayNode, alpha: number, ct: ColorTransform | undefined) {

@@ -1,4 +1,5 @@
-// Execute: plays the loaded game. The SWF dump supplies the symbols,
+// Execute: plays the loaded game. AS1/AS2 games (FFDec .as export) are
+// delegated to As2Execute. For AS3: the SWF dump supplies the symbols,
 // timelines and SymbolClass linkage; the game's AS3 code (transpiled to
 // TypeScript and included in the loaded folder) is compiled in the browser
 // and run on the flash.* engine in src/engine/flash.
@@ -12,6 +13,7 @@ import { compileSources, isCodeFile, linkProgram, type CompiledSources, type Lin
 import { FlashPlayer, HtmlAudioBackend, type LogEntry } from '../engine/flash/player';
 import type { AudioBackend } from '../engine/flash/media';
 import { DisplayObject, MovieClip } from '../engine/flash/display';
+import { As2Execute, isAs2Bundle } from './As2Execute';
 
 type CodeState =
   | { status: 'loading' }
@@ -19,7 +21,12 @@ type CodeState =
 
 const MAX_LOG = 500;
 
-export function ExecuteTab({ doc, cache, assets }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null }) {
+export function ExecuteTab(props: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null }) {
+  // ActionScript 1/2 exports (SWF ≤ 8, .as scripts) run on the AS2 player; AS3 code on the flash.* engine.
+  return isAs2Bundle(props.doc, props.assets) ? <As2Execute {...props} /> : <As3Execute {...props} />;
+}
+
+function As3Execute({ doc, cache, assets }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<FlashPlayer | null>(null);
