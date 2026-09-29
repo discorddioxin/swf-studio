@@ -57,10 +57,17 @@ describe('emitter scoping', () => {
   it('maps frame vars/functions and unresolved names to the timeline', () => {
     const code = script('var n = 1; function f(a) { var b = a + n; return b; } stop(); n = f(2);');
     expect(code).toContain('$t.n = 1;');
-    expect(code).toContain('$t.f = function f(this: any, a: any)');
+    expect(code).toContain('$t.f = function f(this: any, a?: any)');
     expect(code).toContain('var b: any = a + $t.n;');
     expect(code).toContain('$t.stop();');
     expect(code).toContain('$t.n = $t.f?.(2);'); // f may not be defined yet: AS2 ignores the call
+  });
+
+  it('makes untyped params optional and accepts extra args when `arguments` is read', () => {
+    const r = transpileScript('class A { function f(a, b:Number) { return a; } function g() { return arguments[0]; } }');
+    expect(r.code).toContain('f(a?: any, b: number)');
+    expect(r.code).toContain('g(..._args: any[])');
+    expect(r.code).toContain('return arguments[0];');
   });
 
   it('follows AS2 null semantics: no throws on undefined objects or functions', () => {

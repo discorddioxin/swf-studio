@@ -195,6 +195,9 @@ export class AS2Player {
   private last = 0;
   private acc = 0;
   private timers = new Map<number, Timer>();
+  /** game clock (ms): advances only while the player runs, drives getTimer() and intervals */
+  private clock = 0;
+  private inStep = false;
   private timerSeq = 0;
   private startTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
   private canvas: HTMLCanvasElement | null = null;
@@ -309,13 +312,15 @@ export class AS2Player {
 
   /** Advance by real time: timers + as many ticks as are due. */
   step(now: number) {
-    const dt = Math.min(250, now - this.last);
+    const dt = Math.max(0, Math.min(250, now - this.last));
     this.last = now;
     this.acc += dt;
-    this.runTimers(now);
+    this.clock += dt;
+    this.runTimers(this.clock);
     const frameMs = 1000 / this.frameRate;
     let ticks = 0;
-    while (this.acc >= frameMs && ticks < 4) { this.acc -= frameMs; this.tick(); ticks++; }
+    this.inStep = true;
+    try { while (this.acc >= frameMs && ticks < 4) { this.acc -= frameMs; this.tick(); ticks++; } } finally { this.inStep = false; }
     if (this.acc > frameMs * 4) this.acc = 0;
     if (ticks) this.render();
   }
@@ -334,6 +339,7 @@ export class AS2Player {
   tick() {
     if (!this.started) this.start();
     this.tickCount++;
+    if (!this.inStep) this.clock += 1000 / this.frameRate;
     const list: DisplayNode[] = [];
     const walk = (n: DisplayNode) => {
       if (n.kind === 'clip') list.push(n);
@@ -993,7 +999,7 @@ export class AS2Player {
   // ------------------------------------------------------------ timers / host
   setTimer(fn: () => void, ms: number): number {
     const id = ++this.timerSeq;
-    this.timers.set(id, { id, fn, ms: Number(ms) || 0, next: this.time() + Math.max(10, Number(ms) || 0) });
+    this.timers.set(id, { id, fn, ms: Number(ms) || 0, next: this.clock + Math.max(10, Number(ms) || 0) });
     return id;
   }
   clearTimer(id: number) { this.timers.delete(Number(id)); }
@@ -1017,7 +1023,7 @@ export class AS2Player {
       get root() { return p.root.obj; },
       level: (n) => (n === 0 ? p.root.obj : undefined),
       trace: (m) => p.log('trace', m),
-      getTimer: () => Math.floor(p.time()),
+      getTimer: () => Math.floor(p.clock),
       setInterval: (fn, ms) => p.setTimer(fn, ms),
       clearInterval: (id) => p.clearTimer(id),
       getURL: (url, win) => {
@@ -1181,9 +1187,12 @@ export class AS2Player {
   /** Advance by `dt` ms of game time (timers + due frames). For hosts that run their own loop. */
   advanceBy(dt: number) {
     if (!this.started) this.start();
-    this.last = this.time() - dt;
-    this.step(this.time());
+    this.last = 0;
+    this.step(dt);
   }
+
+  /** Game time in ms (what getTimer() returns). */
+  get gameTime() { return this.clock; }
 
   private drawNode(ctx: CanvasRenderingContext2D, node: DisplayNode, alpha: number, ct: ColorTransform | undefined) {
     if (!node.visible || node.removed) return;
