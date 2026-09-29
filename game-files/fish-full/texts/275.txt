@@ -1,0 +1,5 @@
+QUIT GAME?
+--- RECORDSEPARATOR ---
+Would you like to save and exit the 
+--- RECORDSEPARATOR ---
+game?

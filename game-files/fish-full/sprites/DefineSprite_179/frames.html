@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html>
+<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><script type="text/javascript" src="canvas.js"></script><style type="text/css">#resizable {position:relative; display:inline-block; margin:0; padding:0;font-size:0px;} #width_size {width:10px; position:absolute; right:-5px; top:0px; bottom:0px; cursor:e-resize;-webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;} #height_size {height:10px; position:absolute; bottom:-5px; left:0px; right:0px; cursor:n-resize;-webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;} #myCanvas {margin:0; padding:0;} </style></head><body>
+
+<div id="resizable"><canvas id="myCanvas" width="381" height="529" style="border:1px solid #c3c3c3;">
+Your browser does not support the HTML5 canvas tag.
+</canvas><div id="width_size">&nbsp;</div><div id="height_size">&nbsp;</div></div>
+
+<script>var canvas=document.getElementById("myCanvas");
+var ctx=canvas.getContext("2d");
+enhanceContext(ctx);
+var ctrans = new cxform(0,0,0,0,255,255,255,255);
+
+var scalingGrids = {};
+var boundRects = {};
+function shape176(ctx,ctrans,frame,ratio,time){
+	var pathData="M 482 0 L 411 1324 72 1324 0 0 482 0 M 447 1758 L 36 1758 36 1406 447 1406 447 1758";
+	ctx.fillStyle=tocolor(ctrans.apply([0,0,0,1]));
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 482 0 L 411 1324 72 1324 0 0 482 0";
+	var scaleMode = "NORMAL";
+	ctx.strokeStyle=tocolor(ctrans.apply([255,255,255,1]));
+	ctx.lineWidth=4.0;
+	ctx.lineCap="round";
+	ctx.lineJoin="round";
+	drawPath(ctx,pathData,true,scaleMode);
+
+	var pathData="M 447 1758 L 36 1758 36 1406 447 1406 447 1758 Z";
+	var scaleMode = "NORMAL";
+	ctx.strokeStyle=tocolor(ctrans.apply([255,255,255,1]));
+	ctx.lineWidth=4.0;
+	ctx.lineCap="round";
+	ctx.lineJoin="round";
+	drawPath(ctx,pathData,true,scaleMode);
+
+}
+
+function shape177(ctx,ctrans,frame,ratio,time){
+	var pathData="M 4517 404 L 4447 404 4432 11 4531 11 4517 404";
+	var grd=ctx.createLinearGradient(4473.0,160.5,4507.0,67.5);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 4390 83 Q 4399 117 4399 181 L 4399 203 4305 203 4305 156 4302 100 Q 4299 89 4289 89 4280 89 4277 98 4274 108 4274 148 L 4274 398 Q 4274 433 4277 445 4280 456 4290 456 L 4304 443 4307 394 4307 332 4288 332 4288 253 4399 253 4399 533 4339 533 4331 496 Q 4321 520 4307 532 4292 544 4272 544 4248 544 4228 528 4207 511 4196 486 4185 462 4183 435 4180 408 4180 354 L 4180 199 Q 4180 124 4186 91 4191 57 4218 29 4244 0 4286 0 4328 0 4355 25 4382 49 4390 83";
+	var grd=ctx.createLinearGradient(4269.0,284.75,4293.0,67.25);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 4068 11 L 4147 11 4147 533 4064 533 4015 296 4015 533 3937 533 3937 11 4015 11 4068 246 4068 11";
+	var grd=ctx.createLinearGradient(4030.25,246.5,4047.75,37.5);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 4439 533 L 4439 429 4524 429 4524 533 4439 533";
+	var grd=ctx.createLinearGradient(4486.25,523.25,4475.75,438.75);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 3898 11 L 3898 533 3804 533 3804 11 3898 11";
+	var grd=ctx.createLinearGradient(3783.25,266.0,3924.75,88.0);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 3766 11 L 3766 533 3672 533 3672 314 3644 314 3644 533 3550 533 3550 11 3644 11 3644 198 3672 198 3672 11 3766 11";
+	var grd=ctx.createLinearGradient(3663.0,309.5,3685.0,94.5);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 3528 116 L 3472 116 3472 533 3378 533 3378 116 3323 116 3323 11 3528 11 3528 116";
+	var grd=ctx.createLinearGradient(3428.5,284.5,3437.5,79.5);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 3311 116 L 3248 116 3248 215 3307 215 3307 314 3248 314 3248 429 3317 429 3317 533 3154 533 3154 11 3311 11 3311 116";
+	var grd=ctx.createLinearGradient(3201.0,296.0,3287.0,158.0);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 3116 11 L 3116 533 3034 533 3034 181 3001 533 2943 533 2908 189 2908 533 2826 533 2826 11 2948 11 2959 122 2972 255 2994 11 3116 11";
+	var grd=ctx.createLinearGradient(2950.5,303.75,3007.5,20.25);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 2695 99 Q 2692 89 2683 89 2676 89 2672 97 2668 105 2668 145 L 2668 389 Q 2668 434 2671 445 2673 456 2683 456 2692 456 2695 443 L 2698 385 2698 145 2695 99 M 2735 14 Q 2758 28 2772 55 2786 82 2789 115 L 2792 227 2792 317 2789 428 Q 2787 461 2773 488 2760 515 2736 529 2713 544 2683 544 2654 544 2631 530 2608 517 2594 489 2579 462 2577 430 2574 397 2574 317 L 2574 227 Q 2574 149 2577 116 2579 83 2593 56 2606 29 2629 15 2652 0 2683 0 2712 0 2735 14";
+	var grd=ctx.createLinearGradient(2688.25,350.25,2709.75,133.75);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 2531 61 Q 2539 86 2539 149 L 2539 169 2452 169 2452 130 Q 2452 103 2448 96 2445 89 2437 89 2429 89 2424 99 L 2420 129 Q 2420 155 2425 168 2430 181 2451 200 2514 254 2531 288 2547 323 2547 400 2547 455 2538 482 2529 508 2503 526 2477 544 2443 544 2405 544 2378 523 2351 503 2343 471 2335 439 2335 380 L 2335 346 2422 346 2422 410 Q 2422 439 2426 447 2430 456 2439 456 2448 456 2453 445 L 2457 413 Q 2457 367 2449 353 L 2405 306 2358 257 Q 2347 242 2340 215 2332 188 2332 147 2332 87 2343 59 2353 32 2377 16 2401 0 2434 0 2471 0 2497 17 2522 34 2531 61";
+	var grd=ctx.createLinearGradient(2413.5,298.75,2482.5,95.25);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 2169 20 Q 2193 29 2206 50 2218 71 2221 96 L 2225 195 2225 378 2220 472 Q 2215 496 2204 509 2193 522 2176 528 L 2125 533 2007 533 2007 11 2077 11 2169 20 M 2122 105 L 2101 101 2101 444 Q 2121 444 2126 432 L 2131 368 2131 165 2129 120 2122 105";
+	var grd=ctx.createLinearGradient(2059.5,326.5,2152.5,129.5);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 1970 215 L 1970 314 1911 314 1911 429 1980 429 1980 533 1817 533 1817 11 1974 11 1974 116 1911 116 1911 215 1970 215";
+	var grd=ctx.createLinearGradient(1842.25,242.0,1925.75,102.0);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 1706 11 L 1794 11 1740 247 1799 533 1702 533 1664 309 1664 533 1570 533 1570 11 1664 11 1664 214 1706 11";
+	var grd=ctx.createLinearGradient(1657.0,259.25,1701.0,34.75);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 1516 55 Q 1530 82 1533 115 L 1536 227 1536 317 1533 428 Q 1531 461 1517 488 1504 515 1480 529 1457 544 1427 544 1398 544 1375 530 1352 517 1338 489 1323 462 1321 430 1318 397 1318 317 L 1318 227 Q 1318 149 1321 116 1323 83 1337 56 1350 29 1373 15 1396 0 1427 0 1456 0 1479 14 1502 28 1516 55 M 1439 99 Q 1436 89 1427 89 1420 89 1416 97 1412 105 1412 145 L 1412 389 Q 1412 434 1415 445 1417 456 1427 456 1436 456 1439 443 L 1442 385 1442 145 1439 99";
+	var grd=ctx.createLinearGradient(1403.25,294.75,1434.75,79.25);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 1267 55 Q 1281 82 1284 115 L 1287 227 1287 317 1284 428 Q 1282 461 1268 488 1255 515 1231 529 1208 544 1178 544 1149 544 1126 530 1103 517 1089 489 1074 462 1072 430 1069 397 1069 317 L 1069 227 Q 1069 149 1072 116 1074 83 1088 56 1101 29 1124 15 1147 0 1178 0 1207 0 1230 14 1253 28 1267 55 M 1190 99 Q 1187 89 1178 89 1171 89 1167 97 1163 105 1163 145 L 1163 389 Q 1163 434 1166 445 1168 456 1178 456 1187 456 1190 443 L 1193 385 1193 145 1190 99";
+	var grd=ctx.createLinearGradient(1128.0,279.75,1200.0,74.25);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 940 11 L 1034 11 1034 533 940 533 940 314 912 314 912 533 818 533 818 11 912 11 912 198 940 198 940 11";
+	var grd=ctx.createLinearGradient(870.25,283.25,967.75,90.75);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 453 227 L 453 317 450 428 Q 448 461 434 488 421 515 397 529 374 544 344 544 315 544 292 530 269 517 255 489 240 462 238 430 235 397 235 317 L 235 227 Q 235 149 238 116 240 83 254 56 267 29 290 15 313 0 344 0 373 0 396 14 419 28 433 55 447 82 450 115 L 453 227 M 333 97 Q 329 105 329 145 L 329 389 Q 329 434 332 445 334 456 344 456 353 456 356 443 L 359 385 359 145 356 99 Q 353 89 344 89 337 89 333 97";
+	var grd=ctx.createLinearGradient(305.0,373.75,383.0,170.25);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 579 11 L 579 402 Q 579 437 582 446 585 456 592 456 601 456 604 445 L 607 396 607 11 701 11 701 360 698 443 Q 695 467 682 493 669 518 647 531 626 544 596 544 564 544 539 528 514 513 502 488 490 463 488 436 485 408 485 320 L 485 11 579 11";
+	var grd=ctx.createLinearGradient(509.25,345.0,676.75,209.0);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 136 11 L 222 11 154 344 154 533 66 533 66 344 0 11 87 11 110 217 Q 117 133 136 11";
+	var grd=ctx.createLinearGradient(79.75,257.25,190.25,64.75);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([235,20,20,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([251,145,15,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 4517 404 L 4447 404 4432 11 4531 11 4517 404 M 4390 83 Q 4399 117 4399 181 L 4399 203 4305 203 4305 156 4302 100 Q 4299 89 4289 89 4280 89 4277 98 4274 108 4274 148 L 4274 398 Q 4274 433 4277 445 4280 456 4290 456 L 4304 443 4307 394 4307 332 4288 332 4288 253 4399 253 4399 533 4339 533 4331 496 Q 4321 520 4307 532 4292 544 4272 544 4248 544 4228 528 4207 511 4196 486 4185 462 4183 435 4180 408 4180 354 L 4180 199 Q 4180 124 4186 91 4191 57 4218 29 4244 0 4286 0 4328 0 4355 25 4382 49 4390 83 M 4068 11 L 4147 11 4147 533 4064 533 4015 296 4015 533 3937 533 3937 11 4015 11 4068 246 4068 11 M 4439 533 L 4439 429 4524 429 4524 533 4439 533 M 3898 11 L 3898 533 3804 533 3804 11 3898 11 M 3766 11 L 3766 533 3672 533 3672 314 3644 314 3644 533 3550 533 3550 11 3644 11 3644 198 3672 198 3672 11 3766 11 M 3528 116 L 3472 116 3472 533 3378 533 3378 116 3323 116 3323 11 3528 11 3528 116 M 3311 116 L 3248 116 3248 215 3307 215 3307 314 3248 314 3248 429 3317 429 3317 533 3154 533 3154 11 3311 11 3311 116 M 3116 11 L 3116 533 3034 533 3034 181 3001 533 2943 533 2908 189 2908 533 2826 533 2826 11 2948 11 2959 122 2972 255 2994 11 3116 11 M 2695 99 Q 2692 89 2683 89 2676 89 2672 97 2668 105 2668 145 L 2668 389 Q 2668 434 2671 445 2673 456 2683 456 2692 456 2695 443 L 2698 385 2698 145 2695 99 M 2735 14 Q 2758 28 2772 55 2786 82 2789 115 L 2792 227 2792 317 2789 428 Q 2787 461 2773 488 2760 515 2736 529 2713 544 2683 544 2654 544 2631 530 2608 517 2594 489 2579 462 2577 430 2574 397 2574 317 L 2574 227 Q 2574 149 2577 116 2579 83 2593 56 2606 29 2629 15 2652 0 2683 0 2712 0 2735 14 M 2531 61 Q 2539 86 2539 149 L 2539 169 2452 169 2452 130 Q 2452 103 2448 96 2445 89 2437 89 2429 89 2424 99 L 2420 129 Q 2420 155 2425 168 2430 181 2451 200 2514 254 2531 288 2547 323 2547 400 2547 455 2538 482 2529 508 2503 526 2477 544 2443 544 2405 544 2378 523 2351 503 2343 471 2335 439 2335 380 L 2335 346 2422 346 2422 410 Q 2422 439 2426 447 2430 456 2439 456 2448 456 2453 445 L 2457 413 Q 2457 367 2449 353 L 2405 306 2358 257 Q 2347 242 2340 215 2332 188 2332 147 2332 87 2343 59 2353 32 2377 16 2401 0 2434 0 2471 0 2497 17 2522 34 2531 61 M 2169 20 Q 2193 29 2206 50 2218 71 2221 96 L 2225 195 2225 378 2220 472 Q 2215 496 2204 509 2193 522 2176 528 L 2125 533 2007 533 2007 11 2077 11 2169 20 M 2122 105 L 2101 101 2101 444 Q 2121 444 2126 432 L 2131 368 2131 165 2129 120 2122 105 M 1970 215 L 1970 314 1911 314 1911 429 1980 429 1980 533 1817 533 1817 11 1974 11 1974 116 1911 116 1911 215 1970 215 M 1706 11 L 1794 11 1740 247 1799 533 1702 533 1664 309 1664 533 1570 533 1570 11 1664 11 1664 214 1706 11 M 1516 55 Q 1530 82 1533 115 L 1536 227 1536 317 1533 428 Q 1531 461 1517 488 1504 515 1480 529 1457 544 1427 544 1398 544 1375 530 1352 517 1338 489 1323 462 1321 430 1318 397 1318 317 L 1318 227 Q 1318 149 1321 116 1323 83 1337 56 1350 29 1373 15 1396 0 1427 0 1456 0 1479 14 1502 28 1516 55 M 1439 99 Q 1436 89 1427 89 1420 89 1416 97 1412 105 1412 145 L 1412 389 Q 1412 434 1415 445 1417 456 1427 456 1436 456 1439 443 L 1442 385 1442 145 1439 99 M 1267 55 Q 1281 82 1284 115 L 1287 227 1287 317 1284 428 Q 1282 461 1268 488 1255 515 1231 529 1208 544 1178 544 1149 544 1126 530 1103 517 1089 489 1074 462 1072 430 1069 397 1069 317 L 1069 227 Q 1069 149 1072 116 1074 83 1088 56 1101 29 1124 15 1147 0 1178 0 1207 0 1230 14 1253 28 1267 55 M 1190 99 Q 1187 89 1178 89 1171 89 1167 97 1163 105 1163 145 L 1163 389 Q 1163 434 1166 445 1168 456 1178 456 1187 456 1190 443 L 1193 385 1193 145 1190 99 M 940 11 L 1034 11 1034 533 940 533 940 314 912 314 912 533 818 533 818 11 912 11 912 198 940 198 940 11 M 579 11 L 579 402 Q 579 437 582 446 585 456 592 456 601 456 604 445 L 607 396 607 11 701 11 701 360 698 443 Q 695 467 682 493 669 518 647 531 626 544 596 544 564 544 539 528 514 513 502 488 490 463 488 436 485 408 485 320 L 485 11 579 11 M 453 227 L 453 317 450 428 Q 448 461 434 488 421 515 397 529 374 544 344 544 315 544 292 530 269 517 255 489 240 462 238 430 235 397 235 317 L 235 227 Q 235 149 238 116 240 83 254 56 267 29 290 15 313 0 344 0 373 0 396 14 419 28 433 55 447 82 450 115 L 453 227 M 333 97 Q 329 105 329 145 L 329 389 Q 329 434 332 445 334 456 344 456 353 456 356 443 L 359 385 359 145 356 99 Q 353 89 344 89 337 89 333 97 M 136 11 L 222 11 154 344 154 533 66 533 66 344 0 11 87 11 110 217 Q 117 133 136 11 Z";
+	var scaleMode = "NORMAL";
+	ctx.strokeStyle=tocolor(ctrans.apply([255,255,255,1]));
+	ctx.lineWidth=1.0;
+	ctx.lineCap="round";
+	ctx.lineJoin="round";
+	drawPath(ctx,pathData,true,scaleMode);
+
+}
+
+function shape178(ctx,ctrans,frame,ratio,time){
+	var pathData="M 10 102 Q 21 64 71 32 122 0 202 0 280 0 332 27 384 55 400 94 415 132 415 205 L 415 230 236 230 236 177 231 113 Q 226 100 207 100 190 100 185 111 179 122 179 167 L 179 452 Q 179 492 185 505 190 517 208 517 228 517 235 503 242 489 242 447 L 242 377 206 377 206 287 415 287 415 605 303 605 287 563 Q 268 590 240 604 212 617 174 617 129 617 90 599 51 580 30 552 10 524 5 494 0 463 0 402 L 0 226 Q 0 141 10 102 M 806 12 L 1197 12 1197 131 1091 131 1091 605 912 605 912 131 806 131 806 12 M 663 243 L 774 243 774 356 663 356 663 486 794 486 794 605 484 605 484 12 782 12 782 131 663 131 663 243 M 1626 159 Q 1626 131 1615 122 1603 114 1572 114 L 1572 245 1614 238 Q 1626 231 1626 192 L 1626 159 M 1572 338 L 1572 605 1393 605 1393 12 1519 12 1691 21 Q 1736 29 1764 64 1792 98 1792 174 1792 243 1772 267 1752 291 1694 296 1747 307 1765 326 L 1788 361 Q 1792 377 1792 449 L 1792 605 1626 605 1626 408 Q 1626 360 1618 349 1609 338 1572 338 M 2041 131 L 2041 243 2152 243 2152 356 2041 356 2041 486 2172 486 2172 605 1862 605 1862 12 2160 12 2160 131 2041 131 M 2439 393 Q 2426 293 2412 144 2385 315 2378 393 L 2439 393 M 2799 12 L 2974 22 Q 3020 33 3043 56 3067 79 3073 108 3079 137 3079 221 L 3079 429 Q 3079 509 3071 536 3062 563 3040 578 3018 593 2987 599 L 2890 605 2665 605 2665 12 2799 12 M 2534 12 L 2637 605 2453 605 2444 498 2380 498 2369 605 2184 605 2275 12 2534 12 M 3103 12 L 3267 12 Q 3306 186 3311 246 3326 151 3361 12 L 3525 12 3395 390 3395 605 3229 605 3229 390 3103 12 M 2897 136 Q 2894 124 2884 119 L 2844 114 2844 504 Q 2882 504 2891 490 2900 477 2900 418 L 2900 187 2897 136 M 3550 12 L 3738 12 3710 459 3578 459 3550 12 M 3724 605 L 3564 605 3564 486 3724 486 3724 605";
+	ctx.fillStyle=tocolor(ctrans.apply([0,0,0,1]));
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 10 102 Q 21 64 71 32 122 0 202 0 280 0 332 27 384 55 400 94 415 132 415 205 L 415 230 236 230 236 177 231 113 Q 226 100 207 100 190 100 185 111 179 122 179 167 L 179 452 Q 179 492 185 505 190 517 208 517 228 517 235 503 242 489 242 447 L 242 377 206 377 206 287 415 287 415 605 303 605 287 563 Q 268 590 240 604 212 617 174 617 129 617 90 599 51 580 30 552 10 524 5 494 0 463 0 402 L 0 226 Q 0 141 10 102 M 806 12 L 1197 12 1197 131 1091 131 1091 605 912 605 912 131 806 131 806 12 M 663 243 L 774 243 774 356 663 356 663 486 794 486 794 605 484 605 484 12 782 12 782 131 663 131 663 243 M 1626 159 Q 1626 131 1615 122 1603 114 1572 114 L 1572 245 1614 238 Q 1626 231 1626 192 L 1626 159 M 1572 338 L 1572 605 1393 605 1393 12 1519 12 1691 21 Q 1736 29 1764 64 1792 98 1792 174 1792 243 1772 267 1752 291 1694 296 1747 307 1765 326 L 1788 361 Q 1792 377 1792 449 L 1792 605 1626 605 1626 408 Q 1626 360 1618 349 1609 338 1572 338 M 2041 131 L 2041 243 2152 243 2152 356 2041 356 2041 486 2172 486 2172 605 1862 605 1862 12 2160 12 2160 131 2041 131 M 2439 393 Q 2426 293 2412 144 2385 315 2378 393 L 2439 393 M 2799 12 L 2974 22 Q 3020 33 3043 56 3067 79 3073 108 3079 137 3079 221 L 3079 429 Q 3079 509 3071 536 3062 563 3040 578 3018 593 2987 599 L 2890 605 2665 605 2665 12 2799 12 M 2534 12 L 2637 605 2453 605 2444 498 2380 498 2369 605 2184 605 2275 12 2534 12 M 3103 12 L 3267 12 Q 3306 186 3311 246 3326 151 3361 12 L 3525 12 3395 390 3395 605 3229 605 3229 390 3103 12 M 2897 136 Q 2894 124 2884 119 L 2844 114 2844 504 Q 2882 504 2891 490 2900 477 2900 418 L 2900 187 2897 136 M 3550 12 L 3738 12 3710 459 3578 459 3550 12 M 3724 605 L 3564 605 3564 486 3724 486 3724 605 Z";
+	var scaleMode = "NORMAL";
+	ctx.strokeStyle=tocolor(ctrans.apply([255,255,255,1]));
+	ctx.lineWidth=1.0;
+	ctx.lineCap="round";
+	ctx.lineJoin="round";
+	drawPath(ctx,pathData,true,scaleMode);
+
+}
+
+function font173(ctx,ch,textColor){
+	defaultFill = textColor;
+	switch(ch){
+	}
+}
+
+function text174(ctx,ctrans,frame,ratio,time){
+	var textColor = tocolor(ctrans.apply([0,0,0,1]));
+	var textColor = tocolor(ctrans.apply([0,0,0,1]));
+	var textColor = tocolor(ctrans.apply([0,0,0,1]));
+	var textColor = tocolor(ctrans.apply([0,0,0,1]));
+}
+
+function shape175(ctx,ctrans,frame,ratio,time){
+	var pathData="M 0 2489 L -2489 0 0 -2489 2489 0 0 2489 M 10 2194 L 2194 10 10 -2174 -2174 10 10 2194";
+	ctx.fillStyle=tocolor(ctrans.apply([248,215,31,1]));
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 10 2194 L -2174 10 10 -2174 2194 10 10 2194";
+	var grd=ctx.createLinearGradient(-1363.5,1605.25,761.5,-809.25);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([248,130,12,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([249,248,23,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 0 2489 L -2489 0 0 -2489 2489 0 0 2489 M 10 2194 L -2174 10 10 -2174 2194 10 10 2194 Z";
+	var scaleMode = "NORMAL";
+	ctx.strokeStyle=tocolor(ctrans.apply([0,0,0,1]));
+	ctx.lineWidth=4.0;
+	ctx.lineCap="round";
+	ctx.lineJoin="round";
+	drawPath(ctx,pathData,true,scaleMode);
+
+}
+
+function sprite179(ctx,ctrans,frame,ratio,time){
+	ctx.save();
+	ctx.transform(1,0,0,1,88.45,122.0);
+	var clips = [];
+	var frame_cnt = 25;
+	frame = frame % frame_cnt;
+	switch(frame){
+		case 0:
+			place("text174",canvas,ctx,[0.05,0.0,0.0,0.05,97.0,381.95],ctrans,1,0,0,time);
+			break;
+		case 1:
+			break;
+		case 2:
+			break;
+		case 3:
+			break;
+		case 4:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans,1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans,1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans,1,0,0,time);
+			break;
+		case 5:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans,1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans,1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans,1,0,0,time);
+			break;
+		case 6:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans,1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans,1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans,1,0,0,time);
+			break;
+		case 7:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans,1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans,1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans,1,0,0,time);
+			break;
+		case 8:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans,1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans,1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans,1,0,0,time);
+			break;
+		case 9:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans,1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans,1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans,1,0,0,time);
+			break;
+		case 10:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans,1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans,1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans,1,0,0,time);
+			break;
+		case 11:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans,1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans,1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans,1,0,0,time);
+			break;
+		case 12:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans,1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans,1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans,1,0,0,time);
+			break;
+		case 13:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans,1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans,1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans,1,0,0,time);
+			break;
+		case 14:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans.merge(new cxform(0,0,0,0,256,256,256,213)),1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans.merge(new cxform(0,0,0,0,256,256,256,213)),1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans.merge(new cxform(0,0,0,0,256,256,256,213)),1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans.merge(new cxform(0,0,0,0,256,256,256,213)),1,0,0,time);
+			break;
+		case 15:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans.merge(new cxform(0,0,0,0,256,256,256,171)),1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans.merge(new cxform(0,0,0,0,256,256,256,171)),1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans.merge(new cxform(0,0,0,0,256,256,256,171)),1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans.merge(new cxform(0,0,0,0,256,256,256,171)),1,0,0,time);
+			break;
+		case 16:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans.merge(new cxform(0,0,0,0,256,256,256,128)),1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans.merge(new cxform(0,0,0,0,256,256,256,128)),1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans.merge(new cxform(0,0,0,0,256,256,256,128)),1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans.merge(new cxform(0,0,0,0,256,256,256,128)),1,0,0,time);
+			break;
+		case 17:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans.merge(new cxform(0,0,0,0,256,256,256,85)),1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans.merge(new cxform(0,0,0,0,256,256,256,85)),1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans.merge(new cxform(0,0,0,0,256,256,256,85)),1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans.merge(new cxform(0,0,0,0,256,256,256,85)),1,0,0,time);
+			break;
+		case 18:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans.merge(new cxform(0,0,0,0,256,256,256,43)),1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans.merge(new cxform(0,0,0,0,256,256,256,43)),1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans.merge(new cxform(0,0,0,0,256,256,256,43)),1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans.merge(new cxform(0,0,0,0,256,256,256,43)),1,0,0,time);
+			break;
+		case 19:
+			place("shape175",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans.merge(new cxform(0,0,0,0,256,256,256,0)),1,0,0,time);
+			place("shape176",canvas,ctx,[0.0602386474609375,0.0,0.0,0.0602386474609375,23.2,-56.05],ctrans.merge(new cxform(0,0,0,0,256,256,256,0)),1,0,0,time);
+			place("shape177",canvas,ctx,[0.05,0.0,0.0,0.05,-74.9,-99.95],ctrans.merge(new cxform(0,0,0,0,256,256,256,0)),1,0,0,time);
+			place("shape178",canvas,ctx,[0.05,0.0,0.0,0.05,-57.3,63.3],ctrans.merge(new cxform(0,0,0,0,256,256,256,0)),1,0,0,time);
+			break;
+		case 20:
+			break;
+		case 21:
+			break;
+		case 22:
+			break;
+		case 23:
+			break;
+		case 24:
+			break;
+	}
+	ctx.restore();
+}
+
+var frame = -1;
+var time = 0;
+var frames = [];
+frames.push(0);
+frames.push(1);
+frames.push(2);
+frames.push(3);
+frames.push(4);
+frames.push(5);
+frames.push(6);
+frames.push(7);
+frames.push(8);
+frames.push(9);
+frames.push(10);
+frames.push(11);
+frames.push(12);
+frames.push(13);
+frames.push(14);
+frames.push(15);
+frames.push(16);
+frames.push(17);
+frames.push(18);
+frames.push(19);
+frames.push(20);
+frames.push(21);
+frames.push(22);
+frames.push(23);
+frames.push(24);
+
+var backgroundColor = "#ffffff";
+var originalWidth = 381;
+var originalHeight= 529;
+function nextFrame(ctx,ctrans){
+	var oldframe = frame;
+	frame = (frame+1)%frames.length;
+	if(frame==oldframe){time++;}else{time=0;};
+	drawFrame();
+}
+
+function drawFrame(){
+	ctx.fillStyle = backgroundColor;
+	ctx.fillRect(0,0,canvas.width,canvas.height);
+	ctx.save();
+	ctx.transform(canvas.width/originalWidth,0,0,canvas.height/originalHeight,0,0);
+	sprite179(ctx,ctrans,frames[frame],0,time);
+	ctx.restore();
+}
+
+window.setInterval(function(){nextFrame(ctx,ctrans);},41);
+nextFrame(ctx,ctrans);
+</script>
+</body>
+</html>

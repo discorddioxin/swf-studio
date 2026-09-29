@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><script type="text/javascript" src="canvas.js"></script><style type="text/css">#resizable {position:relative; display:inline-block; margin:0; padding:0;font-size:0px;} #width_size {width:10px; position:absolute; right:-5px; top:0px; bottom:0px; cursor:e-resize;-webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;} #height_size {height:10px; position:absolute; bottom:-5px; left:0px; right:0px; cursor:n-resize;-webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;} #myCanvas {margin:0; padding:0;} </style></head><body>
+
+<div id="resizable"><canvas id="myCanvas" width="363" height="477" style="border:1px solid #c3c3c3;">
+Your browser does not support the HTML5 canvas tag.
+</canvas><div id="width_size">&nbsp;</div><div id="height_size">&nbsp;</div></div>
+
+<script>var canvas=document.getElementById("myCanvas");
+var ctx=canvas.getContext("2d");
+enhanceContext(ctx);
+var ctrans = new cxform(0,0,0,0,255,255,255,255);
+
+var scalingGrids = {};
+var boundRects = {};
+function font173(ctx,ch,textColor){
+	defaultFill = textColor;
+	switch(ch){
+	}
+}
+
+function text190(ctx,ctrans,frame,ratio,time){
+	var textColor = tocolor(ctrans.apply([0,0,0,1]));
+	var textColor = tocolor(ctrans.apply([0,0,0,1]));
+	var textColor = tocolor(ctrans.apply([0,0,0,1]));
+	var textColor = tocolor(ctrans.apply([0,0,0,1]));
+	var textColor = tocolor(ctrans.apply([0,0,0,1]));
+}
+
+function shape191(ctx,ctrans,frame,ratio,time){
+	var pathData="M 2005 -1099 Q 2014 -1090 2014 -1078 2014 -1066 2005 -1057 L 952 -4 2012 1057 Q 2021 1066 2021 1078 L 2012 1099 1150 1962 Q 1141 1971 1129 1971 1117 1971 1108 1962 L 47 901 -1106 2054 Q -1115 2063 -1127 2063 -1139 2063 -1148 2054 L -2011 1191 Q -2020 1182 -2020 1170 -2020 1158 -2011 1149 L -858 -3 -2004 -1149 Q -2013 -1158 -2013 -1170 -2013 -1182 -2004 -1191 L -1141 -2054 Q -1132 -2063 -1120 -2063 -1108 -2063 -1099 -2054 L 47 -908 1100 -1962 Q 1109 -1971 1121 -1971 1133 -1971 1142 -1962 L 2005 -1099 M 47 -836 Q 35 -836 26 -845 L -1120 -1991 -1941 -1170 -795 -24 Q -786 -15 -786 -3 -786 9 -795 18 L -1948 1170 -1127 1991 26 838 Q 35 829 47 829 59 829 68 838 L 1129 1899 1949 1078 889 17 Q 880 8 880 -4 880 -16 889 -25 L 1942 -1078 1121 -1899 68 -845 Q 59 -836 47 -836";
+	ctx.fillStyle=tocolor(ctrans.apply([255,255,255,1]));
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 47 -836 Q 59 -836 68 -845 L 1121 -1899 1942 -1078 889 -25 Q 880 -16 880 -4 880 8 889 17 L 1949 1078 1129 1899 68 838 Q 59 829 47 829 35 829 26 838 L -1127 1991 -1948 1170 -795 18 Q -786 9 -786 -3 -786 -15 -795 -24 L -1941 -1170 -1120 -1991 26 -845 Q 35 -836 47 -836";
+	var grd=ctx.createLinearGradient(-0.75,1990.5,0.75,-1990.5);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([124,50,50,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([249,19,19,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 194 -445 Q 220 -445 241 -425 261 -406 274 -367 286 -328 289 -282 L 291 -121 291 5 289 163 Q 287 210 275 248 262 286 243 307 222 328 194 328 168 328 149 308 128 289 116 250 102 211 100 165 L 98 5 98 -121 100 -280 Q 102 -327 115 -366 127 -404 147 -425 167 -445 194 -445 M 185 -308 Q 181 -296 182 -238 L 182 107 184 187 Q 186 202 194 202 202 202 206 185 L 208 101 208 -238 206 -305 Q 202 -320 195 -320 188 -320 185 -308 M 69 -156 L -14 -156 -14 -223 -16 -304 Q -20 -320 -28 -320 -36 -320 -39 -305 L -41 -235 -41 120 -39 187 Q -36 202 -28 202 -19 202 -15 185 -12 166 -12 115 L -12 26 -29 26 -29 -86 69 -86 69 312 17 312 9 258 Q 0 293 -12 311 -26 328 -43 328 -65 328 -82 304 -101 280 -110 246 L -123 173 -125 58 -125 -162 -120 -316 Q -116 -365 -92 -405 -68 -445 -31 -445 6 -445 30 -410 55 -375 62 -327 69 -280 69 -189 L 69 -156 M 308 -281 L 308 -429 491 -429 491 -281 441 -281 441 312 357 312 357 -281 308 -281 M 726 -429 L 774 312 689 312 684 179 654 179 649 312 563 312 605 -429 726 -429 M 973 -429 L 982 -184 992 97 Q 998 -173 1014 -429 L 1096 -429 1059 312 954 312 Q 940 141 929 -77 L 906 312 802 312 764 -429 846 -429 864 80 Q 868 -115 886 -429 L 973 -429 M 1570 -429 L 1557 130 1496 130 1482 -429 1570 -429 M 1470 -429 L 1409 44 1409 312 1331 312 1331 44 1273 -429 1349 -429 1370 -138 Q 1376 -256 1392 -429 L 1470 -429 M 1253 -429 L 1300 312 1216 312 1211 179 1181 179 1175 312 1090 312 1132 -429 1253 -429 M 1488 163 L 1564 163 1564 312 1488 312 1488 163 M 1209 48 L 1196 -264 Q 1183 -52 1180 48 L 1209 48 M 682 48 L 669 -264 Q 656 -52 653 48 L 682 48 M -1291 -429 L -1291 -164 -1266 -164 -1266 -429 -1182 -429 -1182 312 -1266 312 -1266 1 -1291 1 -1291 312 -1375 312 -1375 -429 -1291 -429 M -1577 -281 L -1577 -429 -1394 -429 -1394 -281 -1444 -281 -1444 312 -1527 312 -1527 -281 -1577 -281 M -1010 -429 L -1010 -281 -1066 -281 -1066 -140 -1013 -140 -1013 1 -1066 1 -1066 163 -1005 163 -1005 312 -1149 312 -1149 -429 -1010 -429 M -545 -445 Q -512 -445 -489 -421 -467 -397 -459 -359 -451 -323 -451 -234 L -451 -205 -530 -205 -530 -260 -532 -309 Q -535 -320 -542 -320 -550 -320 -553 -305 L -558 -262 -553 -206 Q -549 -187 -530 -160 -474 -84 -459 -35 -445 14 -445 123 -445 202 -452 240 -461 277 -484 303 -507 328 -537 328 -571 328 -595 299 -619 269 -626 224 -633 178 -633 95 L -633 46 -556 46 -556 136 Q -556 178 -552 190 -550 202 -541 202 -532 202 -528 187 -525 172 -525 142 -525 77 -532 57 -540 37 -571 -11 L -612 -80 Q -623 -101 -629 -139 -636 -178 -636 -237 -636 -322 -626 -362 -617 -401 -596 -422 -575 -445 -545 -445 M -663 -429 L -663 312 -747 312 -747 -429 -663 -429 M -767 -281 L -825 -281 -825 -140 -773 -140 -773 1 -825 1 -825 312 -909 312 -909 -429 -767 -429 -767 -281 M -227 -429 L -227 312 -311 312 -311 1 -336 1 -336 312 -419 312 -419 -429 -336 -429 -336 -164 -311 -164 -311 -429 -227 -429";
+	var grd=ctx.createLinearGradient(-1484.75,254.5,-1487.25,-372.5);
+	grd.addColorStop(0.0,tocolor(ctrans.apply([0,0,0,1])));
+	grd.addColorStop(0.8274509803921568,tocolor(ctrans.apply([157,157,157,1])));
+	grd.addColorStop(1.0,tocolor(ctrans.apply([30,30,30,1])));
+	ctx.fillStyle = grd;
+	drawPath(ctx,pathData,false);
+	ctx.fill("evenodd");
+	var pathData="M 194 -445 Q 220 -445 241 -425 261 -406 274 -367 286 -328 289 -282 L 291 -121 291 5 289 163 Q 287 210 275 248 262 286 243 307 222 328 194 328 168 328 149 308 128 289 116 250 102 211 100 165 L 98 5 98 -121 100 -280 Q 102 -327 115 -366 127 -404 147 -425 167 -445 194 -445 M 185 -308 Q 181 -296 182 -238 L 182 107 184 187 Q 186 202 194 202 202 202 206 185 L 208 101 208 -238 206 -305 Q 202 -320 195 -320 188 -320 185 -308 M 69 -156 L -14 -156 -14 -223 -16 -304 Q -20 -320 -28 -320 -36 -320 -39 -305 L -41 -235 -41 120 -39 187 Q -36 202 -28 202 -19 202 -15 185 -12 166 -12 115 L -12 26 -29 26 -29 -86 69 -86 69 312 17 312 9 258 Q 0 293 -12 311 -26 328 -43 328 -65 328 -82 304 -101 280 -110 246 L -123 173 -125 58 -125 -162 -120 -316 Q -116 -365 -92 -405 -68 -445 -31 -445 6 -445 30 -410 55 -375 62 -327 69 -280 69 -189 L 69 -156 M 308 -281 L 308 -429 491 -429 491 -281 441 -281 441 312 357 312 357 -281 308 -281 M 726 -429 L 774 312 689 312 684 179 654 179 649 312 563 312 605 -429 726 -429 M 973 -429 L 982 -184 992 97 Q 998 -173 1014 -429 L 1096 -429 1059 312 954 312 Q 940 141 929 -77 L 906 312 802 312 764 -429 846 -429 864 80 Q 868 -115 886 -429 L 973 -429 M 1570 -429 L 1557 130 1496 130 1482 -429 1570 -429 M 1470 -429 L 1409 44 1409 312 1331 312 1331 44 1273 -429 1349 -429 1370 -138 Q 1376 -256 1392 -429 L 1470 -429 M 1253 -429 L 1300 312 1216 312 1211 179 1181 179 1175 312 1090 312 1132 -429 1253 -429 M 1488 163 L 1564 163 1564 312 1488 312 1488 163 M 1209 48 L 1196 -264 Q 1183 -52 1180 48 L 1209 48 M 682 48 L 669 -264 Q 656 -52 653 48 L 682 48 M -1291 -429 L -1291 -164 -1266 -164 -1266 -429 -1182 -429 -1182 312 -1266 312 -1266 1 -1291 1 -1291 312 -1375 312 -1375 -429 -1291 -429 M -1577 -281 L -1577 -429 -1394 -429 -1394 -281 -1444 -281 -1444 312 -1527 312 -1527 -281 -1577 -281 M -1010 -429 L -1010 -281 -1066 -281 -1066 -140 -1013 -140 -1013 1 -1066 1 -1066 163 -1005 163 -1005 312 -1149 312 -1149 -429 -1010 -429 M -545 -445 Q -512 -445 -489 -421 -467 -397 -459 -359 -451 -323 -451 -234 L -451 -205 -530 -205 -530 -260 -532 -309 Q -535 -320 -542 -320 -550 -320 -553 -305 L -558 -262 -553 -206 Q -549 -187 -530 -160 -474 -84 -459 -35 -445 14 -445 123 -445 202 -452 240 -461 277 -484 303 -507 328 -537 328 -571 328 -595 299 -619 269 -626 224 -633 178 -633 95 L -633 46 -556 46 -556 136 Q -556 178 -552 190 -550 202 -541 202 -532 202 -528 187 -525 172 -525 142 -525 77 -532 57 -540 37 -571 -11 L -612 -80 Q -623 -101 -629 -139 -636 -178 -636 -237 -636 -322 -626 -362 -617 -401 -596 -422 -575 -445 -545 -445 M -663 -429 L -663 312 -747 312 -747 -429 -663 -429 M -767 -281 L -825 -281 -825 -140 -773 -140 -773 1 -825 1 -825 312 -909 312 -909 -429 -767 -429 -767 -281 M -227 -429 L -227 312 -311 312 -311 1 -336 1 -336 312 -419 312 -419 -429 -336 -429 -336 -164 -311 -164 -311 -429 -227 -429 Z";
+	var scaleMode = "NORMAL";
+	ctx.strokeStyle=tocolor(ctrans.apply([255,255,255,1]));
+	ctx.lineWidth=1.0;
+	ctx.lineCap="round";
+	ctx.lineJoin="round";
+	drawPath(ctx,pathData,true,scaleMode);
+
+}
+
+function sprite192(ctx,ctrans,frame,ratio,time){
+	ctx.save();
+	ctx.transform(1,0,0,1,63.0,98.7);
+	var clips = [];
+	var frame_cnt = 45;
+	frame = frame % frame_cnt;
+	switch(frame){
+		case 0:
+			place("text190",canvas,ctx,[0.05,0.0,0.0,0.05,97.0,353.95],ctrans,1,0,0,time);
+			break;
+		case 1:
+			break;
+		case 2:
+			break;
+		case 3:
+			break;
+		case 4:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 5:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 6:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 7:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 8:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 9:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 10:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 11:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 12:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 13:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 14:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 15:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 16:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 17:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 18:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 19:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 20:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 21:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 22:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 23:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 24:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 25:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 26:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 27:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 28:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 29:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 30:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 31:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 32:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 33:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans,1,0,0,time);
+			break;
+		case 34:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans.merge(new cxform(0,0,0,0,256,256,256,213)),1,0,0,time);
+			break;
+		case 35:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans.merge(new cxform(0,0,0,0,256,256,256,171)),1,0,0,time);
+			break;
+		case 36:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans.merge(new cxform(0,0,0,0,256,256,256,128)),1,0,0,time);
+			break;
+		case 37:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans.merge(new cxform(0,0,0,0,256,256,256,85)),1,0,0,time);
+			break;
+		case 38:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans.merge(new cxform(0,0,0,0,256,256,256,43)),1,0,0,time);
+			break;
+		case 39:
+			place("shape191",canvas,ctx,[0.05,0.0,0.0,0.05,38.0,4.45],ctrans.merge(new cxform(0,0,0,0,256,256,256,0)),1,0,0,time);
+			break;
+		case 40:
+			break;
+		case 41:
+			break;
+		case 42:
+			break;
+		case 43:
+			break;
+		case 44:
+			break;
+	}
+	ctx.restore();
+}
+
+var frame = -1;
+var time = 0;
+var frames = [];
+frames.push(0);
+frames.push(1);
+frames.push(2);
+frames.push(3);
+frames.push(4);
+frames.push(5);
+frames.push(6);
+frames.push(7);
+frames.push(8);
+frames.push(9);
+frames.push(10);
+frames.push(11);
+frames.push(12);
+frames.push(13);
+frames.push(14);
+frames.push(15);
+frames.push(16);
+frames.push(17);
+frames.push(18);
+frames.push(19);
+frames.push(20);
+frames.push(21);
+frames.push(22);
+frames.push(23);
+frames.push(24);
+frames.push(25);
+frames.push(26);
+frames.push(27);
+frames.push(28);
+frames.push(29);
+frames.push(30);
+frames.push(31);
+frames.push(32);
+frames.push(33);
+frames.push(34);
+frames.push(35);
+frames.push(36);
+frames.push(37);
+frames.push(38);
+frames.push(39);
+frames.push(40);
+frames.push(41);
+frames.push(42);
+frames.push(43);
+frames.push(44);
+
+var backgroundColor = "#ffffff";
+var originalWidth = 363;
+var originalHeight= 477;
+function nextFrame(ctx,ctrans){
+	var oldframe = frame;
+	frame = (frame+1)%frames.length;
+	if(frame==oldframe){time++;}else{time=0;};
+	drawFrame();
+}
+
+function drawFrame(){
+	ctx.fillStyle = backgroundColor;
+	ctx.fillRect(0,0,canvas.width,canvas.height);
+	ctx.save();
+	ctx.transform(canvas.width/originalWidth,0,0,canvas.height/originalHeight,0,0);
+	sprite192(ctx,ctrans,frames[frame],0,time);
+	ctx.restore();
+}
+
+window.setInterval(function(){nextFrame(ctx,ctrans);},41);
+nextFrame(ctx,ctrans);
+</script>
+</body>
+</html>

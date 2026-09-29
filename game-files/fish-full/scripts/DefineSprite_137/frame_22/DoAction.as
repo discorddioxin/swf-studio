@@ -1,0 +1,1 @@
+this.fishIcon.gotoAndStop(whichFishIcon);
