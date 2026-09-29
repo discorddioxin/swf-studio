@@ -318,7 +318,14 @@ export class XML extends XMLNode { constructor(public source?: string) { super()
 export class LoadVars { [key: string]: any; }
 export class LocalConnection { [key: string]: any; }
 export class MovieClipLoader { [key: string]: any; }
-export class ContextMenu { [key: string]: any; }
+export class ContextMenu {
+  [key: string]: any;
+  constructor(onSelect?: unknown) {
+    this.onSelect = onSelect;
+    this.customItems = [];
+    this.builtInItems = { forward_back: true, loop: true, play: true, print: true, quality: true, rewind: true, save: true, zoom: true };
+  }
+}
 export class ContextMenuItem { [key: string]: any; constructor(public caption?: string, public onSelect?: unknown) {} }
 export class NetConnection { [key: string]: any; }
 export class NetStream { [key: string]: any; }
