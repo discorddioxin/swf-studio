@@ -12,6 +12,12 @@ const CATEGORY_BY_DIR: Record<string, AssetCategory> = {
   scripts: 'texts',
 };
 
+/** The path of an uploaded file inside the selection ("folder/name.ext"). */
+export function filePath(file: File): string {
+  const raw = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+  return raw.replace(/\\/g, '/').replace(/^\/+/, '');
+}
+
 /** last integer run in a name — "DefineButton2_23" -> 23, "12" -> 12 */
 export function guessId(name: string): number | undefined {
   const m = name.match(/(\d+)(?!.*\d)/);
@@ -28,7 +34,7 @@ export function ingestFiles(fileList: File[]): AssetBundle {
 
   // Work out the browser-selected root folder when one exists. ZIP entries
   // are normalized below by asset directory, so multiple archives can merge.
-  const rel = (f: File) => (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
+  const rel = filePath;
   const firstRelative = (fileList[0] as (File & { webkitRelativePath?: string }) | undefined)?.webkitRelativePath;
   if (firstRelative?.includes('/')) rootName = firstRelative.split('/')[0];
 
@@ -112,7 +118,7 @@ export interface PackageFiles {
  * exports' shapes/1.svg etc. never collide. The main movie comes first.
  */
 export function splitPackages(fileList: File[]): PackageFiles[] {
-  const rel = (f: File) => ((f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name).replace(/\\/g, '/');
+  const rel = filePath;
   const dirOf = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
   const xmls = fileList.filter((f) => /\.xml$/i.test(f.name));
   if (xmls.length <= 1) return xmls.length ? [{ xmlFile: xmls[0], root: dirOf(rel(xmls[0])), files: fileList }] : [];

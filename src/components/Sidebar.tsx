@@ -190,14 +190,22 @@ export function Sidebar({
 
       <div className="border-b border-zinc-800 p-3">
         <label className="block">
-          <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Loaded SWF</span>
+          <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Main SWF · plays the game</span>
           <select
             className={cn(inputCls, 'py-1.5 text-xs')}
             value={activeSwfIndex}
             onChange={(event) => onSelectSwf(Number(event.target.value))}
+            title="The SWF the Execute workspace plays; every other loaded SWF is handed to it as a dependency"
           >
-            {loadedSwfs.map((swf) => <option key={swf.index} value={swf.index}>{swf.name}</option>)}
+            {loadedSwfs.map((swf) => (
+              <option key={swf.index} value={swf.index}>
+                {swf.name}{swf.index === activeSwfIndex ? '' : ' · dependency'}
+              </option>
+            ))}
           </select>
+          {loadedSwfs.length > 1 && (
+            <span className="mt-1 block text-[10px] text-zinc-600">{loadedSwfs.length - 1} other SWF{loadedSwfs.length === 2 ? '' : 's'} available as dependencies.</span>
+          )}
         </label>
         <button
           onClick={() => onOpenTimeline('root')}
