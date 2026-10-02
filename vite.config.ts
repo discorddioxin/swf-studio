@@ -11,10 +11,19 @@ const __dirname = path.dirname(__filename);
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), viteSingleFile()],
+  // bundled game data (manifest.json + fish-full/swfs/*.swf) ships as-is
+  publicDir: 'game-files',
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
     },
+  },
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    strictPort: true,
+    // accept the Arena preview host (proxied origin) in dev
+    allowedHosts: true,
   },
   test: {
     environment: "node",

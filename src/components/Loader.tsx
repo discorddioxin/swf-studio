@@ -23,8 +23,10 @@ async function readEntry(entry: FSEntry, prefix: string, out: File[]) {
   } while (batch.length);
 }
 
-export function Loader({ onFiles, busy, error }: {
-  onFiles: (files: File[]) => void; busy?: string | null; error?: string | null;
+export function Loader({ onFiles, onBundled, busy, error }: {
+  onFiles: (files: File[]) => void;
+  onBundled?: () => void;
+  busy?: string | null; error?: string | null;
 }) {
   const dirRef = useRef<HTMLInputElement>(null);
   const filesRef = useRef<HTMLInputElement>(null);
@@ -92,10 +94,13 @@ export function Loader({ onFiles, busy, error }: {
               <p className="mt-1 text-xs text-zinc-600">
                 [name].xml · shapes/ · morphshapes/ · images/ · buttons/ · sounds/ · texts/ · fonts/
               </p>
-              <div className="mt-5 flex justify-center gap-2">
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                 <Button variant={queuedFiles.length ? 'default' : 'primary'} onClick={() => dirRef.current?.click()}>＋ Add folder</Button>
                 <Button onClick={() => filesRef.current?.click()}>＋ Add ZIPs</Button>
                 <Button variant={queuedFiles.length ? 'primary' : 'ghost'} disabled={!queuedFiles.length} onClick={() => onFiles(queuedFiles)}>Load {queuedFiles.length ? `${queuedFiles.length} files` : 'selection'}</Button>
+                {onBundled && (
+                  <Button variant="ghost" onClick={onBundled} title="Parse the raw .swf binaries shipped with this repo — no upload needed">Use bundled SWFs</Button>
+                )}
               </div>
             </>
           )}
