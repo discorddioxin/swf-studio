@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
+    "preview": "node server/preview-server.mjs",
+    "preview:stable": "npm run build && npm run preview",
+    "preview:check": "node tools/preview/check.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "as2ts": "node tools/as2ts/as2ts.mjs"

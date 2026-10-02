@@ -348,6 +348,7 @@ export class AssetCache {
   private map = new Map<string, LoadedAsset>();
   private urls: string[] = [];
   private externals = new Map<number, string>();
+  private disposed = false;
   constructor(private bundle: AssetBundle, private onChange: () => void) {}
 
   /** feed JPEXS `_externalFile` hints so matching never relies on guesswork */
@@ -382,9 +383,17 @@ export class AssetCache {
     });
   }
 
-  dispose() { this.urls.forEach((u) => URL.revokeObjectURL(u)); this.urls = []; this.map.clear(); }
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.urls.forEach((u) => URL.revokeObjectURL(u));
+    this.urls = [];
+    this.map.clear();
+    this.externals.clear();
+  }
 
   url(a: AssetFile): string {
+    if (this.disposed) throw new Error('Asset cache has been disposed.');
     const key = 'url:' + a.path;
     const hit = this.map.get(key);
     if (hit?.url) return hit.url;
@@ -396,12 +405,14 @@ export class AssetCache {
 
   /** synchronous object-url for thumbnails / audio players */
   preview(id: number, kind: string): { url: string; ext: string; path: string } | undefined {
+    if (this.disposed) return undefined;
     const a = this.resolve(id, kind);
     if (!a) return undefined;
     return { url: this.url(a), ext: a.ext, path: a.path };
   }
 
   get(id: number, kind: string, bounds?: Rect): LoadedAsset {
+    if (this.disposed) return { status: 'error', error: 'Asset cache has been disposed.' };
     const key = `${id}:${kind}`;
     const hit = this.map.get(key);
     if (hit) return hit;
@@ -416,10 +427,9 @@ export class AssetCache {
     if (a.ext === 'svg') this.loadSvg(key, a, bounds);
     else if (a.ext === 'png' || a.ext === 'jpg' || a.ext === 'jpeg' || a.ext === 'gif') this.loadRaster(key, a, bounds);
     else if (a.ext === 'txt' || a.ext === 'as') {
-      a.file.text().then((t) => {
-        this.map.set(key, { status: 'ready', text: t });
-        this.onChange();
-      });
+      a.file.text()
+        .then((text) => this.finish(key, { status: 'ready', text }))
+        .catch((error) => this.finish(key, { status: 'error', error: String(error) }));
     } else {
       this.map.set(key, { status: 'ready', url: this.url(a) });
     }
@@ -443,11 +453,16 @@ export class AssetCache {
     });
   }
 
-  private finish(key: string, v: LoadedAsset) { this.map.set(key, v); this.onChange(); }
+  private finish(key: string, v: LoadedAsset) {
+    if (this.disposed) return;
+    this.map.set(key, v);
+    this.onChange();
+  }
 
   private async loadSvg(key: string, a: AssetFile, bounds?: Rect) {
     try {
       let text = await a.file.text();
+      if (this.disposed) return;
       text = this.patchSvgResources(text);
       const vb = parseViewBox(text);
       const blob = new Blob([text], { type: 'image/svg+xml' });

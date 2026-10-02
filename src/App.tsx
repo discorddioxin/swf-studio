@@ -11,10 +11,16 @@ import { GameEngine } from './components/GameEngine';
 import { Button } from './components/ui';
 import { AssetCache, expandUploadFiles, hydrateActionScriptSources, ingestFiles, patchButtonAssetIds, splitPackages, type SwfPackage } from './lib/assets';
 import { parseSwfXml } from './lib/parser';
+import { fetchBundledManifest, fetchBundledSwf } from './lib/bundled';
 import { useProject } from './lib/project';
 import type { AssetBundle, FlattenedSprite, SwfDocument } from './types';
 import { flattenSpriteToPng } from './lib/render';
 import { cn } from './utils/cn';
+
+function disposeFlattenedSprites(sprites: Set<FlattenedSprite>) {
+  sprites.forEach((sprite) => sprite.frames.forEach((frame) => URL.revokeObjectURL(frame.url)));
+  sprites.clear();
+}
 
 type Workspace = 'workbench' | 'engine' | 'code' | 'execute';
 const WORKSPACE_LABEL: Record<Workspace, string> = {
@@ -58,6 +64,8 @@ export default function App() {
   const cacheRef = useRef<AssetCache | null>(null);
   /** every loaded FFDec export (index = loadedDocs index); [0] is the main movie */
   const [packages, setPackages] = useState<SwfPackage[]>([]);
+  const externalPackages = useMemo(() => packages.filter((_, i) => i !== activeSwfIndex), [packages, activeSwfIndex]);
+  useEffect(() => () => { packages.forEach((p) => p.cache.dispose()); }, [packages]);
 
   const [timelineId, setTimelineId] = useState('root');
   const [frame, setFrame] = useState(0);
@@ -69,6 +77,12 @@ export default function App() {
   const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
   const [flattenedSprites, setFlattenedSprites] = useState<FlattenedSprite[]>([]);
   const [flatteningId, setFlatteningId] = useState<number | null>(null);
+  const flattenRequestRef = useRef<AbortController | null>(null);
+  const flattenedResourcesRef = useRef(new Set<FlattenedSprite>());
+  useEffect(() => () => {
+    flattenRequestRef.current?.abort();
+    disposeFlattenedSprites(flattenedResourcesRef.current);
+  }, []);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [audio, setAudio] = useState(false);
   const [startFrame, setStartFrame] = useState(1);
@@ -79,9 +93,69 @@ export default function App() {
 
   const api = useProject(doc?.header.fileName ?? '');
 
+  /** bundle + cache one parsed document into a SwfPackage (shared by uploads and bundled SWFs) */
+  const buildPackage = useCallback(async (files: File[], parsedDoc: SwfDocument): Promise<SwfPackage> => {
+    const bundle = ingestFiles(files);
+    patchButtonAssetIds(bundle, parsedDoc);
+    await hydrateActionScriptSources(parsedDoc, bundle);
+    const pkgCache = new AssetCache(bundle, () => setTick((t) => t + 1));
+    pkgCache.useExternals(parsedDoc.characters.values());
+    return { doc: parsedDoc, bundle, cache: pkgCache };
+  }, []);
+
+  const installPackages = useCallback((loaded: SwfPackage[]) => {
+    const parsed = loaded[0]?.doc;
+    if (!parsed) throw new Error('No readable SWF packages to open.');
+    setPackages(loaded);
+    cacheRef.current = loaded[0].cache;
+    setAssets(loaded[0].bundle);
+    setLoadedDocs(loaded.map((p) => p.doc));
+    setActiveSwfIndex(0);
+    setDoc(parsed);
+    flattenRequestRef.current?.abort();
+    disposeFlattenedSprites(flattenedResourcesRef.current);
+    setFlattenedSprites([]);
+    setFlatteningId(null);
+    setFps(parsed.header.frameRate);
+    setTimelineId('root');
+    setFrame(0);
+    setSelectedId(null);
+    setSelectedPath(undefined);
+    setBusy(null);
+  }, []);
+
+  /** Names already loaded (basename of the document, without .xml/.swf). */
+  const packageLabels = useCallback((loaded: SwfPackage[]) => new Set(
+    loaded.map((p) => (p.bundle.xmlName || p.doc.header.fileName || '')
+      .replace(/\.(xml|swf)$/i, '')
+      .toLowerCase()),
+  ), []);
+
+  /** Fill in any of the bundled SWFs the current load does not already contain
+   *  (the game's externals). Fails soft: no manifest / offline dev server ⇒
+   *  the upload alone is used unchanged. */
+  const mergeBundledExternals = useCallback(async (loaded: SwfPackage[]): Promise<SwfPackage[]> => {
+    const merged = [...loaded];
+    try {
+      const entries = await fetchBundledManifest();
+      const have = packageLabels(loaded);
+      for (const entry of entries) {
+        if (have.has(entry.name.toLowerCase())) continue;
+        const { doc, files } = await fetchBundledSwf(entry);
+        merged.push(await buildPackage(files, doc));
+      }
+      return merged;
+    } catch (e) {
+      merged.slice(loaded.length).forEach((p) => p.cache.dispose());
+      console.warn('bundled externals unavailable:', e);
+      return loaded;
+    }
+  }, [buildPackage, packageLabels]);
+
   const load = useCallback(async (files: File[]) => {
     setError(null);
     setBusy('Indexing files…');
+    const loaded: SwfPackage[] = [];
     try {
       const hasArchives = files.some((file) => /\.zip$/i.test(file.name));
       if (hasArchives) setBusy('Unpacking ZIP archives…');
@@ -91,40 +165,43 @@ export default function App() {
       const parts = splitPackages(expandedFiles);
       if (!parts.length) throw new Error('No .xml file found in that folder — expected the JPEXS dump at its root.');
       await new Promise((r) => setTimeout(r, 30));
-      const loaded: SwfPackage[] = [];
       for (const part of parts) {
         setBusy(`Parsing ${part.xmlFile.name}${parts.length > 1 ? ` (${loaded.length + 1}/${parts.length})` : ''}…`);
-        const bundle = ingestFiles(part.files);
         const parsedDoc = parseSwfXml(await part.xmlFile.text(), { fileName: part.xmlFile.name });
-        patchButtonAssetIds(bundle, parsedDoc);
-        await hydrateActionScriptSources(parsedDoc, bundle);
-        const pkgCache = new AssetCache(bundle, () => setTick((t) => t + 1));
-        pkgCache.useExternals(parsedDoc.characters.values());
-        loaded.push({ doc: parsedDoc, bundle, cache: pkgCache });
+        loaded.push(await buildPackage(part.files, parsedDoc));
       }
-      const parsed = loaded[0]?.doc;
-      if (!parsed) throw new Error('No readable .xml SWF files found in the selected uploads.');
-      setPackages((previous) => { previous.forEach((p) => p.cache.dispose()); return loaded; });
-      cacheRef.current = loaded[0].cache;
-      setAssets(loaded[0].bundle);
-      setLoadedDocs(loaded.map((p) => p.doc));
-      setActiveSwfIndex(0);
-      setDoc(parsed);
-      setFlattenedSprites((previous) => {
-        previous.forEach((sprite) => sprite.frames.forEach((frameAsset) => URL.revokeObjectURL(frameAsset.url)));
-        return [];
-      });
-      setFps(parsed.header.frameRate);
-      setTimelineId('root');
-      setFrame(0);
-      setSelectedId(null);
-      setSelectedPath(undefined);
-      setBusy(null);
+      if (!loaded.length) throw new Error('No readable .xml SWF files found in the selected uploads.');
+      setBusy('Merging bundled externals…');
+      installPackages(await mergeBundledExternals(loaded));
     } catch (e) {
+      loaded.forEach((p) => p.cache.dispose());
       setBusy(null);
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, []);
+  }, [buildPackage, installPackages, mergeBundledExternals]);
+
+  /** The Loader's "Use bundled SWFs" button: parse the raw .swf binaries that
+   *  ship with the repo (no main movie is bundled — everything degrades to the
+   *  six externals). */
+  const loadBundled = useCallback(async () => {
+    setError(null);
+    setBusy('Fetching bundled SWF manifest…');
+    const loaded: SwfPackage[] = [];
+    try {
+      const entries = await fetchBundledManifest();
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        setBusy(`Loading bundled SWF ${i + 1}/${entries.length}: ${entry.name}…`);
+        const { doc, files } = await fetchBundledSwf(entry);
+        loaded.push(await buildPackage(files, doc));
+      }
+      installPackages(loaded);
+    } catch (e) {
+      loaded.forEach((p) => p.cache.dispose());
+      setBusy(null);
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [buildPackage, installPackages]);
 
   const timeline = useMemo(() => {
     if (!doc) return null;
@@ -258,23 +335,31 @@ export default function App() {
     const character = doc.characters.get(characterId);
     const timeline = character?.timelineId ? doc.timelines.get(character.timelineId) : undefined;
     if (!timeline || timeline.kind !== 'sprite') return;
+    flattenRequestRef.current?.abort();
+    const controller = new AbortController();
+    flattenRequestRef.current = controller;
     setFlatteningId(characterId);
     try {
-      const result = await flattenSpriteToPng(doc, cacheRef.current, timeline);
+      const result = await flattenSpriteToPng(doc, cacheRef.current, timeline, controller.signal);
+      flattenedResourcesRef.current.add(result);
       setFlattenedSprites((previous) => {
         const old = previous.find((sprite) => sprite.timelineId === result.timelineId);
         old?.frames.forEach((frameAsset) => URL.revokeObjectURL(frameAsset.url));
+        if (old) flattenedResourcesRef.current.delete(old);
         return [...previous.filter((sprite) => sprite.timelineId !== result.timelineId), result];
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setFlatteningId(null);
+      if (flattenRequestRef.current === controller) {
+        flattenRequestRef.current = null;
+        if (!controller.signal.aborted) setFlatteningId(null);
+      }
     }
   }, [doc]);
 
   if (!doc || !timeline || !cacheRef.current) {
-    return <Loader onFiles={load} busy={busy} error={error} />;
+    return <Loader onFiles={load} onBundled={loadBundled} busy={busy} error={error} />;
   }
 
   const cache = cacheRef.current;
@@ -353,8 +438,8 @@ export default function App() {
           )}
           <Button variant="ghost" className="px-2 py-1 text-[10px]" onClick={() => {
             packages.forEach((p) => p.cache.dispose()); setPackages([]); cacheRef.current = null;
-            flattenedSprites.forEach((sprite) => sprite.frames.forEach((frameAsset) => URL.revokeObjectURL(frameAsset.url)));
-            setFlattenedSprites([]); setLoadedDocs([]); setActiveSwfIndex(0); setDoc(null); setAssets(null);
+            flattenRequestRef.current?.abort(); disposeFlattenedSprites(flattenedResourcesRef.current);
+            setFlatteningId(null); setFlattenedSprites([]); setLoadedDocs([]); setActiveSwfIndex(0); setDoc(null); setAssets(null);
           }}>
             New folder
           </Button>
@@ -363,7 +448,7 @@ export default function App() {
 
       <ErrorBoundary label={WORKSPACE_LABEL[workspace]} resetKeys={[doc, workspace]} className="flex min-h-0 flex-1 items-center justify-center p-4">
       {workspace === 'execute' ? (
-        <ExecuteTab doc={doc} cache={cache} assets={assets} externals={packages.filter((_, i) => i !== activeSwfIndex)} />
+        <ExecuteTab doc={doc} cache={cache} assets={assets} externals={externalPackages} />
       ) : workspace === 'engine' ? (
         <GameEngine
           doc={doc}

@@ -12,6 +12,7 @@ import { AS2Player, type Movie } from '../engine/as2/player';
 import { createExternalResolver, swfNameOf, type ExternalSwf } from '../engine/as2/externals';
 import { buildAS2Program, type AS2Build } from '../engine/as2/program';
 import { AS2AudioBackend, embeddedFontFamily, registerFonts, soundFilesOf } from '../engine/as2/audio';
+import { gsiStubFetchText } from '../lib/gsiStub';
 
 const MAX_LOG = 500;
 const BOOT_KEY = 'swf-studio.as2.boot';
@@ -77,15 +78,17 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
         setBuild({ status: 'ready', build: buildAS2Program(sources), sourceCount: sources.length });
       })
       .catch((e) => { if (!cancelled) setBuild({ status: 'failed', error: e instanceof Error ? e.message : String(e) }); });
-    registerFonts(assets?.files ?? []).then((ids) => { if (!cancelled) setFontIds(ids); });
-    return () => { cancelled = true; };
+    const fontsController = new AbortController();
+    registerFonts(assets?.files ?? [], undefined, fontsController.signal).then((ids) => { if (!cancelled) setFontIds(ids); });
+    return () => { cancelled = true; fontsController.abort(); };
   }, [assets]);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all(extEntries.map(async (e) => [e.key, await registerFonts(e.pkg.bundle.files, e.key)] as const))
+    const fontsController = new AbortController();
+    Promise.all(extEntries.map(async (e) => [e.key, await registerFonts(e.pkg.bundle.files, e.key, fontsController.signal)] as const))
       .then((pairs) => { if (!cancelled) setExtFontIds(new Map(pairs)); });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; fontsController.abort(); };
   }, [extEntries]);
 
   // Embedded fonts: by character id in the movie that uses it; by name in the calling movie,
@@ -152,6 +155,10 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
         pendingLogs.current.push(entry);
         if (entry.level === 'error') console.error('[game]', entry.message, entry.detail ?? '');
       },
+      // Offline GSI stub: the game's inventory/room/score requests against
+      // gaiaonline.com are answered locally (25× every bait, all rods).
+      fetchText: (url, method, body) =>
+        gsiStubFetchText(url, method, body, (level, message, detail) => player.log(level, message, detail ?? '')),
       afterStart: bootCode ? (root, p) => {
         p.log('info', 'running boot script');
         new Function('_root', 'player', bootCode)(root, p);

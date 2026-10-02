@@ -9,6 +9,7 @@ export class AS2AudioBackend implements AudioBackend {
   private readonly html: HtmlAudioBackend;
   private readonly decoded = new Map<number, Promise<string | null>>();
   private readonly urls: string[] = [];
+  private disposed = false;
   muted = false;
 
   constructor(assets: AssetSource | null, private readonly soundFiles: Map<number, File>) {
@@ -16,7 +17,7 @@ export class AS2AudioBackend implements AudioBackend {
   }
 
   play(characterId: number | null, url: string | null, startMs: number, loops: number, volume: number): AudioHandle | null {
-    if (this.muted) return null;
+    if (this.disposed || this.muted) return null;
     if (url || characterId == null) return this.html.play(null, url, startMs, loops, volume);
     const file = this.soundFiles.get(characterId);
     if (!file || !/\.flv$/i.test(file.name)) {
@@ -34,7 +35,7 @@ export class AS2AudioBackend implements AudioBackend {
       setVolume(v) { vol = v; real?.setVolume(v); },
     };
     this.wav(characterId, file).then((wavUrl) => {
-      if (stopped || !wavUrl) { if (!wavUrl) handle.onended?.(); return; }
+      if (this.disposed || stopped || !wavUrl) { if (!wavUrl) handle.onended?.(); return; }
       real = this.html.play(null, wavUrl, startMs, loops, vol);
       if (real) real.onended = () => handle.onended?.();
       else handle.onended?.();
@@ -44,16 +45,18 @@ export class AS2AudioBackend implements AudioBackend {
 
   private fileUrls = new Map<File, string>();
   private urlFor(file: File): string | null {
-    if (typeof URL === 'undefined' || !URL.createObjectURL) return null;
+    if (this.disposed || typeof URL === 'undefined' || !URL.createObjectURL) return null;
     let u = this.fileUrls.get(file);
     if (!u) { u = URL.createObjectURL(file); this.fileUrls.set(file, u); this.urls.push(u); }
     return u;
   }
 
   private wav(id: number, file: File): Promise<string | null> {
+    if (this.disposed) return Promise.resolve(null);
     let p = this.decoded.get(id);
     if (!p) {
       p = file.arrayBuffer().then((buf) => {
+        if (this.disposed) return null;
         const pcm = decodeFlvAudio(buf);
         if (!pcm) return null;
         const u = URL.createObjectURL(new Blob([encodeWav(pcm)], { type: 'audio/wav' }));
@@ -66,8 +69,12 @@ export class AS2AudioBackend implements AudioBackend {
   }
 
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     for (const u of this.urls) URL.revokeObjectURL(u);
     this.urls.length = 0;
+    this.decoded.clear();
+    this.fileUrls.clear();
   }
 }
 
@@ -85,16 +92,28 @@ export function soundFilesOf(files: { path: string; file: File }[]): Map<number,
 export const embeddedFontFamily = (id: number, key?: string) => (key ? `swf-font-${key}-${id}` : `swf-font-${id}`);
 
 /** fonts/<id>_<name>.ttf → FontFace embeddedFontFamily(id, key) (best effort; returns the registered ids). */
-export async function registerFonts(files: { path: string; file: File }[], key?: string): Promise<Set<number>> {
+export async function registerFonts(files: { path: string; file: File }[], key?: string, signal?: AbortSignal): Promise<Set<number>> {
   const done = new Set<number>();
-  if (typeof FontFace === 'undefined' || typeof document === 'undefined' || !document.fonts) return done;
+  if (signal?.aborted || typeof FontFace === 'undefined' || typeof document === 'undefined' || !document.fonts) return done;
+  const fonts = document.fonts;
+  const faces: FontFace[] = [];
+  // A registration belongs to its mounted Execute session, including fonts
+  // whose asynchronous read/load finishes after that session is gone.
+  signal?.addEventListener('abort', () => {
+    for (const face of faces) fonts.delete(face);
+    faces.length = 0;
+  }, { once: true });
   await Promise.all(files.map(async (f) => {
     const m = /(?:^|\/)fonts\/(\d+)_[^/]*\.(ttf|otf|woff2?)$/i.exec(f.path);
     if (!m) return;
     try {
-      const face = new FontFace(embeddedFontFamily(Number(m[1]), key), await f.file.arrayBuffer());
+      const bytes = await f.file.arrayBuffer();
+      if (signal?.aborted) return;
+      const face = new FontFace(embeddedFontFamily(Number(m[1]), key), bytes);
       await face.load();
-      document.fonts.add(face);
+      if (signal?.aborted) return;
+      fonts.add(face);
+      faces.push(face);
       done.add(Number(m[1]));
     } catch { /* unusable font file: fall back to the system font of the same name */ }
   }));

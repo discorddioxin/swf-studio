@@ -91,48 +91,56 @@ async function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
  * display list is still traversed by depth, and nested sprite transforms remain
  * in TWIPS until the final canvas draw. */
 export async function flattenSpriteToPng(
-  doc: SwfDocument, cache: AssetCache, timeline: Timeline,
+  doc: SwfDocument, cache: AssetCache, timeline: Timeline, signal?: AbortSignal,
 ): Promise<FlattenedSprite> {
   const frames: FlattenedFrame[] = [];
-  for (let frame = 0; frame < timeline.frameCount; frame++) {
-    const flat = flatten(doc, timeline, frame);
-    const leaves = flat.filter((item) => {
-      const ch = doc.characters.get(item.item.characterId);
-      return !!item.bounds && !!ch && ch.kind !== 'sprite' && ch.kind !== 'button' && ch.kind !== 'sound' && ch.kind !== 'font' && ch.kind !== 'binary';
-    });
-    await Promise.all(leaves.map((item) => {
-      const ch = doc.characters.get(item.item.characterId)!;
-      return cache.waitFor(ch.id, ch.kind, ch.bounds);
-    }));
+  try {
+    for (let frame = 0; frame < timeline.frameCount; frame++) {
+      signal?.throwIfAborted();
+      const flat = flatten(doc, timeline, frame);
+      const leaves = flat.filter((item) => {
+        const ch = doc.characters.get(item.item.characterId);
+        return !!item.bounds && !!ch && ch.kind !== 'sprite' && ch.kind !== 'button' && ch.kind !== 'sound' && ch.kind !== 'font' && ch.kind !== 'binary';
+      });
+      await Promise.all(leaves.map((item) => {
+        const ch = doc.characters.get(item.item.characterId)!;
+        return cache.waitFor(ch.id, ch.kind, ch.bounds);
+      }));
 
-    const bounds = frameBounds(flat);
-    const padding = 2 * TWIPS;
-    const width = Math.max(1, Math.ceil((bounds.xMax - bounds.xMin + padding * 2) / TWIPS));
-    const height = Math.max(1, Math.ceil((bounds.yMax - bounds.yMin + padding * 2) / TWIPS));
-    const canvas = document.createElement('canvas');
-    canvas.width = width; canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Canvas 2D rendering is unavailable');
-    ctx.imageSmoothingQuality = 'high';
-    ctx.scale(1 / TWIPS, 1 / TWIPS);
-    ctx.translate(-bounds.xMin + padding, -bounds.yMin + padding);
-    drawTimeline(ctx, {
-      doc, cache, timeline, frame,
-      view: { zoom: 1, panX: 0, panY: 0 },
-      showOutlines: false, showMasks: true, background: 'transparent',
-    }, timeline, frame, undefined, 0);
-    const blob = await canvasBlob(canvas);
-    const path = `flattened/${timeline.id.replace(/[^A-Za-z0-9:_-]/g, '_')}/frame_${String(frame + 1).padStart(4, '0')}.png`;
-    frames.push({ id: `${timeline.id}:flattened:${frame}`, frame, width, height, path, blob, url: URL.createObjectURL(blob) });
+      signal?.throwIfAborted();
+      const bounds = frameBounds(flat);
+      const padding = 2 * TWIPS;
+      const width = Math.max(1, Math.ceil((bounds.xMax - bounds.xMin + padding * 2) / TWIPS));
+      const height = Math.max(1, Math.ceil((bounds.yMax - bounds.yMin + padding * 2) / TWIPS));
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas 2D rendering is unavailable');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.scale(1 / TWIPS, 1 / TWIPS);
+      ctx.translate(-bounds.xMin + padding, -bounds.yMin + padding);
+      drawTimeline(ctx, {
+        doc, cache, timeline, frame,
+        view: { zoom: 1, panX: 0, panY: 0 },
+        showOutlines: false, showMasks: true, background: 'transparent',
+      }, timeline, frame, undefined, 0);
+      const blob = await canvasBlob(canvas);
+      signal?.throwIfAborted();
+      const path = `flattened/${timeline.id.replace(/[^A-Za-z0-9:_-]/g, '_')}/frame_${String(frame + 1).padStart(4, '0')}.png`;
+      frames.push({ id: `${timeline.id}:flattened:${frame}`, frame, width, height, path, blob, url: URL.createObjectURL(blob) });
+    }
+    return {
+      id: `flattened:${timeline.id}`,
+      characterId: timeline.characterId ?? -1,
+      timelineId: timeline.id,
+      name: timeline.name,
+      frameCount: timeline.frameCount,
+      frames,
+    };
+  } catch (error) {
+    frames.forEach((frame) => URL.revokeObjectURL(frame.url));
+    throw error;
   }
-  return {
-    id: `flattened:${timeline.id}`,
-    characterId: timeline.characterId ?? -1,
-    timelineId: timeline.id,
-    name: timeline.name,
-    frameCount: timeline.frameCount,
-    frames,
-  };
 }
 
 export function transformRect(m: Matrix, r: Rect): Rect {

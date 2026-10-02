@@ -216,7 +216,7 @@ export function kindOfTag(type: string): CharacterKind | null {
 const PLACE_RE = /^PlaceObject(2|3|4)?Tag$/;
 const REMOVE_RE = /^RemoveObject(2)?Tag$/;
 
-function classify(type: string): EventKind {
+export function classify(type: string): EventKind {
   if (/^(DoAction|DoInitAction|DoABC|RawABC|DefineButtonCxform)/.test(type)) return 'action';
   if (/^(StartSound|SoundStreamHead|SoundStreamBlock|DefineSound)/.test(type)) return 'sound';
   if (/^FrameLabel/.test(type)) return 'label';
@@ -233,7 +233,7 @@ export function isSpecialTag(type: string): boolean {
     type !== 'JPEGTablesTag';
 }
 
-interface DecodedActionBytes {
+export interface DecodedActionBytes {
   source: string;
   listing: string[];
 }
@@ -297,7 +297,7 @@ function popExpr(stack: string[], fallback = 'undefined') {
 /** Decode the SWF ActionRecord stream when JPEXS did not export a .as file.
  * This is intentionally source-oriented, while the listing preserves offsets
  * and raw opcodes for anything that cannot be safely reconstructed. */
-function decodeActionBytes(raw: string): DecodedActionBytes {
+export function decodeActionBytes(raw: string): DecodedActionBytes {
   const bytes = cleanHex(raw);
   const stack: string[] = [];
   const source: string[] = [];
@@ -523,7 +523,7 @@ function actionDetail(el: Element): string {
   return code.map((line) => '  ' + line).join('\n');
 }
 
-function actionFileCandidates(characterId: number | undefined, frameIndex: number, tagType: string): string[] {
+export function actionFileCandidates(characterId: number | undefined, frameIndex: number, tagType: string): string[] {
   const frame = frameIndex + 1;
   const names = tagType.includes('Init')
     ? ['DoInitAction.as', 'DoAction.as']
