@@ -186,13 +186,22 @@ class Parser {
   }
 }
 
+// Attribute names that carry a tag's *own* character id, in priority order.
+// FFDec spells the font tags' id `fontID` (DefineFont2/3, AlignZones) but
+// `fontId` (DefineFontName). In DefineEditText `fontId` references the font the
+// field uses, so it must not be read as the field's own id — charIdOf skips it
+// for that tag (it made text fields collide with the font of the same number).
 const ID_ATTRS = [
-  'spriteId', 'shapeId', 'buttonId', 'fontId', 'soundId', 'videoId', 'imageId',
+  'spriteId', 'shapeId', 'buttonId', 'fontID', 'fontId', 'soundId', 'videoId', 'imageId',
   'textId', 'characterID', 'characterId', 'binaryDataId', 'tagID', 'id',
 ];
 
 function charIdOf(el: Element): number | undefined {
+  // DefineEditText is the one tag whose `fontId` is a *reference*; for it the
+  // character id is characterID/characterId, so that name is skipped here.
+  const isEditText = /^DefineEditText/.test(el.getAttribute('type') ?? '');
   for (const k of ID_ATTRS) {
+    if (k === 'fontId' && isEditText) continue;
     const v = el.getAttribute(k);
     if (v != null && v !== '' && Number.isFinite(Number(v))) return Number(v);
   }

@@ -951,21 +951,29 @@ export async function parseSwfBinary(
           }
           case 37: {
             const et = parseEditText(tag);
-            // FFDec's XML exposes both characterID and fontId, and the XML
-            // parser's charIdOf() checks fontId first — register EditTexts
-            // under the same id so both paths build identical character maps.
-            const key = et.attrs.fontId != null ? Number(et.attrs.fontId) : et.id;
-            addChar(key, type, 'edittext', { bounds: et.bounds, attrs: et.attrs });
+            // DefineEditText's own id is characterID; `fontId` is only the font it
+            // references. Registering it under the font id (as an earlier revision did,
+            // to match parseSwfXml's fontId-first charIdOf) collided with the font
+            // character and left the text field without a node. The XML parser now looks
+            // at characterID first, so both paths agree on the real id.
+            addChar(et.id, type, 'edittext', { bounds: et.bounds, attrs: et.attrs });
             pendingEditIds.push({ id: et.charId, text: et.initialText });
             break;
           }
           case 10: case 48: case 75: {
             if (tag.type === 10) break; // DefineFont (legacy) — skip parse
-            // parse/validate only: parseSwfXml's charIdOf reads only
-            // characterId/id attrs, so fontID-tagged fonts never become
-            // characters there. Mirroring keeps the character-id layout
-            // identical; fonts still reach the player via FontName/ttf.
-            parseFont23(tag);
+            // DefineFont2/3 carry the glyph→character-code table. Static text
+            // (DefineText) stores only glyph indices, so without this table every
+            // text character in the movie renders blank. FFDec's XML export keeps
+            // the table on the same character (`fontId` is in ID_ATTRS, and
+            // parseSwfXml's character for DefineFont*Tag attaches <codeTable>), so
+            // the binary path must register the character the same way.
+            const info = parseFont23(tag);
+            // an absent/empty table stays absent, like parseSwfXml's `<codeTable>` check
+            addChar(info.id, type, 'font', {
+              ...(info.codeTable.length ? { codeTable: info.codeTable } : {}),
+              attrs: info.attrs,
+            });
             break;
           }
           case 73: { // DefineFontAlignZones
@@ -1329,18 +1337,14 @@ function countTags(tags: RawTag[]): number {
 
 function charIdFromTag(tag: RawTag, _characters: Map<number, SwfCharacter>): number | undefined {
   void _characters;
-  // mirrors parseSwfXml's charIdOf(): only specific attr names count — e.g.
-  // DefineFont2/3 + AlignZones export fontID (capital D) which charIdOf misses
+  // mirrors parseSwfXml's charIdOf(): the same attribute names count, so the two
+  // parsers report the same ids for the same tags. `fontID` is a char id (the font's);
+  // `fontId` is not (in DefineEditText it references the font the field uses).
   switch (tag.type) {
     case 8: return undefined;   // JPEGTables
-    case 48: case 75: case 73: return undefined; // fontID — not in ID_ATTRS
+    case 48: case 75: case 73: return new BitReader(tag.data).u16(); // fontID
     case 74: return undefined;  // CSMTextSettings — textID is not a char id
-    case 37: {
-      // charIdOf() walks ID_ATTRS in order and fontId precedes characterID, so
-      // an EditText with a font is registered/reported under its fontId.
-      const et = parseEditText(tag);
-      return et.attrs.fontId != null ? Number(et.attrs.fontId) : et.id;
-    }
+    case 37: return parseEditText(tag).id;
     default:
       try { return new BitReader(tag.data).u16(); } catch { return undefined; }
   }

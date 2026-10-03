@@ -113,20 +113,32 @@ const dumpCode = (code, indent = '') => {
       let e = 0; while (e < payload.length && payload[e] !== 0) e++;
       extra = Buffer.from(payload.subarray(0, e)).toString('latin1');
     } else if (op === 0x8e || op === 0x9b) {
+      // ActionDefineFunction2 payload order is: Name, NumParams, RegisterCount,
+      // Flags (UI16), ParamList (Register + Name per param), CodeLength, Body.
+      // ActionDefineFunction (0x9b) has no RegisterCount/Flags/param registers:
+      // Name, NumParams, ParamList (Name only), CodeLength, Body.
       let e = 0; while (e < payload.length && payload[e] !== 0) e++;
       const name = Buffer.from(payload.subarray(0, e)).toString('latin1');
-      const argcReg = payload[e + 1] | (payload[e + 2] << 8);
-      const argc = argcReg & 0x7f;
-      const nRegs = argcReg >> 7;
-      const params = [];
+      const argc = payload[e + 1] | (payload[e + 2] << 8);
       let q = e + 3;
-      for (let i = 0; i < argc; i++) { params.push(`reg${payload[q]}=${Buffer.from(payload.subarray(q + 1, payload.subarray(q + 1).indexOf(0) + q + 1)).toString('latin1')}`); q += payload.subarray(q + 1).indexOf(0) + 2; }
-      const flags = payload[q] | (payload[q + 1] << 8);
-      extra = `${name}(${params.join(', ')}) regs=${nRegs} flags=${flags.toString(16)}`;
-      const bodyAt = q + 2;
-      const bodyLen = payload[bodyAt] | (payload[bodyAt + 1] << 8);
+      let nRegs = 0; let flags = 0;
+      if (op === 0x8e) {
+        nRegs = payload[q] ?? 0; q += 1;
+        flags = payload[q] | (payload[q + 1] << 8); q += 2;
+      }
+      const params = [];
+      for (let i = 0; i < argc; i++) {
+        let reg = 0;
+        if (op === 0x8e) { reg = payload[q] ?? 0; q += 1; }
+        let z = q; while (z < payload.length && payload[z] !== 0) z++;
+        const pname = Buffer.from(payload.subarray(q, z)).toString('latin1');
+        q = z + 1;
+        params.push(op === 0x8e ? `reg${reg}=${pname}` : pname);
+      }
+      extra = `${name}(${params.join(', ')}) regs=${nRegs} flags=0x${flags.toString(16)}`;
+      const bodyLen = payload[q] | (payload[q + 1] << 8);
       extra += ` body=${bodyLen}B`;
-      pendingBody = payload.subarray(bodyAt + 2, bodyAt + 2 + bodyLen);
+      pendingBody = payload.subarray(q + 2, q + 2 + bodyLen);
     } else if (op === 0x52 || op === 0x40) {
       const argc = payload[0] | (payload[1] << 8);
       extra = `argc=${argc}`;

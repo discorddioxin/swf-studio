@@ -275,10 +275,15 @@ function protoOf(v: any): any {
   try { return Object.getPrototypeOf(Object(v)); } catch { return null; }
 }
 
-/** `obj[name]` plus the object the member was found on (the AS2 "home object"). */
+/** `obj[name]` plus the object the member was found on (the AS2 "home object").
+ *  The walk tests *own* properties (Ruffle's `proto.lookup`): `name in o` would stop at
+ *  the instance for every inherited method, and `super.x()` would then find the very
+ *  prototype that is running instead of the one above it. */
 function findMember(start: any, name: string): { owner: any; value: any } | undefined {
   for (let o = start; o !== null && o !== undefined; o = protoOf(o)) {
-    try { if (name in Object(o)) return { owner: o, value: (o as any)[name] }; } catch { /* ignore */ }
+    try {
+      if (Object.prototype.hasOwnProperty.call(Object(o), name)) return { owner: o, value: (o as any)[name] };
+    } catch { /* ignore */ }
   }
   return undefined;
 }
@@ -471,10 +476,16 @@ function callDef(def: Avm1Def, thisArg: any, args: any[], construct = false, own
   if (def.flags & F_PRELOAD_THIS) frame.registers[reg++] = suppressed ? undefined : thisArg;
   if (def.flags & F_PRELOAD_ARGUMENTS) frame.registers[reg++] = makeArguments(args, def.fn ?? null);
   else if (!(def.flags & F_SUPPRESS_ARGUMENTS) && !construct) setProp(localScope.obj, 'arguments', makeArguments(args, def.fn ?? null));
+  // Ruffle `load_super`: the super object wraps the `this` the function was *called*
+  // with — not the scope's target clip. Functions that preload `super` usually also
+  // set SuppressThis (`function invalidate() { super.invalidate(); }` compiles to
+  // flags 0x1a), so using frame.thisVal here would bind the movie clip instead of the
+  // instance and every `this.x = …` inside the superclass method would land on it.
+  const superThis = thisArg === undefined || thisArg === null ? undefined : thisArg;
   if (def.flags & F_PRELOAD_SUPER) {
-    frame.registers[reg++] = (def.flags & F_SUPPRESS_SUPER) ? undefined : makeSuper(frame.thisVal, owner);
+    frame.registers[reg++] = (def.flags & F_SUPPRESS_SUPER) ? undefined : makeSuper(superThis, owner);
   } else if (!(def.flags & F_SUPPRESS_SUPER)) {
-    const sup = makeSuper(frame.thisVal, owner);
+    const sup = makeSuper(superThis, owner);
     if (sup !== undefined) setProp(localScope.obj, 'super', sup);
   }
   if (def.flags & F_PRELOAD_ROOT) frame.registers[reg++] = rootOf(def.baseClip);
@@ -565,8 +576,12 @@ function callMethodValue(obj: any, name: string, args: any[]): any {
     return found ? callFunctionValue(found.value, info.thisVal, args, found.owner) : undefined;
   }
   const value = getProp(obj, name);
-  // Only methods that preload `super` need their home object resolved.
-  if (typeof value === 'function' && value.avm1 && (value.avm1.flags & F_PRELOAD_SUPER)) {
+  // The AS2 home object is where the member was found on the prototype chain: a
+  // `super.x()` inside a method starts looking above *that* object. Resolving it only
+  // for functions that preload `super` is not enough — `super` is just as often a
+  // local variable (SuppressSuper clear), and a wrong home object makes the lookup
+  // find the very method that is running (observed with List.layoutContent).
+  if (typeof value === 'function' && value.avm1) {
     const found = findMember(obj, name);
     return callFunctionValue(value, obj, args, found ? found.owner : obj);
   }
