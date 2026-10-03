@@ -171,6 +171,25 @@ export interface AS2PlayerOptions {
   flashVars?: Record<string, string>;
   /** Scripts to run on _root right after the first frame (e.g. automation / guest login). */
   afterStart?: (root: any, player: AS2Player) => void;
+  /** In-process stand-in for the game's XMLSocket server. See `gameServerStub.ts`. */
+  gameServer?: GameServerBackend | null;
+}
+
+/** A socket the game opened with `XMLSocket.connect`. */
+export interface GameSocket {
+  host: string;
+  port: number;
+  /** Push a message to the game: calls `onData` on the next tick. */
+  deliver(data: string): void;
+  /** Close the connection: calls `onClose` (and clears `onData`); `error` = abnormal. */
+  close(error?: boolean): void;
+}
+
+/** Offline game server (the Gaia "Sushi" protocol). */
+export interface GameServerBackend {
+  connect(host: string, port: number, socket: GameSocket, log: (level: LogLevel, message: string) => void): void;
+  send(socket: GameSocket, data: string): void;
+  close(socket: GameSocket): void;
 }
 
 export class AS2Player {
@@ -555,7 +574,10 @@ export class AS2Player {
     node.name = name || `instance${node.id}`;
     this.attach(parent, node);
 
+    let built = false;
     const build = (obj: any) => {
+      if (built) return;
+      built = true;
       this.bind(obj, node);
       if (o.initObject) for (const [k, v] of Object.entries(o.initObject)) obj[k] = v;
       if (kind === 'clip') this.enterFirstFrame(node);
@@ -566,9 +588,25 @@ export class AS2Player {
       const Ctor = typeof cls === 'function' ? cls : RT.MovieClip;
       RT.MovieClip.__construct = build;
       this.runHandlers(node, 'construct');
-      try { new Ctor(); } catch (e) {
+      let instance: any = null;
+      // Flash creates the clip first (so `_name`, depth and the display list are
+      // available) and then runs the class constructor with that clip as `this`.
+      // Classes extending MovieClip reach the MovieClip constructor through
+      // `super()`, which binds them from the hook; classes that only borrow
+      // MovieClip.prototype (the Flash 8 UI components) are bound here.
+      const isJsClass = /^\s*class[\s{]/.test(Function.prototype.toString.call(Ctor));
+      try {
+        if (isJsClass) {
+          instance = new Ctor();
+        } else {
+          instance = Object.create(Ctor.prototype ?? RT.MovieClip.prototype);
+          this.bind(instance, node);
+          Ctor.call(instance);
+        }
+        if (!built) build(instance ?? Object.create(RT.MovieClip.prototype));
+      } catch (e) {
         this.log('error', `constructor of ${this.describe(node)}: ${(e as Error).message}`, (e as Error).stack?.split('\n').slice(0, 6).join('\n'));
-        if (!node.obj) { RT.MovieClip.__construct = null; build(Object.create(RT.MovieClip.prototype)); }
+        if (!built) { RT.MovieClip.__construct = null; build(instance ?? Object.create(RT.MovieClip.prototype)); }
       }
       RT.MovieClip.__construct = null;
       this.queueClipEvent(node, 'initialize');

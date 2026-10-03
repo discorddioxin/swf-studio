@@ -18,9 +18,18 @@ const BOOT = args.boot ?? 'guest';
 const OUT = path.resolve(args.out ?? '/tmp/smoke');
 fs.mkdirSync(OUT, { recursive: true });
 
-const chromium = (await import('@sparticuz/chromium')).default;
-const exe = await chromium.executablePath();
-const browser = await puppeteer.launch({ executablePath: exe, args: [...chromium.args, '--window-size=1200,900'], headless: true, protocolTimeout: 15000 });
+// Launching Chromium from puppeteer is flaky in this sandbox, so allow
+// attaching to one that is already running: keep a browser up with
+//   LD_LIBRARY_PATH=/tmp/al/lib /tmp/chromium --headless=new --no-sandbox \
+//     --disable-gpu --remote-debugging-port=9333 about:blank &
+// and pass --cdp 9333.
+const browser = args.cdp
+  ? await puppeteer.connect({ browserURL: `http://127.0.0.1:${args.cdp}`, protocolTimeout: 20000, defaultViewport: null })
+  : await (async () => {
+      const chromium = (await import('@sparticuz/chromium')).default;
+      const exe = await chromium.executablePath();
+      return puppeteer.launch({ executablePath: exe, args: [...chromium.args, '--window-size=1200,900'], headless: true, protocolTimeout: 15000 });
+    })();
 const page = await browser.newPage();
 await page.evaluateOnNewDocument(() => { globalThis.__SWF_AVM1_TRACE = true; });
 await page.setViewport({ width: 1200, height: 900 });
@@ -129,5 +138,5 @@ if (args.click === 'join') {
   if (info) { await page.mouse.click(info.x, info.y); await sleep(4000); await shot('after-click'); await status('after click'); }
 }
 fs.writeFileSync(path.join(OUT, 'console.log'), lines.join('\n'));
-await browser.close();
+if (args.cdp) browser.disconnect(); else await browser.close();
 log('done');

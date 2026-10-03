@@ -88,6 +88,7 @@ export function takeAvm1Diagnostics(): Avm1Warning[] { return takeAvm1Warnings()
  * does in the Flash player. */
 export function as2Globals(): Record<string, any> {
   const g = _global as Record<string, any>;
+  installObjectStatics();
   const add = (values: Record<string, any>) => {
     for (const [name, value] of Object.entries(values)) if (!(name in g)) g[name] = value;
   };
@@ -150,6 +151,33 @@ const linkage = new Map<unknown, Map<string, unknown>>();
 let linkageScope: unknown = null;
 /** Sets the library that Object.registerClass calls register into (the engine sets it while a loaded SWF's init actions run). */
 export function setLinkageScope(scope: unknown): unknown { const prev = linkageScope; linkageScope = scope; return prev; }
+
+/**
+ * Flash statics on the global `Object` that SWFs rely on. Only
+ * `Object.registerClass` matters in practice: the Flash 8 (v2) UI components
+ * bind their library symbols to their classes with
+ * `Object.registerClass("List", mx.controls.List)` from an init action, and the
+ * engine then gives every instance of that symbol the class prototype.
+ * Transpiled code resolves `Object` to the JavaScript global, so the method has
+ * to live there.
+ */
+export function installObjectStatics(): void {
+  const target = Object as unknown as Record<string, unknown>;
+  if (typeof target.registerClass === 'function') return;
+  Object.defineProperty(Object, 'registerClass', {
+    configurable: true,
+    writable: true,
+    enumerable: false,
+    value: (symbolId: unknown, cls: unknown): undefined => {
+      const key = symbolId == null ? '' : String(symbolId);
+      if (!key) return undefined;
+      let lib = linkage.get(linkageScope);
+      if (!lib) linkage.set(linkageScope, (lib = new Map()));
+      if (cls == null) lib.delete(key); else lib.set(key, cls);
+      return undefined;
+    },
+  });
+}
 
 function setPath(obj: Record<string, any>, path: string, value: unknown) {
   const parts = path.split('.');
@@ -389,7 +417,9 @@ export function toggleHighQuality(): void { /* no-op */ }
 export class MovieClip {
   [key: string]: any;
   static __construct: ((obj: any) => void) | null = null;
-  constructor() { const c = MovieClip.__construct; MovieClip.__construct = null; c?.(this); }
+  constructor() {
+    const c = MovieClip.__construct; MovieClip.__construct = null; c?.(this);
+  }
 }
 export class Button {
   [key: string]: any;

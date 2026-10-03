@@ -115,6 +115,7 @@ const F_SUPPRESS_THIS = 1 << 1;
 const F_PRELOAD_ARGUMENTS = 1 << 2;
 const F_SUPPRESS_ARGUMENTS = 1 << 3;
 const F_PRELOAD_SUPER = 1 << 4;
+const F_SUPPRESS_SUPER = 1 << 5;
 const F_PRELOAD_ROOT = 1 << 6;
 const F_PRELOAD_PARENT = 1 << 7;
 const F_PRELOAD_GLOBAL = 1 << 8;
@@ -244,10 +245,75 @@ function typeOf(v: any): string {
   }
 }
 
+// -------------------------------------------------------------------- super
+
+/** `super` inside an AS2 method, i.e. Ruffle's `SuperObject`: members resolve one
+ *  prototype above the object that owns the running method, `super.method()` calls
+ *  with `this` unchanged, and `super(...)`/`super()` runs the superclass ctor on the
+ *  same instance. The value is callable (a function object) because `super()` is
+ *  compiled to CallMethod with an undefined name, which calls the object itself. */
+interface SuperInfo { thisVal: any; owner: any }
+const SUPER = Symbol('avm1.super');
+let pendingOwner: any;
+
+function makeSuperValue(thisVal: any, owner: any): any {
+  const fn: any = function superValue() { return undefined; };
+  fn[SUPER] = { thisVal, owner } as SuperInfo;
+  return fn;
+}
+
+function makeSuper(thisVal: any, owner: any): any {
+  return thisVal === null || thisVal === undefined ? undefined : makeSuperValue(thisVal, owner);
+}
+
+function superInfo(v: any): SuperInfo | undefined {
+  return typeof v === 'function' ? (v as any)[SUPER] : undefined;
+}
+
+function protoOf(v: any): any {
+  if (v === null || v === undefined) return null;
+  try { return Object.getPrototypeOf(Object(v)); } catch { return null; }
+}
+
+/** `obj[name]` plus the object the member was found on (the AS2 "home object"). */
+function findMember(start: any, name: string): { owner: any; value: any } | undefined {
+  for (let o = start; o !== null && o !== undefined; o = protoOf(o)) {
+    try { if (name in Object(o)) return { owner: o, value: (o as any)[name] }; } catch { /* ignore */ }
+  }
+  return undefined;
+}
+
+/** Where `super.x` starts looking: the prototype above the method's home object. */
+function superBase(info: SuperInfo): any {
+  return protoOf(info.owner ?? info.thisVal);
+}
+
+function superFind(info: SuperInfo, name: string): { owner: any; value: any } | undefined {
+  return findMember(superBase(info), name);
+}
+
+/** `new Ctor(...)` / `super(...)`: AS2 constructors run on the object that was already
+ *  created, with the class prototype as their home object. */
+function runConstructor(constr: any, thisVal: any, args: any[]): any {
+  if (typeof constr !== 'function') return undefined;
+  const home = constr.prototype && (typeof constr.prototype === 'object' || typeof constr.prototype === 'function')
+    ? constr.prototype : undefined;
+  if (constr.avm1) return callDef(constr.avm1, thisVal, args, true, home);
+  try { return constr.apply(thisVal, args); } catch (e) { warn(`super: constructor threw: ${(e as Error)?.message ?? e}`); return undefined; }
+}
+
+function callSuperConstructor(info: SuperInfo, args: any[]): any {
+  const found = findMember(info.owner ?? protoOf(info.thisVal), '__constructor__');
+  if (!found) return undefined;
+  return runConstructor(found.value, info.thisVal, args);
+}
+
 // ------------------------------------------------------------------ scopes
 
 function hasProp(obj: any, name: string): boolean {
   if (obj === null || obj === undefined) return false;
+  const info = superInfo(obj);
+  if (info) return superFind(info, name) !== undefined;
   try { return name in Object(obj); } catch { return false; }
 }
 
@@ -258,16 +324,23 @@ function hasOwn(obj: any, name: string): boolean {
 
 function getProp(obj: any, name: string): any {
   if (obj === null || obj === undefined) return undefined;
+  const info = superInfo(obj);
+  if (info) return superFind(info, name)?.value;
   try { return obj[name]; } catch { return undefined; }
 }
 
 function setProp(obj: any, name: string, value: any): void {
   if (obj === null || obj === undefined) return;
+  // `super.x = v` writes to the instance, not to the superclass prototype.
+  const info = superInfo(obj);
+  if (info) { setProp(info.thisVal, name, value); return; }
   try { obj[name] = value; } catch { /* frozen / read-only */ }
 }
 
 function deleteProp(obj: any, name: string): boolean {
   if (obj === null || obj === undefined) return true;
+  const info = superInfo(obj);
+  if (info) return deleteProp(info.thisVal, name);
   try { return delete obj[name]; } catch { return false; }
 }
 
@@ -381,7 +454,7 @@ function makeArguments(args: any[], callee: any): any[] {
   return out;
 }
 
-function callDef(def: Avm1Def, thisArg: any, args: any[], construct = false): any {
+function callDef(def: Avm1Def, thisArg: any, args: any[], construct = false, owner?: any): any {
   const localScope: Scope = { cls: S_LOCAL, obj: {}, parent: def.scope };
   const suppressed = (def.flags & F_SUPPRESS_THIS) !== 0;
   const frame: Frame = {
@@ -398,7 +471,12 @@ function callDef(def: Avm1Def, thisArg: any, args: any[], construct = false): an
   if (def.flags & F_PRELOAD_THIS) frame.registers[reg++] = suppressed ? undefined : thisArg;
   if (def.flags & F_PRELOAD_ARGUMENTS) frame.registers[reg++] = makeArguments(args, def.fn ?? null);
   else if (!(def.flags & F_SUPPRESS_ARGUMENTS) && !construct) setProp(localScope.obj, 'arguments', makeArguments(args, def.fn ?? null));
-  if (def.flags & F_PRELOAD_SUPER) frame.registers[reg++] = undefined;
+  if (def.flags & F_PRELOAD_SUPER) {
+    frame.registers[reg++] = (def.flags & F_SUPPRESS_SUPER) ? undefined : makeSuper(frame.thisVal, owner);
+  } else if (!(def.flags & F_SUPPRESS_SUPER)) {
+    const sup = makeSuper(frame.thisVal, owner);
+    if (sup !== undefined) setProp(localScope.obj, 'super', sup);
+  }
   if (def.flags & F_PRELOAD_ROOT) frame.registers[reg++] = rootOf(def.baseClip);
   if (def.flags & F_PRELOAD_PARENT) { const p = def.baseClip?._parent; if (p) frame.registers[reg++] = p; }
   if (def.flags & F_PRELOAD_GLOBAL) frame.registers[reg++] = env.global;
@@ -416,11 +494,11 @@ function makeFunction(def: Avm1Def): any {
   const fn: any = function (this: any, ...args: any[]) {
     if (new.target) {
       const obj = Object.create(fn.prototype ?? Object.prototype);
-      const r = callDef(def, obj, args, true);
+      const r = callDef(def, obj, args, true, fn.prototype);
       return r !== null && (typeof r === 'object' || typeof r === 'function') ? r : obj;
     }
     const self = this === undefined || this === null ? def.baseClip : this;
-    return callDef(def, self, args);
+    return callDef(def, self, args, false, pendingOwner);
   };
   fn.avm1 = def;
   def.fn = fn;
@@ -437,7 +515,7 @@ function constructValue(constr: any, args: any[]): any {
   if (constr.avm1) {
     const def: Avm1Def = constr.avm1;
     const obj = Object.create(constr.prototype ?? Object.prototype);
-    const r = callDef(def, obj, args, true);
+    const r = callDef(def, obj, args, true, constr.prototype);
     return r !== null && (typeof r === 'object' || typeof r === 'function') ? r : obj;
   }
   try {
@@ -448,14 +526,21 @@ function constructValue(constr: any, args: any[]): any {
   }
 }
 
-function callFunctionValue(fn: any, thisArg: any, args: any[]): any {
+function callFunctionValue(fn: any, thisArg: any, args: any[], owner?: any): any {
   if (typeof fn !== 'function') return undefined;
+  // `super(...)`: call the superclass constructor on the current instance.
+  const info = superInfo(fn);
+  if (info) return callSuperConstructor(info, args);
+  const prev = pendingOwner;
+  pendingOwner = owner;
   try {
     return fn.apply(thisArg, args);
   } catch (e) {
     if (e instanceof Avm1Thrown) throw e;
     warn(`call failed: ${(e as Error)?.message ?? e}`);
     return undefined;
+  } finally {
+    pendingOwner = prev;
   }
 }
 
@@ -472,7 +557,20 @@ let scriptBudget = DEFAULT_SCRIPT_BUDGET;
 /** obj[name](…args); AS2 ignores calls of non-function values. */
 function callMethodValue(obj: any, name: string, args: any[]): any {
   if (obj === undefined || obj === null) return undefined;
-  return callFunctionValue(getProp(obj, name), obj, args);
+  const info = superInfo(obj);
+  if (info) {
+    // `super.name(...)`: the method comes from the superclass prototype but runs
+    // with the original `this` and its home object for further `super` lookups.
+    const found = superFind(info, name);
+    return found ? callFunctionValue(found.value, info.thisVal, args, found.owner) : undefined;
+  }
+  const value = getProp(obj, name);
+  // Only methods that preload `super` need their home object resolved.
+  if (typeof value === 'function' && value.avm1 && (value.avm1.flags & F_PRELOAD_SUPER)) {
+    const found = findMember(obj, name);
+    return callFunctionValue(value, obj, args, found ? found.owner : obj);
+  }
+  return callFunctionValue(value, obj, args, obj);
 }
 
 function globalFn(name: string, ...args: any[]): any {
@@ -797,8 +895,15 @@ function loop(frame: Frame, code: Uint8Array): Return {
       case 0x50: push(numberValue(pop()) + 1); advance(); break;
       case 0x51: push(numberValue(pop()) - 1); advance(); break;
       case 0x52: { // CallMethod: args…, argCount, obj, name
-        const name = stringValue(pop()), obj = pop();
-        push(callMethodValue(obj, name, popArgs(stack, toInt32(pop()))));
+        const nameVal = pop(), obj = pop();
+        const args = popArgs(stack, toInt32(pop()));
+        // An undefined or empty name calls the object itself — this is how `super()`
+        // (and Flash's anonymous method calls) reach the superclass constructor.
+        if (nameVal === undefined) push(callFunctionValue(obj, undefined, args));
+        else {
+          const name = stringValue(nameVal);
+          push(name === '' ? callFunctionValue(obj, undefined, args) : callMethodValue(obj, name, args));
+        }
         advance(); break;
       }
       case 0x53: { // NewMethod: args…, argCount, obj, name
@@ -1071,6 +1176,8 @@ function isInstance(obj: any, constr: any): boolean {
 
 function enumerateKeys(value: any): string[] {
   if (value === null || value === undefined) return [];
+  const info = superInfo(value);
+  if (info) { const s = superBase(info); return s === null || s === undefined ? [] : enumerateKeys(s); }
   const out: string[] = [];
   for (const k in Object(value)) out.push(k);
   return out;
