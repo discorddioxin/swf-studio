@@ -192,6 +192,15 @@ export class GameServerStub implements GameServerBackend {
       case 3:
         // latency probe — nothing to answer
         return null;
+      case 45:
+      case 51:
+      case 86: {
+        // joinSession / searchMember / sendObject: the client registered a
+        // callback whose `action` tells it how to read the reply, so a plain
+        // success envelope runs it (0 = no error).
+        const callId = msg.fields[0] ?? '0';
+        return encodeMessage(32, callId, 0);
+      }
       default:
         return null;
     }
