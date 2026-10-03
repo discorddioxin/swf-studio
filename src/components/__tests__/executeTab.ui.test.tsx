@@ -4,7 +4,7 @@
 // through the canvas DOM events, and trace()/linkage show up in the UI.
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { AssetCache, ingestFiles } from '../../lib/assets';
+import { AssetCache, ingestFiles, type SwfPackage } from '../../lib/assets';
 import { parseSwfXml } from '../../lib/parser';
 import { ExecuteTab } from '../ExecuteTab';
 import { GAME_XML, SOURCES } from '../../engine/flash/__tests__/gameFixture';
@@ -48,6 +48,26 @@ async function mount(withCode = true) {
   const doc = parseSwfXml(await bundle.xmlFile!.text(), { fileName: 'game.xml' });
   const cache = new AssetCache(bundle, () => {});
   render(<ExecuteTab doc={doc} cache={cache} assets={bundle} />);
+}
+
+/** A second loaded SWF with its own code: `paths` select which of the fixture's
+ *  classes live in it, so the main movie's imports only resolve through it. */
+async function dependencyPackage(name: string, paths: string[]): Promise<SwfPackage> {
+  const sources = SOURCES.filter((s) => paths.some((p) => s.path.endsWith(p)));
+  const bundle = ingestFiles([file(`${name}.xml`, GAME_XML), ...sources.map((s) => file(`external/${name}/${s.path}`, s.text))]);
+  const doc = parseSwfXml(await bundle.xmlFile!.text(), { fileName: `${name}.xml` });
+  return { doc, bundle, cache: new AssetCache(bundle, () => {}) };
+}
+
+/** The main movie without the code that lives in the dependency SWF. */
+async function mountWithDependency(dependencyPaths: string[]) {
+  const missing = SOURCES.filter((s) => dependencyPaths.some((p) => s.path.endsWith(p)));
+  const files = [file('game.xml', GAME_XML), ...SOURCES.filter((s) => !missing.includes(s)).map((s) => file(s.path, s.text))];
+  const bundle = ingestFiles(files);
+  const doc = parseSwfXml(await bundle.xmlFile!.text(), { fileName: 'game.xml' });
+  const cache = new AssetCache(bundle, () => {});
+  const dependency = await dependencyPackage('library', dependencyPaths);
+  render(<ExecuteTab doc={doc} cache={cache} assets={bundle} externals={[dependency]} />);
 }
 
 /** Run animation frames: advances player time by `ms` in 1/60 s steps. */
@@ -98,6 +118,34 @@ describe('ExecuteTab', () => {
     fireEvent.click(screen.getByText('Restart'));
     await runFrames(100);
     expect(screen.getByText(/frame 1\/3 “menu”/)).toBeTruthy();
+  });
+
+  it('links the code of a dependency SWF when the main movie alone cannot', async () => {
+    // Enemy + GameConfig live in the dependency SWF only; Main imports both.
+    await mountWithDependency(['com/game/Enemy.ts', 'util/GameConfig.ts']);
+    await waitFor(() => expect(screen.getByText(/AS3 engine · com\.game\.Main/)).toBeTruthy());
+    await runFrames(200);
+    expect(screen.getByText(/frame 1\/3 “menu”/)).toBeTruthy();
+    // The console says where the extra classes came from.
+    expect(screen.getByText(/linked code from dependency SWF.*: library\.xml/)).toBeTruthy();
+
+    // The game runs: the start button leads into the level, then game over.
+    const canvas = screen.getByLabelText('Game stage');
+    const toCanvas = (x: number, y: number) => ({ clientX: 66.666 + x * (5 / 3), clientY: y * (5 / 3) });
+    fireEvent.pointerMove(canvas, toCanvas(270, 30));
+    fireEvent.pointerDown(canvas, toCanvas(270, 30));
+    fireEvent.pointerUp(canvas, toCanvas(270, 30));
+    await runFrames(200);
+    expect(screen.queryByText(/frame 1\/3 “menu”/)).toBeNull(); // the button left the menu
+    await runFrames(2000);
+    expect(screen.getByText(/GAME OVER \d+/)).toBeTruthy();
+
+    // …and the Program panel shows every SymbolClass entry linked, the main
+    // movie's two files plus the dependency's two.
+    fireEvent.click(screen.getByText(/^Program/));
+    expect(screen.getByText(/4 file\(s\) compiled/)).toBeTruthy();
+    expect(screen.getByText(/Includes the code of dependency SWF: library\.xml/)).toBeTruthy();
+    expect(screen.getAllByText('✓ linked')).toHaveLength(3);
   });
 
   it('without transpiled code it says so and plays the SWF timeline', async () => {

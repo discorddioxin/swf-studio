@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Ruffle oracle</title>
+<style>html,body{margin:0;background:#101014;color:#ddd;font:12px system-ui}#wrap{position:relative}
+#status{position:fixed;left:4px;bottom:2px;opacity:.7}</style>
+</head>
+<body>
+<div id="wrap"></div>
+<div id="status">loading…</div>
+<script src="/ruffle/ruffle.js"></script>
+<script>
+// Reference renderer. Plays a SWF with Ruffle (a real Flash implementation) so
+// the studio's own player can be compared against it.
+//
+//   /oracle.html?swf=/swfs/bassken_game4.21.swf&w=640&h=580&t=3000
+//
+// Offline stubs: the game talks to gaiaonline.com over HTTP for the GSI
+// gateway/inventory; those requests are redirected to /stub/* below, which
+// answers with the same payloads the studio's GSI stub uses. The status line
+// and window.__oracle expose progress for the capture script.
+const P = new URLSearchParams(location.search);
+const SWF = P.get('swf') ?? '/swfs/bassken_game4.21.swf';
+const W = Number(P.get('w') ?? 640);
+const H = Number(P.get('h') ?? 580);
+const FLASHVARS = Object.fromEntries(new URLSearchParams(P.get('fv') ?? ''));
+
+const status = (m) => { document.getElementById('status').textContent = m; window.__oracleStatus = m; };
+window.__oracle = { ready: false, frames: 0, logs: [], status: 'loading' };
+
+// ---- offline network stubs -------------------------------------------------
+const realFetch = window.fetch.bind(window);
+const stub = (url) => {
+  const u = String(url);
+  if (/gateway\.php/i.test(u)) return '/stub/gateway';
+  if (/game\.php/i.test(u)) return '/stub/game';
+  if (/inventory|getData/i.test(u)) return '/stub/inventory';
+  return '/stub/echo?url=' + encodeURIComponent(u);
+};
+window.fetch = (input, init) => {
+  const url = typeof input === 'string' ? input : input?.url;
+  if (url && /^https?:/i.test(url) && !location.host.includes(new URL(url, location.href).host)) {
+    const body = init?.body ?? null;
+    window.__oracle.logs.push(`[fetch] ${url} ${body ? String(body).slice(0, 160) : ''}`);
+    return realFetch(stub(url), { ...init, body, method: init?.method ?? 'GET' });
+  }
+  return realFetch(input, init);
+};
+const XHR = window.XMLHttpRequest;
+window.XMLHttpRequest = class extends XHR {
+  open(method, url, ...rest) {
+    this.__url = url;
+    if (/^https?:/i.test(url) && !location.host.includes(new URL(url, location.href).host)) url = stub(url);
+    return super.open(method, url, ...rest);
+  }
+  send(body) { window.__oracle.logs.push(`[xhr] ${this.__url} ${body ? String(body).slice(0, 160) : ''}`); return super.send(body); }
+};
+
+// ---- ruffle ----------------------------------------------------------------
+window.RufflePlayer = window.RufflePlayer || {};
+window.RufflePlayer.config = {
+  autoplay: 'on',
+  unmuteOverlay: 'hidden',
+  letterbox: 'off',
+  scale: 'exactFit',
+  quality: 'high',
+  logLevel: 'info',
+  warnOnUnsupportedContent: false,
+  openUrlMode: 'deny',
+  allowNetworking: 'all',
+  // The sandbox has no GPU; the canvas renderer is the reliable one headless.
+  renderer: 'canvas',
+  base: null,
+  splashScreen: false,
+  contextMenu: 'off',
+  preferences: { scale: 'exactFit' },
+};
+
+(async () => {
+  const player = window.RufflePlayer.newest().createPlayer();
+  player.id = 'ruffle';
+  player.style.width = W + 'px';
+  player.style.height = H + 'px';
+  document.getElementById('wrap').appendChild(player);
+  status(`loading ${SWF}`);
+  const ruffle = player.ruffle();
+  try {
+    await ruffle.load({
+      url: SWF,
+      base: null,
+      width: W,
+      height: H,
+      parameters: FLASHVARS,
+      allowScriptAccess: false,
+    });
+    window.__oracle.ready = true;
+    status('running');
+  } catch (e) {
+    status('load failed: ' + e.message);
+    window.__oracle.error = String(e);
+  }
+  // count frames off the canvas so the capture script knows it is animating
+  const tick = () => {
+    window.__oracle.frames++;
+    requestAnimationFrame(tick);
+  };
+  tick();
+})();
+</script>
+</body>
+</html>

@@ -103,16 +103,20 @@ function compareDocs(xmlDoc: any, binDoc: any, name: string) {
     }));
     // externalActionCandidates are FFDec script-path hints — root-level
     // DoInitActions carry sprite scope as exporter metadata that cannot be
-    // recovered from binary payloads, so they are compared loosely.
+    // recovered from binary payloads, so they are compared loosely. The binary
+    // parser also pins each action event to the script file it synthesized for
+    // it (externalActions, "…/DoAction_2.as" for a frame's second DoAction),
+    // which an XML export has no reason to name, so that is compared loosely too.
     const stripCand = (frames: any[]) => frames.map((f) => ({
       ...f,
       events: f.events.map((e: any) =>
-        e.externalActionCandidates
-          ? { ...e, externalActionCandidates: [...e.externalActionCandidates].sort() }
+        e.externalActionCandidates || e.externalActions
+          ? { ...e, externalActionCandidates: e.externalActionCandidates ? [...e.externalActionCandidates].sort() : e.externalActionCandidates }
           : e),
     }));
-    const stripCandStr = (frames: any[]) => stable(stripCand(frames)).replace(
-      /,"externalActionCandidates":\[[^\]]*\]/g, '');
+    const stripCandStr = (frames: any[]) => stable(stripCand(frames))
+      .replace(/,"externalActionCandidates":\[[^\]]*\]/g, '')
+      .replace(/,"externalActions":"[^"]*"/g, '');
     expectSame(stripCandStr(fb), stripCandStr(fa), `${name} ${id} frames`);
   }
 

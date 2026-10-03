@@ -14,18 +14,48 @@ listed `.swf`, in order:
 
 | # | package          | role                                       |
 |---|------------------|--------------------------------------------|
-| 1 | bassken_overview | default active document (hub map)          |
+| 1 | bassken_overview | hub map (default main SWF)                 |
 | 2 | bassken_pier     | external scene                             |
 | 3 | bassken_fish4.20 | external scene                             |
 | 4 | bassken_scene    | external scene                             |
 | 5 | game_chat        | external chat UI                           |
 | 6 | gsecs2.9         | GSECS login/game framework                 |
 
+Next to the button is a **Bundled main SWF** drop-down listing the manifest, so
+the user chooses which of the six plays the game; that SWF is loaded first
+(`packages[0]`, the document the Execute workspace plays) and the other five
+are its dependencies.
+
 The real main movie (`bassken_game4.20`) was never committed to this repo, so
-nothing pretends to be it — the first bundled package simply becomes the
-active document and everything else is available as an external. The app
-degrades gracefully: any missing manifest or SWF surfaces as a Loader error,
-and the upload flow works exactly as before.
+nothing pretends to be it — the drop-down default (the first manifest entry,
+`bassken_overview`) is the most sensible substitute. The app degrades
+gracefully: any missing manifest or SWF surfaces as a Loader error, and the
+upload flow works exactly as before.
+
+## Uploading SWFs
+
+The upload flow accepts the same two shapes of a movie, in any mix and in folder
+or ZIP form:
+
+| upload                                            | parser          |
+|---------------------------------------------------|-----------------|
+| `bassken_scene.swf` (raw binary)                  | `parseSwfBinary` |
+| `bassken_scene/bassken_scene.xml` + its folders    | `parseSwfXml`    |
+
+Queued files are scanned with `collectSwfSources` (ZIP name tables included, so
+nothing is unpacked twice) and the Loader shows a **Main SWF · plays the game**
+drop-down of everything found. On Load, `loadUploadedPackages` orders the
+packages so the picked SWF is first and the rest follow as dependencies; a movie
+uploaded both as `.swf` and as its FFDec export is parsed once, preferring the
+XML export unless the `.swf` was picked. With no pick, the shallowest SWF wins —
+the old FFDec heuristics still decide.
+
+The main SWF is the one the Execute workspace plays; the others are handed to it
+as externals (`packages.filter((_, i) => i !== activeSwfIndex)`). The Sidebar's
+**Main SWF** drop-down re-picks it after loading. An AS2 game resolves a
+dependency when it asks for it by URL; an AS3 game gets the dependency's classes
+folded into its program when its own code cannot link without them
+(`mergeSources` in `src/engine/flash/loader.ts`).
 
 After **any** load (upload or bundled), `App` merges in *missing* bundled
 externals: every manifest package whose name is not already among the loaded
@@ -99,4 +129,10 @@ the Execute workspace and combines with the stub for offline guest play.
 npx vitest run                      # full suite
 npx vitest run src/lib/swf/swf-roundtrip.test.ts
 npx vitest run src/lib/gsiStub.test.ts
+
+# the main-SWF flow
+npx vitest run src/lib/swfSources.test.ts            # which SWFs a selection holds, ordering, merging
+npx vitest run src/lib/swfLoading.test.ts            # raw .swf / XML / ZIP uploads → packages
+npx vitest run src/components/__tests__/loader.ui.test.tsx        # the Main SWF drop-downs
+npx vitest run src/components/__tests__/executeTab.ui.test.tsx    # playing a game split over two SWFs
 ```

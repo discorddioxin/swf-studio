@@ -39,6 +39,12 @@ class BitWriter {
   u16(v) { this.raw(v, v >> 8); }
   u32(v) { this.raw(v, v >> 8, v >> 16, v >> 24); }
   s16(v) { this.u16(v); }
+  /** little-endian IEEE-754 single (CSMTextSettings thickness/sharpness) */
+  f32(v) {
+    const buf = Buffer.alloc(4);
+    buf.writeFloatLE(Number(v) || 0, 0);
+    for (const b of buf) this.u8(b);
+  }
   str(s) {
     this.align();
     const buf = Buffer.from(s ?? '', 'utf8');
@@ -63,6 +69,8 @@ class BitWriter {
 }
 
 const BOOL = (v) => v === 'true' || v === '1' || v === true;
+/** FFDec writes Java escapes such as \u0000 inside attribute values. */
+const stripEscapes = (v) => v.replace(/\\u([0-9a-fA-F]{4})/g, '');
 const num = (el, name, def = 0) => {
   const v = el?.getAttribute(name);
   if (v == null || v === '') return def;
@@ -99,6 +107,9 @@ function writeRect(w, rectEl) {
   for (const v of vals) n = Math.max(n, BitWriter.bitsS(v));
   w.ub(5, n);
   for (const v of vals) w.sb(n, v);
+  // RECTs are followed by byte-aligned structures (MATRIX, flags, strings) —
+  // Flash pads the rectangle to a byte boundary, and readers assume it.
+  w.align();
 }
 
 function fixedRaw(v) { return Math.round(Number(v) * 65536); }
@@ -127,6 +138,11 @@ function writeMatrix(w, mEl) {
   const n = Math.max(1, BitWriter.bitsS(tx), BitWriter.bitsS(ty));
   w.ub(5, n);
   w.sb(n, tx); w.sb(n, ty);
+  // A MATRIX is a bit field, but every structure that follows one starts on a
+  // byte boundary (gradient modes, colour transforms, strings, tags). Without
+  // this, the following field inherits the leftover bits and the stream
+  // desynchronises — Flash/Ruffle then read garbage.
+  w.align();
 }
 
 function childByTag(el, name) {
@@ -186,18 +202,20 @@ function writeFillStyle(w, fs, shapeNum) {
   w.u8(type);
   if (type === 0) {
     writeColor(w, childByTag(fs, 'color'), shapeNum >= 3);
-  } else if (type === 16 || type === 18) {
+  } else if (type === 16 || type === 18 || type === 19) {
     writeMatrix(w, childByTag(fs, 'gradientMatrix'));
     const grad = childByTag(fs, 'gradient');
-    w.u8(num(grad, 'spreadMode'));
-    w.u8(num(grad, 'interpolationMode'));
     const items = gradientItems(grad);
-    w.u8(items.length);
+    if (items.length > 15) throw new Error(`gradient with ${items.length} records (max 15)`);
+    // GRADIENT packs spread (2), interpolation (2) and the record count (4)
+    // into a single byte — not three bytes.
+    w.u8(((num(grad, 'spreadMode') & 0b11) << 6) | ((num(grad, 'interpolationMode') & 0b11) << 4) | (items.length & 0x0f));
     for (const r of items) {
       w.u8(num(r, 'ratio'));
       const color = childByTag(r, 'color');
       writeColor(w, color, shapeNum >= 3);
     }
+    if (type === 19) w.u16(Math.round(num(fs, 'focalPoint', 0) * 256));
   } else if (type >= 0x40 && type <= 0x43) {
     w.u16(num(fs, 'bitmapId'));
     writeMatrix(w, childByTag(fs, 'bitmapMatrix'));
@@ -237,7 +255,7 @@ function writeLineStyle2(w, ls) {
   w.ub(5, num(ls, 'reserved'));
   w.ub(1, BOOL(ls.getAttribute('noClose')) ? 1 : 0);
   w.ub(2, num(ls, 'endCapStyle'));
-  if (num(ls, 'joinStyle') === 2) w.u8(Math.round(num(ls, 'miterLimitFactor') * 256));
+  if (num(ls, 'joinStyle') === 2) w.u16(Math.round(num(ls, 'miterLimitFactor') * 256)); // FIXED8
   if (BOOL(ls.getAttribute('hasFillFlag'))) {
     const fill = [...ls.children].find((c) => c.getAttribute('type') === 'FILLSTYLE');
     if (fill) writeFillStyle(w, fill, 4);
@@ -468,6 +486,8 @@ function writeTextTag(w, itemEl, is2) {
       advanceBits = Math.max(advanceBits, Math.min(32, n));
     }
   }
+  if (glyphBits < 1) glyphBits = 1;
+  if (advanceBits < 1) advanceBits = 1;
   w.u8(glyphBits);
   w.u8(advanceBits);
   for (const r of recs) {
@@ -501,49 +521,33 @@ function writeTextTag(w, itemEl, is2) {
   w.u8(0); // terminator
 }
 
+// DefineEditText. Layout (SWF spec / Ruffle): id, bounds, flags UI16, then
+// fontId (HasFont), fontClass (HasFontClass), fontHeight (HasFont|HasFontClass),
+// textColor, maxLength, layout, variableName, initialText.
+const EDIT_TEXT_BITS = {
+  hasFont: 0, hasMaxLength: 1, hasTextColor: 2, readOnly: 3, password: 4,
+  multiline: 5, wordWrap: 6, hasText: 7, useOutlines: 8, html: 9,
+  wasStatic: 10, border: 11, noSelect: 12, hasLayout: 13, autoSize: 14, hasFontClass: 15,
+};
 function writeEditText(w, el) {
-  const bounds = childByTag(el, 'bounds');
-  const hasFont = BOOL(el.getAttribute('hasFont'));
-  const hasMaxLength = BOOL(el.getAttribute('hasMaxLength'));
-  const hasTextColor = BOOL(el.getAttribute('hasTextColor'));
-  const readOnly = BOOL(el.getAttribute('readOnly'));
-  const password = BOOL(el.getAttribute('password'));
-  const hasFontClass = BOOL(el.getAttribute('hasFontClass'));
-  const autoSize = BOOL(el.getAttribute('autoSize'));
-  const hasLayout = BOOL(el.getAttribute('hasLayout'));
-  const noSelect = BOOL(el.getAttribute('noSelect'));
-  const wordWrap = BOOL(el.getAttribute('wordWrap'));
-  const hasText = BOOL(el.getAttribute('hasText'));
-  let f1 = 0;
-  if (hasFont) f1 |= 0x80;
-  if (hasMaxLength) f1 |= 0x40;
-  if (hasTextColor) f1 |= 0x20;
-  if (readOnly) f1 |= 0x10;
-  if (password) f1 |= 0x08;
-  if (hasFontClass) f1 |= 0x04;
-  if (autoSize) f1 |= 0x02;
-  let f2 = 0;
-  if (hasLayout) f2 |= 0x80;
-  if (noSelect) f2 |= 0x40;
-  if (wordWrap) f2 |= 0x20;
-  if (hasText) f2 |= 0x01;
-  w.u8(f1); w.u8(f2);
-  writeRect(w, bounds);
-  if (hasFont) { w.u16(num(el, 'fontId')); w.u16(num(el, 'fontHeight')); }
-  if (hasTextColor) {
-    const c = childByTag(el, 'textColor');
-    writeColor(w, c, true);
-  }
-  if (hasLayout) {
+  let flags = 0;
+  for (const [name, bit] of Object.entries(EDIT_TEXT_BITS)) if (BOOL(el.getAttribute(name))) flags |= 1 << bit;
+  writeRect(w, childByTag(el, 'bounds'));
+  w.u16(flags);
+  if (flags & 0x0001) w.u16(num(el, 'fontId'));
+  if (flags & 0x8000) w.str(el.getAttribute('fontClass') ?? '');
+  if (flags & 0x8001) w.u16(num(el, 'fontHeight'));
+  if (flags & 0x0004) writeColor(w, childByTag(el, 'textColor'), true);
+  if (flags & 0x0002) w.u16(num(el, 'maxLength'));
+  if (flags & 0x2000) {
     w.u8(num(el, 'align'));
     w.u16(num(el, 'leftMargin'));
     w.u16(num(el, 'rightMargin'));
     w.s16(num(el, 'indent'));
     w.s16(num(el, 'leading'));
   }
-  if (hasFontClass) w.str(el.getAttribute('fontClass') ?? '');
   w.str(el.getAttribute('variableName') ?? '');
-  if (hasText) w.str(el.getAttribute('initialText') ?? '');
+  if (flags & 0x0080) w.str(el.getAttribute('initialText') ?? '');
 }
 
 function writeFont23(w, itemEl, wideOffsetsFromAttr) {
@@ -563,9 +567,11 @@ function writeFont23(w, itemEl, wideOffsetsFromAttr) {
   if (BOOL(itemEl.getAttribute('fontFlagsBold'))) f |= 0x01;
   w.u8(f);
   w.u8(num(itemEl, 'languageCode'));
-  const name = itemEl.getAttribute('fontName') ?? '';
-  w.u8(Buffer.byteLength(name, 'utf8'));
-  for (const b of Buffer.from(name, 'utf8')) w.u8(b);
+  // DefineFont2/3 names are length-prefixed strings. FFDec's fontName
+  // attribute carries the terminator as a trailing NUL — strip it.
+  const nameBytes = Buffer.from(stripEscapes(itemEl.getAttribute('fontName') ?? ''), 'utf8');
+  w.u8(nameBytes.length);
+  for (const b of nameBytes) w.u8(b);
 
   // glyphs: <glyphShapeTable><item type="SHAPE">…
   const gst = childByTag(itemEl, 'glyphShapeTable');
@@ -582,11 +588,11 @@ function writeFont23(w, itemEl, wideOffsetsFromAttr) {
   const offsets = [];
   for (const g of glyphs) {
     offsets.push(glyphEnc.bitsOut());
-    const shapes = g; // item type=SHAPE holds numFillBits/numLineBits + records
-    glyphEnc.ub(4, num(shapes, 'numFillBits', 1));
-    glyphEnc.ub(4, num(shapes, 'numLineBits', 1));
-    writeShapeRecords(glyphEnc, childByTag(shapes, 'shapeRecords'), 1,
-      num(shapes, 'numFillBits', 1), num(shapes, 'numLineBits', 1));
+    // A glyph shape carries its numFillBits/numLineBits nibbles once, and
+    // writeShapeRecords emits them — writing them here as well shifted every
+    // glyph by a byte (which desynchronised the whole font tag).
+    writeShapeRecords(glyphEnc, childByTag(g, 'shapeRecords'), 1,
+      num(g, 'numFillBits', 1), num(g, 'numLineBits', 1));
   }
   const shapesBytes = glyphEnc.bytes;
   const headerSize = 0; // offsets are relative to the position after numGlyphs…
@@ -596,7 +602,9 @@ function writeFont23(w, itemEl, wideOffsetsFromAttr) {
   const base = n * offSize + offSize; // bytes from pos to start of shapes
   void headerSize;
   for (let i = 0; i < n; i++) {
-    const off = base + offsets[i];
+    // offsets[] holds bit offsets into the glyph stream; the table is in bytes
+    // (writeShapeRecords byte-aligns, so every glyph starts on a byte).
+    const off = base + offsets[i] / 8;
     if (wideOffsets) w.u32(off); else w.u16(off);
   }
   const codeTableOff = base + shapesBytes.length;
@@ -720,16 +728,20 @@ function tagPayload(itemEl, type) {
       break;
     case 'DefineFontNameTag':
       w.u16(num(itemEl, 'fontId'));
-      w.str(itemEl.getAttribute('fontName') ?? '');
-      w.str(itemEl.getAttribute('fontCopyright') ?? '');
+      w.str(stripEscapes(itemEl.getAttribute('fontName') ?? ''));
+      w.str(stripEscapes(itemEl.getAttribute('fontCopyright') ?? ''));
       break;
     case 'CSMTextSettingsTag': {
+      // id, flags (bit6 useFlashType, bits3-4 gridFit, rest reserved),
+      // thickness FLOAT, sharpness FLOAT, reserved byte.
       w.u16(num(itemEl, 'textID'));
-      w.ub(3, num(itemEl, 'reserved'));
-      w.ub(3, num(itemEl, 'gridFit'));
-      w.ub(2, num(itemEl, 'useFlashType'));
-      w.u8(Math.round(num(itemEl, 'sharpness') * 256));
-      w.u8(Math.round(num(itemEl, 'thickness') * 256));
+      const gridFit = num(itemEl, 'gridFit') & 0b11;
+      const useFlashType = BOOL(itemEl.getAttribute('useFlashType')) || num(itemEl, 'useFlashType') ? 1 : 0;
+      const reserved = num(itemEl, 'reserved') & 0b10010011;
+      w.u8((reserved & 0b10010011) | ((gridFit & 0b11) << 3) | (useFlashType << 6));
+      w.f32(num(itemEl, 'thickness'));
+      w.f32(num(itemEl, 'sharpness'));
+      w.u8(num(itemEl, 'reserved2'));
       break;
     }
     case 'DefineButton2Tag': {
@@ -822,7 +834,9 @@ function tagPayload(itemEl, type) {
       break;
     case 'DefineBitsTag':
       w.u16(num(itemEl, 'characterID'));
-      w.hex(itemEl.getAttribute('imageData'));
+      // FFDec names the payload jpegData for DefineBits/JPEGTables,
+      // imageData for the DefineBitsJPEG2/3 variants.
+      w.hex(itemEl.getAttribute('jpegData') ?? itemEl.getAttribute('imageData'));
       break;
     case 'DefineBitsJPEG2Tag':
       w.u16(num(itemEl, 'characterID'));
@@ -834,10 +848,8 @@ function tagPayload(itemEl, type) {
       const alpha = Buffer.from(itemEl.getAttribute('bitmapAlphaData') ?? '', 'hex');
       w.u32(jpeg.length);
       for (const b of jpeg) w.u8(b);
-      if (alpha.length) {
-        const z = zlib.deflateSync(alpha);
-        for (const b of z) w.u8(b);
-      }
+      // FFDec exports the alpha channel already zlib-compressed (78xx header).
+      for (const b of alpha) w.u8(b);
       break;
     }
     case 'DefineBitsLosslessTag':

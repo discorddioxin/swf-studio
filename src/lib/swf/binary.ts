@@ -7,8 +7,8 @@ import type {
   ColorTransform, DisplayItem, EventKind, Frame, FrameEvent, Matrix, PlaceOp,
   Rect, SwfCharacter, SwfDocument, SwfHeader, TextRecord, Timeline,
 } from '../../types';
-import { classify, kindOfTag, isSpecialTag, actionFileCandidates, decodeActionBytes } from '../parser';
-import { BitReader, latin1, toHex } from './bitio';
+import { classify, kindOfTag, isSpecialTag, actionFileCandidates } from '../parser';
+import { BitReader, avm1ActionSource, isLikelyActionStream, latin1 } from './bitio';
 import { shapeToSvg, type SvgFillStyle, type SvgLineStyle, type SvgShapeRecord } from './shapeSvg';
 
 /** SWF tag codes → JPEXS FFDec type names (the XML "type" attribute). */
@@ -89,6 +89,9 @@ function readMatrix(br: BitReader): Matrix {
   }
   const tn = br.ub(5);
   const tx = br.sb(tn), ty = br.sb(tn);
+  // MATRIX may end mid-byte, but everything that follows a matrix in the SWF
+  // format starts on a byte boundary (gradient flags, colours, strings).
+  br.align();
   return { a, b, c, d, tx, ty };
 }
 
@@ -120,6 +123,15 @@ function readColor(br: BitReader, shapeNum: number): string {
 
 // tag stream ---------------------------------------------------------------
 
+/** DoInitAction carries the SpriteID it targets before its action records — but
+ * some producers (and FFDec's XML `actionBytes`) write the records only.  Pick
+ * the reading that walks as a complete action stream. */
+export function doInitActions(data: Uint8Array): Uint8Array {
+  const body = data.subarray(2);
+  if (data.length > 4 && isLikelyActionStream(body) && !isLikelyActionStream(data)) return body;
+  return data;
+}
+
 export function parseTags(data: Uint8Array): RawTag[] {
   const br = new BitReader(data);
   const out: RawTag[] = [];
@@ -142,11 +154,13 @@ export function parseTags(data: Uint8Array): RawTag[] {
 function readFillStyle(br: BitReader, shapeNum: number, warnings: string[]): SvgFillStyle {
   const type = br.u8();
   if (type === 0) return { type, color: readColor(br, shapeNum) };
-  if (type === 16 || type === 18) {
+  if (type === 16 || type === 18 || type === 19) {
     const matrix = readMatrix(br);
-    const spreadMode = br.u8();
-    const interpolationMode = br.u8();
-    const count = br.u8();
+    // GRADIENT flags: spread (2 bits), interpolation (2 bits), record count (4).
+    const flags = br.u8();
+    const spreadMode = (flags >> 6) & 0b11;
+    const interpolationMode = (flags >> 4) & 0b11;
+    const count = flags & 0x0f;
     const records: { ratio: number; color: string; alpha?: number }[] = [];
     for (let i = 0; i < count; i++) {
       const ratio = br.u8();
@@ -154,7 +168,8 @@ function readFillStyle(br: BitReader, shapeNum: number, warnings: string[]): Svg
       if (shapeNum >= 3) records.push({ ratio, color: rgbHex(r, g, b), alpha: br.u8() / 255 });
       else records.push({ ratio, color: rgbHex(r, g, b) });
     }
-    return { type, matrix, spreadMode, interpolationMode, records };
+    const focalPoint = type === 19 ? br.u16() / 256 : undefined;
+    return { type, matrix, spreadMode, interpolationMode, records, ...(focalPoint !== undefined ? { focalPoint } : {}) };
   }
   if (type >= 0x40 && type <= 0x43) {
     const bitmapId = br.u16();
@@ -166,7 +181,8 @@ function readFillStyle(br: BitReader, shapeNum: number, warnings: string[]): Svg
 }
 
 function readFillStyles(br: BitReader, shapeNum: number, warnings: string[]): SvgFillStyle[] {
-  const count = br.u8();
+  let count = br.u8();
+  if (count === 0xff && shapeNum >= 2) count = br.u16();
   if (count === 0xff) throw new Error('long fill arrays unsupported');
   const out: SvgFillStyle[] = [];
   for (let i = 0; i < count; i++) out.push(readFillStyle(br, shapeNum, warnings));
@@ -185,7 +201,7 @@ function readLineStyle2(br: BitReader, shapeNum: number, warnings: string[]): Sv
   const noClose = br.ub(1) === 1;
   const endCap = br.ub(2);
   let miterLimit = 0;
-  if (join === 2 /* miter */) miterLimit = br.ub(8) / 256;
+  if (join === 2 /* miter */) miterLimit = br.u16() / 256; // FIXED8
   let color = '#000000';
   if (hasFill) {
     const fill = readFillStyle(br, shapeNum, warnings);
@@ -537,9 +553,11 @@ function parseDefineText(tag: RawTag, is2: boolean): {
   const id = br.u16();
   // DefineText: bounds + matrix are bit-packed; the glyph/advance counts
   // are UI8s, so the writer pads to the next byte before writing them.
-  const bounds = readRect(br, false);
+  // RECT is padded to the next byte boundary before the MATRIX that follows it
+  // (verified against the genuine bassken_game4.21 build: 18 of 21 DefineText
+  // tags only parse exactly when the rectangle is aligned).
+  const bounds = readRect(br);
   const matrix = readMatrix(br);
-  br.align();
   const glyphBits = br.u8(); // spec: two separate UI8s (not nibble-packed)
   const advanceBits = br.u8();
   const records: TextRecord[] = [];
@@ -576,45 +594,64 @@ function parseDefineText(tag: RawTag, is2: boolean): {
 function parseEditText(tag: RawTag): {
   id: number; charId: number; bounds: Rect; attrs: Record<string, string>; initialText: string;
 } {
+  // DefineEditText layout (SWF spec / Ruffle read_define_edit_text):
+  //   characterID, bounds RECT, flags UI16, [fontId], [fontClass],
+  //   [fontHeight], [textColor RGBA], [maxLength], [layout], variableName,
+  //   [initialText].
   const br = new BitReader(tag.data);
   const id = br.u16();
-  const f1 = br.u8();
-  const f2 = br.u8();
-  const hasFont = !!(f1 & 0x80);
-  const hasMaxLength = !!(f1 & 0x40);
-  const hasTextColor = !!(f1 & 0x20);
-  const readOnly = !!(f1 & 0x10);
-  const password = !!(f1 & 0x08);
-  const hasFontClass = !!(f1 & 0x04);
-  const autoSize = !!(f1 & 0x02);
-  const hasLayout = !!(f2 & 0x80);
-  const noSelect = !!(f2 & 0x40);
-  const wordWrap = !!(f2 & 0x20);
-  const hasText = !!(f2 & 0x01);
   const bounds = readRect(br);
-  let fontId: number | undefined, fontHeight = 0;
-  if (hasFont) { fontId = br.u16(); fontHeight = br.u16(); }
+  const flags = br.u16();
+  const bit = (n: number) => (flags & (1 << n)) !== 0;
+  const hasFont = bit(0);
+  const hasMaxLength = bit(1);
+  const hasTextColor = bit(2);
+  const readOnly = bit(3);
+  const password = bit(4);
+  const multiline = bit(5);
+  const wordWrap = bit(6);
+  const hasText = bit(7);
+  const useOutlines = bit(8);
+  const html = bit(9);
+  const wasStatic = bit(10);
+  const border = bit(11);
+  const noSelect = bit(12);
+  const hasLayout = bit(13);
+  const autoSize = bit(14);
+  const hasFontClass = bit(15);
+
+  let fontId: number | undefined;
+  if (hasFont) fontId = br.u16();
+  if (hasFontClass) br.str();
+  let fontHeight = 0;
+  if (hasFont || hasFontClass) fontHeight = br.u16();
   let textAlpha: number | undefined;
   if (hasTextColor) { br.u8(); br.u8(); br.u8(); textAlpha = br.u8() / 255; }
+  let maxLength = 0;
+  if (hasMaxLength) maxLength = br.u16();
   let align = 0, leftMargin = 0, rightMargin = 0, indent = 0, leading = 0;
   if (hasLayout) {
     align = br.u8(); leftMargin = br.u16(); rightMargin = br.u16();
     indent = br.s16(); leading = br.s16();
   }
-  if (hasFontClass) br.str();
   const variableName = br.str();
   let initialText = '';
-  if (hasText) initialText = utf8(br.bytes(br.remaining));
+  if (hasText) initialText = latin1(br.bytes(br.remaining));
+
   const attrs: Record<string, string> = {
     characterID: String(id),
     hasFont: String(hasFont), hasMaxLength: String(hasMaxLength),
     hasTextColor: String(hasTextColor), readOnly: String(readOnly),
-    password: String(password), hasFontClass: String(hasFontClass),
-    autoSize: String(autoSize), hasLayout: String(hasLayout),
-    noSelect: String(noSelect), wordWrap: String(wordWrap),
-    hasText: String(hasText), variableName,
+    password: String(password), multiline: String(multiline),
+    wordWrap: String(wordWrap), hasText: String(hasText),
+    useOutlines: String(useOutlines), html: String(html),
+    wasStatic: String(wasStatic), border: String(border),
+    noSelect: String(noSelect), hasLayout: String(hasLayout),
+    autoSize: String(autoSize), hasFontClass: String(hasFontClass),
+    variableName,
   };
   if (fontId != null) { attrs.fontId = String(fontId); attrs.fontHeight = String(fontHeight); }
+  if (hasMaxLength) attrs.maxLength = String(maxLength);
   if (textAlpha != null) attrs.textAlpha = String(textAlpha);
   if (hasLayout) {
     attrs.align = String(align); attrs.leftMargin = String(leftMargin);
@@ -622,15 +659,7 @@ function parseEditText(tag: RawTag): {
     attrs.leading = String(leading);
   }
   if (initialText) attrs.initialText = initialText;
-  // parseSwfXml's charIdOf checks ID_ATTRS in order and finds 'fontId'
-  // before 'characterID', so EditTexts with hasFont register under fontId
-  // (while the text file itself stays keyed by the raw characterID).
-  return { id: fontId ?? id, charId: id, bounds, attrs, initialText };
-}
-
-function utf8(bytes: Uint8Array): string {
-  try { return new TextDecoder('utf-8').decode(bytes); }
-  catch { return latin1(bytes); }
+  return { id, charId: id, bounds, attrs, initialText };
 }
 
 // place/remove -------------------------------------------------------------
@@ -922,17 +951,29 @@ export async function parseSwfBinary(
           }
           case 37: {
             const et = parseEditText(tag);
+            // DefineEditText's own id is characterID; `fontId` is only the font it
+            // references. Registering it under the font id (as an earlier revision did,
+            // to match parseSwfXml's fontId-first charIdOf) collided with the font
+            // character and left the text field without a node. The XML parser now looks
+            // at characterID first, so both paths agree on the real id.
             addChar(et.id, type, 'edittext', { bounds: et.bounds, attrs: et.attrs });
             pendingEditIds.push({ id: et.charId, text: et.initialText });
             break;
           }
           case 10: case 48: case 75: {
             if (tag.type === 10) break; // DefineFont (legacy) — skip parse
-            // parse/validate only: parseSwfXml's charIdOf reads only
-            // characterId/id attrs, so fontID-tagged fonts never become
-            // characters there. Mirroring keeps the character-id layout
-            // identical; fonts still reach the player via FontName/ttf.
-            parseFont23(tag);
+            // DefineFont2/3 carry the glyph→character-code table. Static text
+            // (DefineText) stores only glyph indices, so without this table every
+            // text character in the movie renders blank. FFDec's XML export keeps
+            // the table on the same character (`fontId` is in ID_ATTRS, and
+            // parseSwfXml's character for DefineFont*Tag attaches <codeTable>), so
+            // the binary path must register the character the same way.
+            const info = parseFont23(tag);
+            // an absent/empty table stays absent, like parseSwfXml's `<codeTable>` check
+            addChar(info.id, type, 'font', {
+              ...(info.codeTable.length ? { codeTable: info.codeTable } : {}),
+              attrs: info.attrs,
+            });
             break;
           }
           case 73: { // DefineFontAlignZones
@@ -1001,17 +1042,22 @@ export async function parseSwfBinary(
       case 24: return 'reserved=0';      // Protect
       case 69: return 'reservedB=0 useNetwork=true';
       case 74: {
+        // CSMTextSettings: textID, flags (useFlashType bit 6, gridFit bits 3-4,
+        // rest reserved), thickness FLOAT, sharpness FLOAT, reserved byte.
         const br2 = new BitReader(tag.data);
         const textID = br2.u16();
         void textID;
         const b = br2.u8();
-        const reserved = b >> 5;
-        const gridFit = (b >> 2) & 7;
+        const reserved = b & 0b10100111; // everything but gridFit (3-4) and useFlashType (6)
+        const gridFit = (b >> 3) & 0b11;
+        const br3 = new BitReader(tag.data);
+        br3.skip(9);
+        const reserved2 = br3.u8();
         return summarize([
           'forceWriteAsLong=true',
           `gridFit=${gridFit}`,
           `reserved=${reserved}`,
-          'reserved2=0',
+          `reserved2=${reserved2}`,
         ]);
       }
       default: return '';
@@ -1103,10 +1149,10 @@ export async function parseSwfBinary(
           });
           continue;
         }
-        const hex = toHex(tag.data);
+        const actionBytes = type === 'DoInitActionTag' ? doInitActions(tag.data) : tag.data;
         events.push({
           kind: 'action', tagType: type,
-          detail: decodeActionBytes(hex).source,
+          detail: avm1ActionSource(actionBytes),
           externalActionCandidates: actionFileCandidates(characterId, frameIndex, type),
         });
         continue;
@@ -1238,17 +1284,27 @@ export async function parseSwfBinary(
 
   // Synthesize scripts/*.as sources (FFDec export layout) from the decoded
   // action events — the Execute workspace transpiles those files.
+  //
+  // A frame may hold several DoAction tags (frame 1 of a real game usually does:
+  // a small setup script and the big library definition script). FFDec names the
+  // extra ones DoAction_2.as, DoAction_3.as, … and the transpiler appends them in
+  // file order, so every event must get its own file — deduping by path silently
+  // dropped everything after the first script of a frame.
   const seenScriptPaths = new Set(files.map((f) => f.path));
   for (const tl of timelines.values()) {
     for (const frame of tl.frames) {
       for (const ev of frame.events) {
         if (ev.kind !== 'action' || !ev.detail || !ev.externalActionCandidates?.length) continue;
-        const path = ev.externalActionCandidates[0];
-        if (seenScriptPaths.has(path)) continue;
+        const preferred = ev.externalActionCandidates[0];
+        const slash = preferred.lastIndexOf('/');
+        const dir = preferred.slice(0, slash + 1);
+        const stem = preferred.slice(slash + 1).replace(/\.as$/i, '');
+        let path = preferred;
+        for (let n = 2; seenScriptPaths.has(path); n++) path = `${dir}${stem}_${n}.as`;
         seenScriptPaths.add(path);
-        const base = path.slice(path.lastIndexOf('/') + 1).replace(/\.as$/i, '');
+        ev.externalActions = path;
         files.push({
-          path, name: base, ext: 'as', category: 'scripts',
+          path, name: path.slice(path.lastIndexOf('/') + 1).replace(/\.as$/i, ''), ext: 'as', category: 'scripts',
           bytes: new TextEncoder().encode(ev.detail.endsWith('\n') ? ev.detail : ev.detail + '\n'),
         });
       }
@@ -1281,13 +1337,14 @@ function countTags(tags: RawTag[]): number {
 
 function charIdFromTag(tag: RawTag, _characters: Map<number, SwfCharacter>): number | undefined {
   void _characters;
-  // mirrors parseSwfXml's charIdOf(): only specific attr names count — e.g.
-  // DefineFont2/3 + AlignZones export fontID (capital D) which charIdOf misses
+  // mirrors parseSwfXml's charIdOf(): the same attribute names count, so the two
+  // parsers report the same ids for the same tags. `fontID` is a char id (the font's);
+  // `fontId` is not (in DefineEditText it references the font the field uses).
   switch (tag.type) {
     case 8: return undefined;   // JPEGTables
-    case 48: case 75: case 73: return undefined; // fontID — not in ID_ATTRS
+    case 48: case 75: case 73: return new BitReader(tag.data).u16(); // fontID
     case 74: return undefined;  // CSMTextSettings — textID is not a char id
-    case 37: return parseEditText(tag).id; // mirrors charIdOf (fontId first)
+    case 37: return parseEditText(tag).id;
     default:
       try { return new BitReader(tag.data).u16(); } catch { return undefined; }
   }

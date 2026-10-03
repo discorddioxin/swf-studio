@@ -1,0 +1,24 @@
+import { readFileSync } from 'node:fs';
+import { JSDOM } from 'jsdom';
+const xml = readFileSync('game-files/fish-full/external/gsecs2.9/gsecs2.9.xml', 'utf8');
+const dom = new JSDOM(xml, { contentType: 'text/xml' });
+const doc = dom.window.document;
+const all = [...doc.querySelectorAll('item[type="DefineButton2Tag"]')];
+const btn = all.find((el) => el.getAttribute('buttonId') === '15');
+const deep = (el, name) => [...el.querySelectorAll('*')].filter((c) => c.getAttribute('type') === name);
+const recs = deep(btn, 'BUTTONRECORD');
+console.log('records:', recs.length);
+recs.forEach((r, i) => {
+  let f = 0;
+  if (r.getAttribute('buttonStateUp') === 'true') f |= 1;
+  if (r.getAttribute('buttonStateOver') === 'true') f |= 2;
+  if (r.getAttribute('buttonStateDown') === 'true') f |= 4;
+  if (r.getAttribute('buttonStateHitTest') === 'true') f |= 8;
+  if (r.getAttribute('buttonHasFilterList') === 'true') f |= 0x10;
+  if (r.getAttribute('buttonHasBlendMode') === 'true') f |= 0x20;
+  const m = deep(r, 'MATRIX')[0];
+  console.log(`  xml#${i} flags=0x${f.toString(16)} id=${r.getAttribute('characterId')} depth=${r.getAttribute('placeDepth')} tx=${m?.getAttribute('translateX')} ty=${m?.getAttribute('translateY')} nTB=${m?.getAttribute('nTranslateBits')} hasFilter=${r.getAttribute('buttonHasFilterList')}`);
+});
+const conds = deep(btn, 'BUTTONCONDACTION');
+console.log('conditions:', conds.length);
+conds.forEach((c, i) => console.log(`  cond#${i} len=${(c.getAttribute('actionBytes') ?? '').length / 2} bytes=${(c.getAttribute('actionBytes') ?? '').slice(0, 24)} flags=${c.getAttribute('condKeyPress')}`));

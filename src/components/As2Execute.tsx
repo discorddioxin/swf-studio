@@ -11,8 +11,10 @@ import type { LogEntry } from '../engine/flash/player';
 import { AS2Player, type Movie } from '../engine/as2/player';
 import { createExternalResolver, swfNameOf, type ExternalSwf } from '../engine/as2/externals';
 import { buildAS2Program, type AS2Build } from '../engine/as2/program';
+import { _global as as2Global } from '../runtime/as2';
 import { AS2AudioBackend, embeddedFontFamily, registerFonts, soundFilesOf } from '../engine/as2/audio';
 import { gsiStubFetchText } from '../lib/gsiStub';
+import { createGameServerStub } from '../lib/gameServerStub';
 
 const MAX_LOG = 500;
 const BOOT_KEY = 'swf-studio.as2.boot';
@@ -21,8 +23,10 @@ const BOOT_KEY = 'swf-studio.as2.boot';
 const BOOT_PRESETS: { id: string; label: string; code: string; hint: string }[] = [
   { id: 'none', label: 'None', code: '', hint: 'Start exactly like the SWF does.' },
   {
-    id: 'gaia-guest', label: 'Gaia: play as guest', code: '_root.playAsGuest = true;\n_root.startGameSingle();',
-    hint: "Uses the game's own guest mode to skip the GSECS login server (gsecs2.9.swf), which cannot be reached offline.",
+    id: 'gaia-guest',
+    label: 'Gaia: play as guest',
+    code: '_root.playAsGuest = true;\n_root.startGameSingle();',
+    hint: "Uses the game's own guest mode to skip the GSECS login server (gsecs2.9.swf), which cannot be reached offline.", 
   },
 ];
 
@@ -38,6 +42,7 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<AS2Player | null>(null);
+  const gameServerRef = useRef<ReturnType<typeof createGameServerStub> | null>(null);
   const audioRef = useRef<AS2AudioBackend | null>(null);
   const extAudioRef = useRef<AS2AudioBackend[]>([]);
   const playingRef = useRef(true);
@@ -143,6 +148,9 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
       onError: (swf, e) => playerForLog?.log('error', `external SWF ${swf.name}: ${e.message}`),
     });
     const bootCode = boot.trim();
+    if (!gameServerRef.current) {
+      gameServerRef.current = createGameServerStub((level, message) => playerForLog?.log(level, message));
+    }
     const player = new AS2Player({
       doc,
       program: build.build.program,
@@ -159,15 +167,20 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
       // gaiaonline.com are answered locally (25× every bait, all rods).
       fetchText: (url, method, body) =>
         gsiStubFetchText(url, method, body, (level, message, detail) => player.log(level, message, detail ?? '')),
+      // Offline game server: the multiplayer games open an XMLSocket to the
+      // game server; this answers it locally with one test session/room.
+      gameServer: gameServerRef.current,
       afterStart: bootCode ? (root, p) => {
         p.log('info', 'running boot script');
-        new Function('_root', 'player', bootCode)(root, p);
+        new Function('_root', 'player', '_global', bootCode)(root, p, as2Global);
       } : undefined,
     });
     for (const e of build.build.errors) player.log('error', `as2ts: ${e.file}: ${e.message}`);
     playerForLog = player;
     if (swfs.length) player.log('info', `external SWFs available: ${swfs.map((s) => s.name).join(', ')}`);
     playerRef.current = player;
+    // Dev aid: inspect the live display tree / asset states from the browser console.
+    (globalThis as any).__as2player = player;
     player.start();
     canvasRef.current?.focus({ preventScroll: true });
     return () => {

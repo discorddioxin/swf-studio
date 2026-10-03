@@ -148,6 +148,8 @@ export class DisplayNode {
 export const nodeOf = (o: unknown): DisplayNode | null =>
   o && (typeof o === 'object' || typeof o === 'function') ? ((o as any)[NODE] as DisplayNode | undefined) ?? null : null;
 
+
+
 interface QueuedAction { node: DisplayNode; run: () => void; label: string; always?: boolean }
 interface Timer { id: number; fn: () => void; ms: number; next: number }
 
@@ -171,6 +173,25 @@ export interface AS2PlayerOptions {
   flashVars?: Record<string, string>;
   /** Scripts to run on _root right after the first frame (e.g. automation / guest login). */
   afterStart?: (root: any, player: AS2Player) => void;
+  /** In-process stand-in for the game's XMLSocket server. See `gameServerStub.ts`. */
+  gameServer?: GameServerBackend | null;
+}
+
+/** A socket the game opened with `XMLSocket.connect`. */
+export interface GameSocket {
+  host: string;
+  port: number;
+  /** Push a message to the game: calls `onData` on the next tick. */
+  deliver(data: string): void;
+  /** Close the connection: calls `onClose` (and clears `onData`); `error` = abnormal. */
+  close(error?: boolean): void;
+}
+
+/** Offline game server (the Gaia "Sushi" protocol). */
+export interface GameServerBackend {
+  connect(host: string, port: number, socket: GameSocket, log: (level: LogLevel, message: string) => void): void;
+  send(socket: GameSocket, data: string): void;
+  close(socket: GameSocket): void;
 }
 
 export class AS2Player {
@@ -421,9 +442,9 @@ export class AS2Player {
   enterFirstFrame(node: DisplayNode) {
     node.frame = 0;
     if (!node.timeline) return;
-    this.queueFrame(node, 0);
     const f = node.timeline.frames[0];
     if (f) this.applyOps(node, f, 0);
+    this.queueFrame(node, 0);
   }
 
   advance(node: DisplayNode) {
@@ -433,9 +454,9 @@ export class AS2Player {
     const next = node.frame + 1;
     if (next >= total) { this.gotoFrame(node, 0, true); return; }
     node.frame = next;
-    this.queueFrame(node, next);
     const f = node.timeline.frames[next];
     if (f) this.applyOps(node, f, next);
+    this.queueFrame(node, next);
   }
 
   private applyOps(node: DisplayNode, frame: Frame, index: number) {
@@ -487,9 +508,9 @@ export class AS2Player {
     if (target === node.frame && !loop) return;
     if (target === node.frame + 1 && !loop) {
       node.frame = target;
-      this.queueFrame(node, target);
       const f = node.timeline.frames[target];
       if (f) this.applyOps(node, f, target);
+      this.queueFrame(node, target);
       return;
     }
     const snapshot = node.timeline.frames[target]?.display ?? [];
@@ -500,7 +521,6 @@ export class AS2Player {
       if (!d || d.characterId !== c.characterId || d.startFrame !== c.startFrame) this.removeNode(c);
     }
     node.frame = target;
-    this.queueFrame(node, target);
     for (const d of snapshot) {
       const depth = d.depth - DEPTH_OFFSET;
       const c = node.childAtDepth(depth);
@@ -512,6 +532,7 @@ export class AS2Player {
       if (c) { if (c.fromTimeline) this.removeNode(c); else continue; }
       this.placeFromTimeline(node, d);
     }
+    this.queueFrame(node, target);
   }
 
   frameOf(node: DisplayNode, f: unknown): number | null {
@@ -555,7 +576,10 @@ export class AS2Player {
     node.name = name || `instance${node.id}`;
     this.attach(parent, node);
 
+    let built = false;
     const build = (obj: any) => {
+      if (built) return;
+      built = true;
       this.bind(obj, node);
       if (o.initObject) for (const [k, v] of Object.entries(o.initObject)) obj[k] = v;
       if (kind === 'clip') this.enterFirstFrame(node);
@@ -566,9 +590,56 @@ export class AS2Player {
       const Ctor = typeof cls === 'function' ? cls : RT.MovieClip;
       RT.MovieClip.__construct = build;
       this.runHandlers(node, 'construct');
-      try { new Ctor(); } catch (e) {
+      let instance: any = null;
+      // Flash creates the clip first (so `_name`, depth and the display list are
+      // available) and then runs the class constructor with that clip as `this`.
+      // Classes extending MovieClip reach the MovieClip constructor through
+      // `super()`, which binds them from the hook; classes that only borrow
+      // MovieClip.prototype (the Flash 8 UI components) are bound here.
+      const isJsClass = /^\s*class[\s{]/.test(Function.prototype.toString.call(Ctor));
+      try {
+        if (isJsClass) {
+          instance = new Ctor();
+        } else {
+          instance = Object.create(Ctor.prototype ?? RT.MovieClip.prototype);
+          this.bind(instance, node);
+          // Flash places the clip's own first frame - children and their
+          // properties, so `_width`/`_height` are the authored size - before the
+          // symbol's class constructor body runs. The Flash 8 UI components rely
+          // on it: `UIObject.init()` reads `this._width` to size themselves, and
+          // their `createChildren()` builds the sub-clips from that size.
+          // (Frame *scripts* are still queued and run later in the tick.)
+          build(instance);
+          if ((globalThis as any).__DBG_CC) {
+            let lvl: any = Object.getPrototypeOf(instance); let i = 0;
+            while (lvl && i < 8 && lvl !== Object.prototype) {
+              const name = `L${i}`;
+              if (typeof lvl.createChildren === 'function') {
+                const orig = lvl.createChildren;
+                lvl.createChildren = function (this: any) { (globalThis as any).__CC ??= []; (globalThis as any).__CC.push(`${name}.createChildren on ${this._name} after=${String(this.listContent)}`); return orig.call(this); };
+              }
+              if (typeof lvl.constructObject === 'function') {
+                const origCO = lvl.constructObject;
+                lvl.constructObject = function (this: any) { (globalThis as any).__CC ??= []; (globalThis as any).__CC.push(`${name}.constructObject on ${this._name} name=${String(this._name)}`); return origCO.call(this); };
+              }
+              lvl = Object.getPrototypeOf(lvl); i++;
+            }
+          }
+          Ctor.call(instance);
+        }
+        if (!built) build(instance ?? Object.create(RT.MovieClip.prototype));
+        // The Flash 8 UI components boot from `UIObject`, whose constructor calls
+        // `constructObject()` (init + createChildren + invalidate). AVM1 class
+        // constructor chains assembled from symbol init clips do not always take
+        // that path here, so run the component's own boot when it did not run.
+        const inst = instance ?? node.obj;
+        if (inst && !inst.__componentBooted && typeof inst.constructObject === 'function') {
+          inst.__componentBooted = true;
+          this.guard(`constructObject of ${this.describe(node)}`, () => inst.constructObject());
+        }
+      } catch (e) {
         this.log('error', `constructor of ${this.describe(node)}: ${(e as Error).message}`, (e as Error).stack?.split('\n').slice(0, 6).join('\n'));
-        if (!node.obj) { RT.MovieClip.__construct = null; build(Object.create(RT.MovieClip.prototype)); }
+        if (!built) { RT.MovieClip.__construct = null; build(instance ?? Object.create(RT.MovieClip.prototype)); }
       }
       RT.MovieClip.__construct = null;
       this.queueClipEvent(node, 'initialize');
@@ -635,6 +706,7 @@ export class AS2Player {
   }
 
   describe(node: DisplayNode): string {
+    if (typeof (node as any)?.path !== 'function') return `"${(node as any)?._name ?? '?'}"`;
     if (node === this.root) return '_root';
     const ch = node.character;
     const what = ch?.exportName ? `"${ch.exportName}"` : `${ch?.kind ?? 'clip'} ${node.characterId}`;

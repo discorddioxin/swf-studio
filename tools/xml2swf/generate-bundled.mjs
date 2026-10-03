@@ -26,7 +26,11 @@ const EXPORTS = [
 
 const outDir = resolve(root, 'game-files/fish-full/swfs');
 mkdirSync(outDir, { recursive: true });
-const manifest = { swfs: [] };
+// The main movie is a genuine Flash build (not synthesised from XML), so it is
+// copied through untouched and listed first: the Execute tab picks the
+// shallowest/first manifest entry as its default main SWF.
+const MAIN = { name: 'bassken_game4.21', path: 'fish-full/swfs/bassken_game4.21.swf' };
+const manifest = { swfs: [MAIN] };
 for (const name of EXPORTS) {
   const xmlPath = resolve(root, `game-files/fish-full/external/${name}/${name}.xml`);
   const bytes = xmlToSwf(readFileSync(xmlPath, 'utf8'));

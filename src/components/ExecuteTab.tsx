@@ -9,7 +9,7 @@ import type { AssetCache, SwfPackage } from '../lib/assets';
 import type { AssetBundle, SwfDocument } from '../types';
 import { cn } from '../utils/cn';
 import { Button } from './ui';
-import { compileSources, isCodeFile, linkProgram, type CompiledSources, type LinkedProgram } from '../engine/flash/loader';
+import { compileSources, expectedClasses, isCodeFile, linkProgram, mergeSources, type CompiledSources, type LinkedProgram } from '../engine/flash/loader';
 import { FlashPlayer, HtmlAudioBackend, type LogEntry } from '../engine/flash/player';
 import type { AudioBackend } from '../engine/flash/media';
 import { DisplayObject, MovieClip } from '../engine/flash/display';
@@ -17,16 +17,23 @@ import { As2Execute, isAs2Bundle } from './As2Execute';
 
 type CodeState =
   | { status: 'loading' }
-  | { status: 'ready'; compiled: CompiledSources; fileCount: number; classes: LinkedProgram['classes']; displayClasses: string[] };
+  | {
+    status: 'ready'; compiled: CompiledSources; classes: LinkedProgram['classes'];
+    displayClasses: string[];
+    /** dependency SWFs whose code was folded in because the main movie alone could not link */
+    dependencies: string[];
+  };
 
 const MAX_LOG = 500;
 
 export function ExecuteTab({ externals, ...props }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; externals?: SwfPackage[] }) {
-  // ActionScript 1/2 exports (SWF ≤ 8, .as scripts) run on the AS2 player; AS3 code on the flash.* engine.
-  return isAs2Bundle(props.doc, props.assets) ? <As2Execute {...props} externals={externals} /> : <As3Execute {...props} />;
+  // ActionScript 1/2 exports (SWF ≤ 8, .as scripts) run on the AS2 player, which
+  // loads a dependency SWF when the game asks for it by URL; AS3 code runs on
+  // the flash.* engine, where the dependencies contribute their classes.
+  return isAs2Bundle(props.doc, props.assets) ? <As2Execute {...props} externals={externals} /> : <As3Execute {...props} externals={externals} />;
 }
 
-function As3Execute({ doc, cache, assets }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null }) {
+function As3Execute({ doc, cache, assets, externals = [] }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; externals?: SwfPackage[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<FlashPlayer | null>(null);
@@ -45,27 +52,64 @@ function As3Execute({ doc, cache, assets }: { doc: SwfDocument; cache: AssetCach
   const [size, setSize] = useState({ w: 800, h: 500 });
   const pendingLogs = useRef<LogEntry[]>([]);
 
+  /** Dependency SWFs (everything loaded besides the main one) and their code files. */
+  const dependencyFiles = useMemo(() => externals
+    .map((pkg) => ({
+      name: pkg.bundle.xmlName || pkg.doc.header.fileName || 'dependency.swf',
+      files: pkg.bundle.files.filter((f) => isCodeFile(f.path)),
+    }))
+    .filter((dependency) => dependency.files.length > 0), [externals]);
+  const dependencyKey = dependencyFiles.map((d) => `${d.name}:${d.files.length}`).join('|');
+
   // ---- compile the transpiled code in the bundle (once per bundle)
   useEffect(() => {
     let cancelled = false;
     setCode({ status: 'loading' });
+    const read = async (f: { path: string; file: File }) => ({ path: f.path, text: await readText(f.file) });
     const files = (assets?.files ?? []).filter((f) => isCodeFile(f.path));
-    Promise.all(files.map(async (f) => ({ path: f.path, text: await readText(f.file) })))
-      .then((sources) => {
+    Promise.all(files.map(read))
+      .then(async (mainSources) => {
         if (cancelled) return;
-        const compiled = compileSources(sources);
-        // A throwaway link to list classes for the document-class picker.
-        const probe = linkProgram(compiled);
+        let compiled = compileSources(mainSources);
+        // A throwaway link: it lists classes for the document-class picker and
+        // shows whether the main movie's own code is complete.
+        let probe = linkProgram(compiled);
+        // A SWF the game loads at run time may hold classes the main movie
+        // imports (a shared library SWF, or the other half of a split game), so
+        // fold its code in when — and only when — the main movie alone falls
+        // short: unresolved imports, or a SymbolClass with no class behind it.
+        let dependencies: string[] = [];
+        const wanted = expectedClasses(doc);
+        const unresolved = (linked: LinkedProgram) => wanted.filter((name) => !linked.getDefinition(name)).length;
+        if (dependencyFiles.length && (probe.errors.length > 0 || unresolved(probe) > 0)) {
+          const readDependencies = await Promise.all(dependencyFiles.map(async (dependency) => ({
+            name: dependency.name,
+            files: await Promise.all(dependency.files.map(read)),
+          })));
+          if (cancelled) return;
+          const withDependencies = mergeSources(mainSources, readDependencies);
+          if (withDependencies.used.length) {
+            const retryCompiled = compileSources(withDependencies.sources);
+            const retry = linkProgram(retryCompiled);
+            // Keep the retry only if it is at least as healthy as the main-only link.
+            if (retry.errors.length <= probe.errors.length && unresolved(retry) <= unresolved(probe)) {
+              compiled = retryCompiled;
+              probe = retry;
+              dependencies = withDependencies.used;
+            }
+          }
+        }
         const displayClasses = probe.classes
           .filter((c) => { const d = probe.getDefinition(c.qualifiedName); return typeof d === 'function' && d.prototype instanceof DisplayObject; })
           .map((c) => c.qualifiedName);
-        setCode({ status: 'ready', compiled, fileCount: sources.length, classes: probe.classes, displayClasses });
+        setCode({ status: 'ready', compiled, classes: probe.classes, displayClasses, dependencies });
       })
       .catch((e) => {
         if (!cancelled) setLogs([{ level: 'error', message: `Could not read the code files: ${e instanceof Error ? e.message : String(e)}`, time: 0 }]);
       });
     return () => { cancelled = true; };
-  }, [assets]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assets, dependencyKey]);
 
   useEffect(() => { setDocClass(null); }, [doc]);
 
@@ -87,6 +131,14 @@ function As3Execute({ doc, cache, assets }: { doc: SwfDocument; cache: AssetCach
         if (entry.level === 'error') console.error('[game]', entry.message, entry.detail ?? '');
       },
     });
+    if (code.dependencies.length) {
+      pendingLogs.current.push({
+        level: 'info',
+        message: `linked code from dependency SWF${code.dependencies.length === 1 ? '' : 's'}: ${code.dependencies.join(', ')}`,
+        detail: 'The main SWF alone did not define every class it links to, so the dependency SWFs in the load supplied them.',
+        time: 0,
+      });
+    }
     playerRef.current = player;
     setLinkage([...player.linkage]);
     player.start();
@@ -174,7 +226,7 @@ function As3Execute({ doc, cache, assets }: { doc: SwfDocument; cache: AssetCach
 
   const errorCount = logs.filter((l) => l.level === 'error').length;
   const shownLogs = errorsOnly ? logs.filter((l) => l.level === 'error') : logs;
-  const hasCode = code.status === 'ready' && code.fileCount > 0;
+  const hasCode = code.status === 'ready' && code.compiled.modules.length > 0;
   const docLink = linkage.find((l) => l.id === 0);
   const unlinked = linkage.filter((l) => !l.linked);
   const compileErrors = code.status === 'ready' ? code.compiled.modules.filter((m) => m.error) : [];
@@ -257,7 +309,12 @@ function As3Execute({ doc, cache, assets }: { doc: SwfDocument; cache: AssetCach
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Code</div>
-                <div>{code.fileCount} file(s) compiled, {code.classes.length} class(es) exported.</div>
+                <div>{code.compiled.modules.length} file(s) compiled, {code.classes.length} class(es) exported.</div>
+                {code.dependencies.length > 0 && (
+                  <div className="mt-1 text-zinc-500">
+                    Includes the code of dependency SWF{code.dependencies.length === 1 ? '' : 's'}: {code.dependencies.join(', ')}
+                  </div>
+                )}
                 {compileErrors.map((m) => <div key={m.path} className="mt-1 font-mono text-[10px] text-rose-300">{m.path}: {m.error}</div>)}
                 <div className="mt-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Document class</div>
                 <select
