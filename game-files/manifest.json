@@ -1,6 +1,10 @@
 {
   "swfs": [
     {
+      "name": "bassken_game4.21",
+      "path": "fish-full/swfs/bassken_game4.21.swf"
+    },
+    {
       "name": "bassken_overview",
       "path": "fish-full/swfs/bassken_overview.swf"
     },

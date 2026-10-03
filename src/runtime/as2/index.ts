@@ -8,6 +8,8 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { runActionsBase64, setAvm1Env, takeAvm1Warnings, type Avm1Warning } from './avm1';
+
 // ------------------------------------------------------------------- types
 
 /** A timeline/MovieClip as seen by transpiled code. AS2 objects are dynamic. */
@@ -71,7 +73,64 @@ export interface AS2Host {
 let host: AS2Host | null = null;
 const log: string[] = [];
 
-export function installHost(h: AS2Host | null) { host = h; if (h) installAS2Extensions(); }
+export function installHost(h: AS2Host | null) {
+  host = h;
+  installAvm1Bridge(h);
+  if (h) installAS2Extensions();
+}
+
+/** Diagnostics the AVM1 interpreter collected (unknown opcodes, failed targets…). */
+export function takeAvm1Diagnostics(): Avm1Warning[] { return takeAvm1Warnings(); }
+
+/** The AS2 global object: the player built-ins plus every class the transpiled
+ * scripts registered.  AVM1 bytecode resolves unqualified names through the
+ * scope chain into this object, so it has to hold the same things `_global`
+ * does in the Flash player. */
+export function as2Globals(): Record<string, any> {
+  const g = _global as Record<string, any>;
+  const add = (values: Record<string, any>) => {
+    for (const [name, value] of Object.entries(values)) if (!(name in g)) g[name] = value;
+  };
+  add({
+    Object, Array, String, Number, Boolean, Date, Math, Function, Infinity, NaN, undefined,
+    isNaN, isFinite, parseInt, parseFloat, escape, unescape, encodeURI, decodeURI, encodeURIComponent, decodeURIComponent,
+  });
+  add({
+    trace, getTimer, random, int, chr, ord, mbchr, mbord, mblength, mbsubstring, substring,
+    setInterval, clearInterval, setTimeout, clearTimeout, getURL, fscommand, stopAllSounds,
+    updateAfterEvent, getVersion, targetPath, stopDrag, loadMovieNum, loadVariablesNum, unloadMovieNum,
+    ASSetPropFlags, toggleHighQuality,
+  });
+  add({
+    MovieClip, Button, TextField, TextFormat, Sound, Color, Key, Mouse, Stage, Selection, System,
+    XML, XMLNode, LoadVars, LocalConnection, MovieClipLoader, ContextMenu, ContextMenuItem,
+    NetConnection, NetStream, Video, TextSnapshot, PrintJob, XMLSocket, AsBroadcaster,
+    Camera, Microphone, Accessibility, flash, SharedObject,
+  });
+  return g;
+}
+
+/** Wires the AVM1 interpreter to the engine's display list and clock. */
+function installAvm1Bridge(h: AS2Host | null): void {
+  if (!h) { setAvm1Env(null); return; }
+  setAvm1Env({
+    global: as2Globals(),
+    level: (n) => h.level(n),
+    getURL: (url, win, method) => h.getURL(url, win, method),
+    stopAllSounds: () => h.stopAllSounds(),
+    updateAfterEvent: () => h.updateAfterEvent(),
+    duplicateMovieClip: (_from, target, name, depth) => h.duplicateMovieClip(target, name, depth),
+    removeMovieClip: (_from, target) => h.removeMovieClip(target),
+    startDrag: (_from, target, lock, l, t, r, b) => h.startDrag(target, lock, l, t, r, b),
+    stopDrag: () => h.stopDrag(),
+    loadMovie: (_from, url, target, method) => h.loadMovie(url, target, method),
+    loadVariables: (_from, url, target, method) => h.loadVariables(url, target, method),
+    callFrame: (from, frame) => {
+      const fn = (from as any)?.__callFrame;
+      if (typeof fn === 'function') fn.call(from, frame);
+    },
+  });
+}
 export function currentHost(): AS2Host | null { return host; }
 function need(): AS2Host {
   if (!host) throw new Error('AS2 runtime: no host installed (call installHost() from the engine first)');
@@ -106,6 +165,11 @@ const sink: any = new Proxy(Object.create(null), { set: () => true, get: () => u
 
 export const $rt = {
   sink,
+
+  /** Executes a raw AVM1 action stream (base64) captured from a SWF tag. */
+  avm1Actions(from: AS2Clip, base64: string): void {
+    runActionsBase64(from, base64);
+  },
   get root(): AS2Clip { return need().root; },
   level(n: number): AS2Clip | undefined { return need().level(n); },
 

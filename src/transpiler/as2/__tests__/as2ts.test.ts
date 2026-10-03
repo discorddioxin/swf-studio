@@ -220,9 +220,11 @@ describe('project mapping', () => {
         expect(() => transform(c, { transforms: ['typescript', 'imports'] })).not.toThrow();
       }
       mkdirSync(join(dir, 'runtime', 'as2'), { recursive: true });
-      writeFileSync(join(dir, 'runtime', 'as2', 'index.ts'), readFileSync(join(repo, 'src/runtime/as2/index.ts'), 'utf8'));
+      for (const file of ['index.ts', 'avm1.ts']) {
+        writeFileSync(join(dir, 'runtime', 'as2', file), readFileSync(join(repo, 'src/runtime/as2', file), 'utf8'));
+      }
       writeFileSync(join(dir, 'tsconfig.json'), JSON.stringify({
-        compilerOptions: { target: 'ES2020', module: 'ESNext', moduleResolution: 'bundler', strict: true, noEmit: true, skipLibCheck: true, isolatedModules: true, useDefineForClassFields: true, lib: ['ES2020'], types: [] },
+        compilerOptions: { target: 'ES2020', module: 'ESNext', moduleResolution: 'bundler', strict: true, noEmit: true, skipLibCheck: true, isolatedModules: true, useDefineForClassFields: true, lib: ['ES2020', 'DOM'], types: [] },
         include: ['game', 'runtime'],
       }));
       let out = '';

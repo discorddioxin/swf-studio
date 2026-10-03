@@ -206,7 +206,7 @@ export function resolveAssetFile(bundle: AssetBundle, reference: string): AssetF
   // sprite's script to every other timeline's frame actions). Those are
   // resolved by owner + frame in resolveActionScriptFile instead.
   const base = ref.split('/').pop();
-  if (base?.endsWith('.as') && base !== 'doaction.as' && base !== 'doinitaction.as') {
+  if (base?.endsWith('.as') && !/^do(init)?action(_\d+)?\.as$/i.test(base)) {
     const matches = bundle.files.filter((f) => f.ext === 'as' && f.name.toLowerCase() + '.as' === base);
     if (matches.length === 1) return matches[0];
   }
@@ -239,6 +239,13 @@ export function resolveActionScriptFile(
   const frame = frameIndex + 1;
   const initFirst = /InitAction/i.test(tagType);
   const preference = initFirst ? ['doinitaction.as', 'doaction.as'] : ['doaction.as', 'doinitaction.as'];
+  // FFDec numbers the 2nd/3rd script of a frame DoAction_2.as, DoAction_3.as, …
+  const rank = (base: string) => {
+    const hit = /^(doaction|doinitaction)(?:_(\d+))?\.as$/.exec(base);
+    if (!hit) return -1;
+    const kind = `${hit[1]}.as`;
+    return preference.indexOf(kind) * 1000 + (hit[2] ? Number(hit[2]) : 1);
+  };
   const spriteTokens = timeline.characterId == null
     ? []
     : [`definesprite_${timeline.characterId}`, `definespritetag_${timeline.characterId}`];
@@ -252,14 +259,14 @@ export function resolveActionScriptFile(
     const segments = path.split('/');
     const base = `${file.name}.${file.ext}`.toLowerCase();
     if (file.ext !== 'as' || !segments.includes('scripts')) return false;
-    if (!preference.includes(base) || !segments.includes(frameToken)) return false;
+    if (rank(base) < 0 || !segments.includes(frameToken)) return false;
     if (timeline.characterId == null) {
       // Main timeline: never a script that belongs to a sprite/button definition.
       return !segments.some((segment) => /^define/.test(segment));
     }
     return spriteTokens.some((token) => segments.includes(token));
   });
-  scripts.sort((a, b) => preference.indexOf(`${a.name}.${a.ext}`.toLowerCase()) - preference.indexOf(`${b.name}.${b.ext}`.toLowerCase()));
+  scripts.sort((a, b) => rank(`${a.name}.${a.ext}`.toLowerCase()) - rank(`${b.name}.${b.ext}`.toLowerCase()));
 
   return scripts[0];
 }

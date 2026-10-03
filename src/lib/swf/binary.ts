@@ -7,8 +7,8 @@ import type {
   ColorTransform, DisplayItem, EventKind, Frame, FrameEvent, Matrix, PlaceOp,
   Rect, SwfCharacter, SwfDocument, SwfHeader, TextRecord, Timeline,
 } from '../../types';
-import { classify, kindOfTag, isSpecialTag, actionFileCandidates, decodeActionBytes } from '../parser';
-import { BitReader, latin1, toHex } from './bitio';
+import { classify, kindOfTag, isSpecialTag, actionFileCandidates } from '../parser';
+import { BitReader, avm1ActionSource, isLikelyActionStream, latin1 } from './bitio';
 import { shapeToSvg, type SvgFillStyle, type SvgLineStyle, type SvgShapeRecord } from './shapeSvg';
 
 /** SWF tag codes → JPEXS FFDec type names (the XML "type" attribute). */
@@ -119,6 +119,15 @@ function readColor(br: BitReader, shapeNum: number): string {
 }
 
 // tag stream ---------------------------------------------------------------
+
+/** DoInitAction carries the SpriteID it targets before its action records — but
+ * some producers (and FFDec's XML `actionBytes`) write the records only.  Pick
+ * the reading that walks as a complete action stream. */
+export function doInitActions(data: Uint8Array): Uint8Array {
+  const body = data.subarray(2);
+  if (data.length > 4 && isLikelyActionStream(body) && !isLikelyActionStream(data)) return body;
+  return data;
+}
 
 export function parseTags(data: Uint8Array): RawTag[] {
   const br = new BitReader(data);
@@ -1103,10 +1112,10 @@ export async function parseSwfBinary(
           });
           continue;
         }
-        const hex = toHex(tag.data);
+        const actionBytes = type === 'DoInitActionTag' ? doInitActions(tag.data) : tag.data;
         events.push({
           kind: 'action', tagType: type,
-          detail: decodeActionBytes(hex).source,
+          detail: avm1ActionSource(actionBytes),
           externalActionCandidates: actionFileCandidates(characterId, frameIndex, type),
         });
         continue;
@@ -1238,17 +1247,27 @@ export async function parseSwfBinary(
 
   // Synthesize scripts/*.as sources (FFDec export layout) from the decoded
   // action events — the Execute workspace transpiles those files.
+  //
+  // A frame may hold several DoAction tags (frame 1 of a real game usually does:
+  // a small setup script and the big library definition script). FFDec names the
+  // extra ones DoAction_2.as, DoAction_3.as, … and the transpiler appends them in
+  // file order, so every event must get its own file — deduping by path silently
+  // dropped everything after the first script of a frame.
   const seenScriptPaths = new Set(files.map((f) => f.path));
   for (const tl of timelines.values()) {
     for (const frame of tl.frames) {
       for (const ev of frame.events) {
         if (ev.kind !== 'action' || !ev.detail || !ev.externalActionCandidates?.length) continue;
-        const path = ev.externalActionCandidates[0];
-        if (seenScriptPaths.has(path)) continue;
+        const preferred = ev.externalActionCandidates[0];
+        const slash = preferred.lastIndexOf('/');
+        const dir = preferred.slice(0, slash + 1);
+        const stem = preferred.slice(slash + 1).replace(/\.as$/i, '');
+        let path = preferred;
+        for (let n = 2; seenScriptPaths.has(path); n++) path = `${dir}${stem}_${n}.as`;
         seenScriptPaths.add(path);
-        const base = path.slice(path.lastIndexOf('/') + 1).replace(/\.as$/i, '');
+        ev.externalActions = path;
         files.push({
-          path, name: base, ext: 'as', category: 'scripts',
+          path, name: path.slice(path.lastIndexOf('/') + 1).replace(/\.as$/i, ''), ext: 'as', category: 'scripts',
           bytes: new TextEncoder().encode(ev.detail.endsWith('\n') ? ev.detail : ev.detail + '\n'),
         });
       }
