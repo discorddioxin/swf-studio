@@ -1,0 +1,16 @@
+{
+  "name": "ruffle-oracle",
+  "private": true,
+  "type": "module",
+  "description": "Reference renderer: plays a SWF with Ruffle so the studio's output can be compared against a real Flash implementation.",
+  "scripts": {
+    "serve": "node serve.mjs",
+    "capture": "node capture.mjs"
+  },
+  "dependencies": {
+    "@ruffle-rs/ruffle": "^0.6.0",
+    "@sparticuz/chromium": "^153.0.0",
+    "puppeteer-core": "^25.12.0",
+    "swf-parser": "^0.14.1"
+  }
+}

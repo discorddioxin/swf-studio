@@ -146,6 +146,52 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
   };
 }
 
+/**
+ * The AS3 class names a movie expects its code to define: every SymbolClass
+ * entry (0 is the document class) plus the classes named on characters.
+ */
+export function expectedClasses(doc: { symbolClasses?: Map<number, string>; characters: Map<number, { className?: string }> }): string[] {
+  const names = new Set<string>();
+  for (const className of doc.symbolClasses?.values() ?? []) if (className) names.add(className);
+  for (const character of doc.characters.values()) if (character.className) names.add(character.className);
+  return [...names];
+}
+
+/** A dependency SWF's code files (the transpiled sources of one loaded package). */
+export interface DependencySources {
+  /** the SWF the code came from, e.g. "game_chat.swf" */
+  name: string;
+  files: SourceFile[];
+}
+
+/**
+ * The sources to link when a game is split over several SWFs: the main movie's
+ * code first, then every dependency file the main package does not already
+ * provide. A dependency never shadows the main movie's own class, so folding
+ * them in cannot change how the main movie behaves — it only adds the classes
+ * an external SWF would have contributed at run time.
+ */
+export function mergeSources(
+  main: SourceFile[],
+  dependencies: DependencySources[],
+): { sources: SourceFile[]; used: string[] } {
+  const seen = new Set(main.map((f) => normalize(f.path).toLowerCase()));
+  const sources = [...main];
+  const used: string[] = [];
+  for (const dependency of dependencies) {
+    let added = 0;
+    for (const file of dependency.files) {
+      const key = normalize(file.path).toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      sources.push(file);
+      added++;
+    }
+    if (added) used.push(dependency.name);
+  }
+  return { sources, used };
+}
+
 /** Evaluate modules with the player active so module-level `trace`/errors reach its console. */
 export function linkWithPlayer(compiled: CompiledSources, player: unknown): LinkedProgram {
   const previous = runtime.player;
@@ -183,8 +229,11 @@ function findModule(spec: string, dir: string, byPath: Map<string, CompiledModul
     const loose = noExt.get(stripExt(base).toLowerCase());
     if (loose?.length) return loose[0];
   }
-  // Package-style: strip aliases like "@/", "~/", "src/" and match by suffix.
-  const tail = s.replace(/^[@~]\/?/, '').replace(/^\.\.?\//, '').replace(/\.(tsx?|jsx?|mjs)$/, '');
+  // Package-style: strip aliases like "@/", "~/", or any leading "../" and
+  // match by suffix. This also rescues a relative import that points into a
+  // *different* package of the same game (a dependency SWF's code lives in its
+  // own folder, so "../../util/GameConfig" is only found by its tail).
+  const tail = s.replace(/^[@~]\/?/, '').replace(/^((\.\.?)\/)+/, '').replace(/\.(tsx?|jsx?|mjs)$/, '');
   const asPath = /\//.test(tail) ? tail : tail.replace(/\./g, '/');
   const wanted = asPath.toLowerCase();
   let best: CompiledModule | undefined;

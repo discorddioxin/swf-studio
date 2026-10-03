@@ -9,8 +9,8 @@ import { Stage } from './components/Stage';
 import { TimelineView } from './components/TimelineView';
 import { GameEngine } from './components/GameEngine';
 import { Button } from './components/ui';
-import { AssetCache, expandUploadFiles, hydrateActionScriptSources, ingestFiles, patchButtonAssetIds, splitPackages, type SwfPackage } from './lib/assets';
-import { parseSwfXml } from './lib/parser';
+import type { AssetCache, SwfPackage } from './lib/assets';
+import { buildPackage as buildPackageIn, loadUploadedPackages } from './lib/swfLoading';
 import { fetchBundledManifest, fetchBundledSwf } from './lib/bundled';
 import { useProject } from './lib/project';
 import type { AssetBundle, FlattenedSprite, SwfDocument } from './types';
@@ -94,14 +94,10 @@ export default function App() {
   const api = useProject(doc?.header.fileName ?? '');
 
   /** bundle + cache one parsed document into a SwfPackage (shared by uploads and bundled SWFs) */
-  const buildPackage = useCallback(async (files: File[], parsedDoc: SwfDocument): Promise<SwfPackage> => {
-    const bundle = ingestFiles(files);
-    patchButtonAssetIds(bundle, parsedDoc);
-    await hydrateActionScriptSources(parsedDoc, bundle);
-    const pkgCache = new AssetCache(bundle, () => setTick((t) => t + 1));
-    pkgCache.useExternals(parsedDoc.characters.values());
-    return { doc: parsedDoc, bundle, cache: pkgCache };
-  }, []);
+  const buildPackage = useCallback(
+    (files: File[], parsedDoc: SwfDocument) => buildPackageIn(files, parsedDoc, () => setTick((t) => t + 1)),
+    [],
+  );
 
   const installPackages = useCallback((loaded: SwfPackage[]) => {
     const parsed = loaded[0]?.doc;
@@ -152,46 +148,44 @@ export default function App() {
     }
   }, [buildPackage, packageLabels]);
 
-  const load = useCallback(async (files: File[]) => {
+  /**
+   * Load an upload. Every `.swf` (raw binary) and every `.xml` (FFDec export)
+   * in the selection becomes a package; `mainKey` picks the one that plays the
+   * game, the rest are its dependencies. Without a pick, the shallowest SWF is
+   * the main movie and the ones below it are the external SWFs the game loads
+   * at run time (loadMovie / MovieClipLoader).
+   */
+  const load = useCallback(async (files: File[], mainKey?: string | null) => {
     setError(null);
     setBusy('Indexing files…');
-    const loaded: SwfPackage[] = [];
     try {
-      const hasArchives = files.some((file) => /\.zip$/i.test(file.name));
-      if (hasArchives) setBusy('Unpacking ZIP archives…');
-      const expandedFiles = await expandUploadFiles(files);
-      // one package per FFDec export (.xml + its folder); the shallowest one is the main movie,
-      // the others are SWFs the game loads at run time (loadMovie / MovieClipLoader)
-      const parts = splitPackages(expandedFiles);
-      if (!parts.length) throw new Error('No .xml file found in that folder — expected the JPEXS dump at its root.');
-      await new Promise((r) => setTimeout(r, 30));
-      for (const part of parts) {
-        setBusy(`Parsing ${part.xmlFile.name}${parts.length > 1 ? ` (${loaded.length + 1}/${parts.length})` : ''}…`);
-        const parsedDoc = parseSwfXml(await part.xmlFile.text(), { fileName: part.xmlFile.name });
-        loaded.push(await buildPackage(part.files, parsedDoc));
-      }
-      if (!loaded.length) throw new Error('No readable .xml SWF files found in the selected uploads.');
+      const loaded = await loadUploadedPackages(files, mainKey, {
+        onProgress: setBusy,
+        onChange: () => setTick((t) => t + 1),
+      });
       setBusy('Merging bundled externals…');
       installPackages(await mergeBundledExternals(loaded));
     } catch (e) {
-      loaded.forEach((p) => p.cache.dispose());
       setBusy(null);
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [buildPackage, installPackages, mergeBundledExternals]);
+  }, [installPackages, mergeBundledExternals]);
 
   /** The Loader's "Use bundled SWFs" button: parse the raw .swf binaries that
-   *  ship with the repo (no main movie is bundled — everything degrades to the
-   *  six externals). */
-  const loadBundled = useCallback(async () => {
+   *  ship with the repo. `mainName` picks which of them plays the game (the
+   *  others become dependencies); the default is the first manifest entry. */
+  const loadBundled = useCallback(async (mainName?: string | null) => {
     setError(null);
     setBusy('Fetching bundled SWF manifest…');
     const loaded: SwfPackage[] = [];
     try {
       const entries = await fetchBundledManifest();
-      for (let i = 0; i < entries.length; i++) {
-        const entry = entries[i];
-        setBusy(`Loading bundled SWF ${i + 1}/${entries.length}: ${entry.name}…`);
+      const ordered = mainName
+        ? [...entries].sort((a, b) => (a.name === mainName ? -1 : b.name === mainName ? 1 : 0))
+        : entries;
+      for (let i = 0; i < ordered.length; i++) {
+        const entry = ordered[i];
+        setBusy(`Loading bundled SWF ${i + 1}/${ordered.length}: ${entry.name}${entry.name === mainName ? ' (main)' : ''}…`);
         const { doc, files } = await fetchBundledSwf(entry);
         loaded.push(await buildPackage(files, doc));
       }

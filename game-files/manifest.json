@@ -1,41 +1,49 @@
 {
-  "swfs": [
-    {
-      "name": "bassken_overview",
-      "path": "fish-full/swfs/bassken_overview.swf"
-    },
-    {
-      "name": "bassken_pier",
-      "path": "fish-full/swfs/bassken_pier.swf",
-      "fonts": [
-        "fish-full/external/bassken_pier/fonts/9_AdLib BT.ttf"
-      ]
-    },
-    {
-      "name": "bassken_fish4.20",
-      "path": "fish-full/swfs/bassken_fish4.20.swf"
-    },
-    {
-      "name": "bassken_scene",
-      "path": "fish-full/swfs/bassken_scene.swf"
-    },
-    {
-      "name": "game_chat",
-      "path": "fish-full/swfs/game_chat.swf"
-    },
-    {
-      "name": "gsecs2.9",
-      "path": "fish-full/swfs/gsecs2.9.swf",
-      "fonts": [
-        "fish-full/external/gsecs2.9/fonts/10_Arial.ttf",
-        "fish-full/external/gsecs2.9/fonts/186_Courier.ttf",
-        "fish-full/external/gsecs2.9/fonts/277_Helvetica.ttf",
-        "fish-full/external/gsecs2.9/fonts/299_Synchro LET.ttf",
-        "fish-full/external/gsecs2.9/fonts/305_Helvetica.ttf",
-        "fish-full/external/gsecs2.9/fonts/330_Comic Sans MS.ttf",
-        "fish-full/external/gsecs2.9/fonts/5_ITC Avant Garde Pro Bk.ttf",
-        "fish-full/external/gsecs2.9/fonts/7_Arial.ttf"
-      ]
-    }
-  ]
+ "swfs": [
+  {
+   "name": "bassken_game4.21",
+   "path": "fish-full/swfs/bassken_game4.21.swf"
+  },
+  {
+   "name": "bassken_overview",
+   "path": "fish-full/swfs/bassken_overview.swf"
+  },
+  {
+   "name": "bassken_pier",
+   "path": "fish-full/swfs/bassken_pier.swf",
+   "fonts": [
+    "fish-full/external/bassken_pier/fonts/9_AdLib BT.ttf"
+   ]
+  },
+  {
+   "name": "bassken_fish4.20",
+   "path": "fish-full/swfs/bassken_fish4.20.swf"
+  },
+  {
+   "name": "bassken_scene",
+   "path": "fish-full/swfs/bassken_scene.swf"
+  },
+  {
+   "name": "game_chat",
+   "path": "fish-full/swfs/game_chat.swf"
+  },
+  {
+   "name": "gsecs2.9",
+   "path": "fish-full/swfs/gsecs2.9.swf",
+   "fonts": [
+    "fish-full/external/gsecs2.9/fonts/10_Arial.ttf",
+    "fish-full/external/gsecs2.9/fonts/186_Courier.ttf",
+    "fish-full/external/gsecs2.9/fonts/277_Helvetica.ttf",
+    "fish-full/external/gsecs2.9/fonts/299_Synchro LET.ttf",
+    "fish-full/external/gsecs2.9/fonts/305_Helvetica.ttf",
+    "fish-full/external/gsecs2.9/fonts/330_Comic Sans MS.ttf",
+    "fish-full/external/gsecs2.9/fonts/5_ITC Avant Garde Pro Bk.ttf",
+    "fish-full/external/gsecs2.9/fonts/7_Arial.ttf"
+   ]
+  },
+  {
+   "name": "OmnitureActionSource",
+   "path": "fish-full/swfs/OmnitureActionSource.swf"
+  }
+ ]
 }

@@ -8,6 +8,8 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { runActionsBase64, setAvm1Env, takeAvm1Warnings, type Avm1Warning } from './avm1';
+
 // ------------------------------------------------------------------- types
 
 /** A timeline/MovieClip as seen by transpiled code. AS2 objects are dynamic. */
@@ -71,7 +73,65 @@ export interface AS2Host {
 let host: AS2Host | null = null;
 const log: string[] = [];
 
-export function installHost(h: AS2Host | null) { host = h; if (h) installAS2Extensions(); }
+export function installHost(h: AS2Host | null) {
+  host = h;
+  installAvm1Bridge(h);
+  if (h) installAS2Extensions();
+}
+
+/** Diagnostics the AVM1 interpreter collected (unknown opcodes, failed targets…). */
+export function takeAvm1Diagnostics(): Avm1Warning[] { return takeAvm1Warnings(); }
+
+/** The AS2 global object: the player built-ins plus every class the transpiled
+ * scripts registered.  AVM1 bytecode resolves unqualified names through the
+ * scope chain into this object, so it has to hold the same things `_global`
+ * does in the Flash player. */
+export function as2Globals(): Record<string, any> {
+  const g = _global as Record<string, any>;
+  installObjectStatics();
+  const add = (values: Record<string, any>) => {
+    for (const [name, value] of Object.entries(values)) if (!(name in g)) g[name] = value;
+  };
+  add({
+    Object, Array, String, Number, Boolean, Date, Math, Function, Infinity, NaN, undefined,
+    isNaN, isFinite, parseInt, parseFloat, escape, unescape, encodeURI, decodeURI, encodeURIComponent, decodeURIComponent,
+  });
+  add({
+    trace, getTimer, random, int, chr, ord, mbchr, mbord, mblength, mbsubstring, substring,
+    setInterval, clearInterval, setTimeout, clearTimeout, getURL, fscommand, stopAllSounds,
+    updateAfterEvent, getVersion, targetPath, stopDrag, loadMovieNum, loadVariablesNum, unloadMovieNum,
+    ASSetPropFlags, toggleHighQuality,
+  });
+  add({
+    MovieClip, Button, TextField, TextFormat, Sound, Color, Key, Mouse, Stage, Selection, System,
+    XML, XMLNode, LoadVars, LocalConnection, MovieClipLoader, ContextMenu, ContextMenuItem,
+    NetConnection, NetStream, Video, TextSnapshot, PrintJob, XMLSocket, AsBroadcaster,
+    Camera, Microphone, Accessibility, flash, SharedObject,
+  });
+  return g;
+}
+
+/** Wires the AVM1 interpreter to the engine's display list and clock. */
+function installAvm1Bridge(h: AS2Host | null): void {
+  if (!h) { setAvm1Env(null); return; }
+  setAvm1Env({
+    global: as2Globals(),
+    level: (n) => h.level(n),
+    getURL: (url, win, method) => h.getURL(url, win, method),
+    stopAllSounds: () => h.stopAllSounds(),
+    updateAfterEvent: () => h.updateAfterEvent(),
+    duplicateMovieClip: (_from, target, name, depth) => h.duplicateMovieClip(target, name, depth),
+    removeMovieClip: (_from, target) => h.removeMovieClip(target),
+    startDrag: (_from, target, lock, l, t, r, b) => h.startDrag(target, lock, l, t, r, b),
+    stopDrag: () => h.stopDrag(),
+    loadMovie: (_from, url, target, method) => h.loadMovie(url, target, method),
+    loadVariables: (_from, url, target, method) => h.loadVariables(url, target, method),
+    callFrame: (from, frame) => {
+      const fn = (from as any)?.__callFrame;
+      if (typeof fn === 'function') fn.call(from, frame);
+    },
+  });
+}
 export function currentHost(): AS2Host | null { return host; }
 function need(): AS2Host {
   if (!host) throw new Error('AS2 runtime: no host installed (call installHost() from the engine first)');
@@ -92,6 +152,73 @@ let linkageScope: unknown = null;
 /** Sets the library that Object.registerClass calls register into (the engine sets it while a loaded SWF's init actions run). */
 export function setLinkageScope(scope: unknown): unknown { const prev = linkageScope; linkageScope = scope; return prev; }
 
+/**
+ * Flash statics on the global `Object` that SWFs rely on. Only
+ * `Object.registerClass` matters in practice: the Flash 8 (v2) UI components
+ * bind their library symbols to their classes with
+ * `Object.registerClass("List", mx.controls.List)` from an init action, and the
+ * engine then gives every instance of that symbol the class prototype.
+ * Transpiled code resolves `Object` to the JavaScript global, so the method has
+ * to live there.
+ */
+export function installObjectStatics(): void {
+  installAddProperty();
+  const target = Object as unknown as Record<string, unknown>;
+  if (typeof target.registerClass === 'function') return;
+  Object.defineProperty(Object, 'registerClass', {
+    configurable: true,
+    writable: true,
+    enumerable: false,
+    value: (symbolId: unknown, cls: unknown): undefined => {
+      const key = symbolId == null ? '' : String(symbolId);
+      if (!key) return undefined;
+      let lib = linkage.get(linkageScope);
+      if (!lib) linkage.set(linkageScope, (lib = new Map()));
+      if (cls == null) lib.delete(key); else lib.set(key, cls);
+      return undefined;
+    },
+  });
+}
+
+/**
+ * `Object.prototype.addProperty(name, getter, setter)` — AVM1 virtual properties.
+ *
+ * The Flash IDE compiles `function get width() { … }` into a plain `__get__width`
+ * method plus an `addProperty("width", __get__width, null)` call in the class body
+ * (see the DoInitAction of mx.core.UIObject in gsecs2.9.swf). Without this method
+ * the call is dropped, so every component getter/setter — `width`, `height`,
+ * `minWidth`, `minHeight`, `rowHeight`, `dataProvider`, … — reads `undefined`
+ * and MX (v2) layouts collapse to NaN. Flash puts it on `Object.prototype`, and
+ * so do we, non-enumerably so game code iterating with for..in is unaffected.
+ */
+function installAddProperty(): void {
+  const proto = Object.prototype as unknown as Record<string, unknown>;
+  if (typeof proto.addProperty === 'function') return;
+  Object.defineProperty(Object.prototype, 'addProperty', {
+    configurable: true,
+    writable: true,
+    enumerable: false,
+    value: function addProperty(this: unknown, name: unknown, getter: unknown, setter: unknown): boolean {
+      const key = name == null ? '' : String(name);
+      if (!key || typeof getter !== 'function') return false;
+      const get = getter as () => unknown;
+      const set = typeof setter === 'function' ? (setter as (v: unknown) => unknown) : null;
+      try {
+        Object.defineProperty(this, key, {
+          configurable: true,
+          enumerable: false,
+          get(this: unknown) { return get.call(this); },
+          // Flash makes a setter-less property READ_ONLY: writes are ignored silently.
+          set: set
+            ? function (this: unknown, v: unknown) { set.call(this, v); }
+            : function () { /* read-only */ },
+        });
+      } catch { return false; }
+      return true;
+    },
+  });
+}
+
 function setPath(obj: Record<string, any>, path: string, value: unknown) {
   const parts = path.split('.');
   let o = obj;
@@ -106,6 +233,11 @@ const sink: any = new Proxy(Object.create(null), { set: () => true, get: () => u
 
 export const $rt = {
   sink,
+
+  /** Executes a raw AVM1 action stream (base64) captured from a SWF tag. */
+  avm1Actions(from: AS2Clip, base64: string): void {
+    runActionsBase64(from, base64);
+  },
   get root(): AS2Clip { return need().root; },
   level(n: number): AS2Clip | undefined { return need().level(n); },
 
@@ -217,6 +349,9 @@ export const $rt = {
   },
 };
 
+// Dev hook: lets the puppeteer oracle inspect live classes/instances. Read-only.
+(globalThis as any).__rt = $rt;
+
 // ---------------------------------------------------------- path resolution
 
 /** Resolves AS2 target paths: "_root.a.b", "../a", "/a/b", "_level0.a", "a:b" (slash syntax). */
@@ -325,7 +460,9 @@ export function toggleHighQuality(): void { /* no-op */ }
 export class MovieClip {
   [key: string]: any;
   static __construct: ((obj: any) => void) | null = null;
-  constructor() { const c = MovieClip.__construct; MovieClip.__construct = null; c?.(this); }
+  constructor() {
+    const c = MovieClip.__construct; MovieClip.__construct = null; c?.(this);
+  }
 }
 export class Button {
   [key: string]: any;

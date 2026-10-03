@@ -53,6 +53,7 @@ const SOURCES = [
   {
     path: 'scripts/frame_1/DoAction.as',
     text: `stop();
+trace("frame1 enter");
 log = [];
 log.push("frame1 hero=" + (hero != undefined) + " body=" + (hero.body != undefined));
 undefinedThing.child.method();
@@ -61,8 +62,8 @@ _global.sharedCount = 0;
 function addScore(n) { score = Number(score) + n; }`,
   },
   { path: 'scripts/frame_3/DoAction.as', text: `log.push("game frame"); hero.gotoAndStop("jump");` },
-  { path: 'scripts/DefineSprite_10/frame_1/DoAction.as', text: `stop(); _root.log.push("hero frame1 " + this._name);` },
-  { path: 'scripts/frame_1/PlaceObject2_10_5/onClipEvent(load).as', text: `onClipEvent(load){ _root.log.push("hero load"); }` },
+  { path: 'scripts/DefineSprite_10/frame_1/DoAction.as', text: `stop(); trace("hero frame1 " + this._name); if (_root.log != undefined) { _root.log.push("hero frame1"); }` },
+  { path: 'scripts/frame_1/PlaceObject2_10_5/onClipEvent(load).as', text: `onClipEvent(load){ trace("hero load"); }` },
   { path: 'scripts/frame_1/PlaceObject2_10_5/onClipEvent(enterFrame).as', text: `onClipEvent(enterFrame){ _global.sharedCount++; }` },
   { path: 'scripts/DefineButton2_20/on(release).as', text: `on(release){ log.push("release this=" + this._name); gotoAndStop("game"); }` },
   { path: 'scripts/Hero.as', text: `Object.registerClass("Hero", HeroClip);` },
@@ -97,12 +98,16 @@ describe('AS2 player', () => {
   });
 
   it('builds linked classes before their constructor body and runs clip events in order', () => {
-    const { root } = boot();
-    const i = (s: string) => root.log.findIndex((l: string) => l.startsWith(s));
+    const { root, logs } = boot();
+    // A clip placed by a frame is fully initialised - children placed, frame-1 actions run -
+    // while the opening timeline instantiates it, so its code runs before the placing frame's
+    // actions. mx UI components rely on this (they create their children in frame 1).
+    const t = (s: string) => logs.findIndex((l) => l.includes(s));
+    expect(t('hero frame1 hero')).toBeGreaterThanOrEqual(0);
+    expect(t('hero frame1 hero')).toBeLessThan(t('frame1 enter'));
+    expect(t('hero load')).toBeGreaterThan(t('hero frame1 hero'));
     // the timeline-placed hero was constructed before _root's frame script created _root.log (as in Flash)
     expect(root.log).not.toContain('ctor hero speed=undefined body=true');
-    expect(root.log).toContain('hero frame1 hero');
-    expect(i('hero load')).toBeGreaterThan(i('hero frame1'));
     expect(typeof root.hero.run).toBe('function');
     root.hero.speed = 5;
     root.hero.run();

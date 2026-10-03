@@ -659,8 +659,22 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   // ------------------------------------------------------------ LoadVars
   def(RT.LoadVars.prototype, {
     toString(this: any) {
-      return Object.keys(this).filter((k) => !k.startsWith('__') && typeof this[k] !== 'function' && k !== 'loaded' && k !== 'contentType')
-        .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(this[k]))}`).join('&');
+      // Flash renders dynamic properties as `k=v` joined by `&`, with function
+      // members last as `k=[type Function]`. `loaded`/`contentType` are runtime
+      // bookkeeping and object values (GSIRequest keeps its owner in there) are
+      // not part of the wire format.
+      //
+      // The order matters for the GSI gateway: `GSIRequest.onRecieverLoad`
+      // reads `unescape(reciever.toString())`, cuts everything from
+      // `=&onLoad=` on and hands the rest to PHPSerializer.unserialize, so the
+      // reply body has to be a valueless property whose name is the payload.
+      const keys = Object.keys(this)
+        .filter((k) => !k.startsWith('__') && k !== 'loaded' && k !== 'contentType')
+        .filter((k) => this[k] == null || (typeof this[k] !== 'object' && typeof this[k] !== 'function'));
+      const fns = Object.keys(this).filter((k) => typeof this[k] === 'function' && !k.startsWith('__'));
+      const pairs = keys.map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(this[k] ?? ''))}`);
+      for (const k of fns) pairs.push(`${encodeURIComponent(k)}=${encodeURIComponent('[type Function]')}`);
+      return pairs.join('&');
     },
     decode(this: any, s: any) { decodeVars(this, String(s ?? '')); },
     load(this: any, url: any) { return lvRequest(this, String(url), 'GET', null, this); },
@@ -709,12 +723,52 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   });
   def(RT.XMLSocket.prototype, {
     connect(this: any, host: any, port: any) {
-      p.log('warn', `XMLSocket.connect(${host}, ${port}): socket servers are not available offline`);
-      setTimeout(() => { if (typeof this.onConnect === 'function') { p.guard('XMLSocket.onConnect', () => this.onConnect(false)); p.runQueue(); } }, 0);
+      const backend = p.opts.gameServer ?? null;
+      const socket: any = {
+        host: String(host), port: Number(port), open: false,
+        deliver: (data: string) => {
+          // Deliver on a later turn: the game is usually still inside the AVM1
+          // action that called `send` when the test server replies.
+          setTimeout(() => {
+            if (typeof this.onData !== 'function') return;
+            p.guard('XMLSocket.onData', () => this.onData(String(data)));
+            p.runQueue();
+          }, 0);
+        },
+        close: (error = false) => {
+          socket.open = false;
+          p.guard('XMLSocket.onClose', () => { if (typeof this.onClose === 'function') this.onClose(error); });
+          p.runQueue();
+        },
+      };
+      this.__socket = socket;
+      if (!backend) {
+        p.log('warn', `XMLSocket.connect(${host}, ${port}): socket servers are not available offline`);
+        setTimeout(() => { if (typeof this.onConnect === 'function') { p.guard('XMLSocket.onConnect', () => this.onConnect(false)); p.runQueue(); } }, 0);
+        return true;
+      }
+      setTimeout(() => {
+        p.log('info', `XMLSocket.connect(${host}:${port}) — local test game server`);
+        p.guard('XMLSocket.onConnect', () => {
+          backend.connect(String(host), Number(port), socket, (level, message) => p.log(level, message));
+          socket.open = true;
+          if (typeof this.onConnect === 'function') this.onConnect(true);
+        });
+        p.runQueue();
+      }, 0);
       return true;
     },
-    send() {},
-    close() {},
+    send(this: any, data: any) {
+      const socket = this.__socket;
+      const text = data === undefined || data === null ? '' : String(data);
+      if (!socket || !p.opts.gameServer) return;
+      p.guard('XMLSocket.send', () => p.opts.gameServer!.send(socket, text));
+    },
+    close(this: any) {
+      const socket = this.__socket;
+      if (!socket) return;
+      p.guard('XMLSocket.close', () => p.opts.gameServer?.close(socket));
+    },
   });
   def(RT.XML.prototype, {
     parseXML(this: any, s: any) { parseXmlInto(this, String(s ?? '')); },

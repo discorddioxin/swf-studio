@@ -12,6 +12,12 @@ const CATEGORY_BY_DIR: Record<string, AssetCategory> = {
   scripts: 'texts',
 };
 
+/** The path of an uploaded file inside the selection ("folder/name.ext"). */
+export function filePath(file: File): string {
+  const raw = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+  return raw.replace(/\\/g, '/').replace(/^\/+/, '');
+}
+
 /** last integer run in a name — "DefineButton2_23" -> 23, "12" -> 12 */
 export function guessId(name: string): number | undefined {
   const m = name.match(/(\d+)(?!.*\d)/);
@@ -28,7 +34,7 @@ export function ingestFiles(fileList: File[]): AssetBundle {
 
   // Work out the browser-selected root folder when one exists. ZIP entries
   // are normalized below by asset directory, so multiple archives can merge.
-  const rel = (f: File) => (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
+  const rel = filePath;
   const firstRelative = (fileList[0] as (File & { webkitRelativePath?: string }) | undefined)?.webkitRelativePath;
   if (firstRelative?.includes('/')) rootName = firstRelative.split('/')[0];
 
@@ -112,7 +118,7 @@ export interface PackageFiles {
  * exports' shapes/1.svg etc. never collide. The main movie comes first.
  */
 export function splitPackages(fileList: File[]): PackageFiles[] {
-  const rel = (f: File) => ((f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name).replace(/\\/g, '/');
+  const rel = filePath;
   const dirOf = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
   const xmls = fileList.filter((f) => /\.xml$/i.test(f.name));
   if (xmls.length <= 1) return xmls.length ? [{ xmlFile: xmls[0], root: dirOf(rel(xmls[0])), files: fileList }] : [];
@@ -200,7 +206,7 @@ export function resolveAssetFile(bundle: AssetBundle, reference: string): AssetF
   // sprite's script to every other timeline's frame actions). Those are
   // resolved by owner + frame in resolveActionScriptFile instead.
   const base = ref.split('/').pop();
-  if (base?.endsWith('.as') && base !== 'doaction.as' && base !== 'doinitaction.as') {
+  if (base?.endsWith('.as') && !/^do(init)?action(_\d+)?\.as$/i.test(base)) {
     const matches = bundle.files.filter((f) => f.ext === 'as' && f.name.toLowerCase() + '.as' === base);
     if (matches.length === 1) return matches[0];
   }
@@ -233,6 +239,13 @@ export function resolveActionScriptFile(
   const frame = frameIndex + 1;
   const initFirst = /InitAction/i.test(tagType);
   const preference = initFirst ? ['doinitaction.as', 'doaction.as'] : ['doaction.as', 'doinitaction.as'];
+  // FFDec numbers the 2nd/3rd script of a frame DoAction_2.as, DoAction_3.as, …
+  const rank = (base: string) => {
+    const hit = /^(doaction|doinitaction)(?:_(\d+))?\.as$/.exec(base);
+    if (!hit) return -1;
+    const kind = `${hit[1]}.as`;
+    return preference.indexOf(kind) * 1000 + (hit[2] ? Number(hit[2]) : 1);
+  };
   const spriteTokens = timeline.characterId == null
     ? []
     : [`definesprite_${timeline.characterId}`, `definespritetag_${timeline.characterId}`];
@@ -246,14 +259,14 @@ export function resolveActionScriptFile(
     const segments = path.split('/');
     const base = `${file.name}.${file.ext}`.toLowerCase();
     if (file.ext !== 'as' || !segments.includes('scripts')) return false;
-    if (!preference.includes(base) || !segments.includes(frameToken)) return false;
+    if (rank(base) < 0 || !segments.includes(frameToken)) return false;
     if (timeline.characterId == null) {
       // Main timeline: never a script that belongs to a sprite/button definition.
       return !segments.some((segment) => /^define/.test(segment));
     }
     return spriteTokens.some((token) => segments.includes(token));
   });
-  scripts.sort((a, b) => preference.indexOf(`${a.name}.${a.ext}`.toLowerCase()) - preference.indexOf(`${b.name}.${b.ext}`.toLowerCase()));
+  scripts.sort((a, b) => rank(`${a.name}.${a.ext}`.toLowerCase()) - rank(`${b.name}.${b.ext}`.toLowerCase()));
 
   return scripts[0];
 }

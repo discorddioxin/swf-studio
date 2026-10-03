@@ -1,3 +1,4 @@
+import { avm1ActionSource, hexToBytes } from './swf/bitio';
 import {
   type ColorTransform, type DisplayItem, type EventKind, type Frame, type FrameEvent,
   type Matrix, type PlaceOp, type Rect, type SwfCharacter, type TextRecord, type SwfDocument,
@@ -413,10 +414,15 @@ function actionDetail(el: Element): string {
     return !!(t && t.startsWith('Action'));
   });
 
+  const actionBytesAttr = el.getAttribute('actionBytes') ?? findData(el, (e) => /actionBytes/i.test(e.tagName))?.textContent;
+  // A raw byte dump can be executed by the AVM1 interpreter — always prefer it.
+  // (FFDec stores DoInitAction actions without the sprite id that prefixes the tag.)
+  if (actionBytesAttr && /^[0-9a-fA-F]+$/.test(actionBytesAttr.trim())) {
+    return avm1ActionSource(hexToBytes(actionBytesAttr.trim()));
+  }
   if (!actualActions.length) {
-    const bytes = el.getAttribute('actionBytes') ?? findData(el, (e) => /actionBytes/i.test(e.tagName))?.textContent;
-    if (bytes) {
-      return decodeActionBytes(bytes).source;
+    if (actionBytesAttr) {
+      return decodeActionBytes(actionBytesAttr).source;
     }
     return '  // script';
   }

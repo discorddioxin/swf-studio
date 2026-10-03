@@ -3,7 +3,7 @@
 // Everything is fetched relative to the page so it works behind any dev-server
 // or preview origin without hard-coded hosts.
 
-import { parseSwfBinary } from './swf/binary';
+import { parseSwfBinary, type SwfFile } from './swf/binary';
 import type { SwfDocument } from '../types';
 
 export interface BundledSwf {
@@ -47,6 +47,23 @@ export interface BundledPackage {
   files: File[];
 }
 
+/**
+ * Wrap the asset files the binary parser synthesized (scripts/, shapes/, …)
+ * as upload Files under `prefix`, so a raw .swf upload goes through the same
+ * `ingestFiles` path as an FFDec folder.
+ */
+export function swfFilesToFiles(files: SwfFile[], prefix: string): File[] {
+  return files.map((f) => {
+    const copy = f.bytes.slice(); // fresh ArrayBuffer-backed view for Blob
+    const file = new File([copy.buffer as ArrayBuffer], f.path.split('/').pop() ?? f.path);
+    Object.defineProperty(file, 'webkitRelativePath', {
+      value: `${prefix}/${f.path}`,
+      configurable: true,
+    });
+    return file;
+  });
+}
+
 /** Fetch one bundled .swf and parse it with the binary SWF parser. */
 export async function fetchBundledSwf(
   entry: BundledSwf,
@@ -59,15 +76,7 @@ export async function fetchBundledSwf(
   onProgress?.(`Parsing bundled ${entry.name}.swf…`);
   const fileName = entry.path.split('/').pop() ?? `${entry.name}.swf`;
   const { doc, files } = await parseSwfBinary(buffer, fileName);
-  const asFiles = files.map((f) => {
-    const copy = f.bytes.slice(); // fresh ArrayBuffer-backed view for Blob
-    const file = new File([copy.buffer as ArrayBuffer], f.path.split('/').pop() ?? f.path);
-    Object.defineProperty(file, 'webkitRelativePath', {
-      value: `${entry.name}/${f.path}`,
-      configurable: true,
-    });
-    return file;
-  });
+  const asFiles = swfFilesToFiles(files, entry.name);
   // ttf fonts from the committed FFDec export
   for (const fontPath of entry.fonts ?? []) {
     try {

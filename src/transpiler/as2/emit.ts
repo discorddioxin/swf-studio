@@ -62,6 +62,9 @@ export const RUNTIME_FUNCTIONS = new Set([
 export const CONTEXT_FUNCTIONS = new Set([
   'eval', 'set', 'getProperty', 'setProperty', 'duplicateMovieClip', 'removeMovieClip', 'startDrag', 'loadMovie',
   'loadVariables', 'unloadMovie', 'call', 'print', 'printAsBitmap',
+  // host hook for raw AVM1 bytecode: the SWF parser synthesises
+  // `avm1Actions("<base64>")` for DoAction / DoInitAction tags.
+  'avm1Actions',
 ]);
 
 /** Classes that make unknown unqualified names resolve to `this.x` in subclasses. */

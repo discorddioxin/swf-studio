@@ -27,6 +27,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.{ts,tsx}", "server/**/*.test.{ts,mjs}"],
+    // `debug/tools/vitest/*.dev.test.ts` are developer dumpers (see debug/README.md);
+    // they are kept out of src/ so they never ship, but still run with the suite.
+    include: ["src/**/*.test.{ts,tsx}", "server/**/*.test.{ts,mjs}", "debug/tools/vitest/*.dev.test.ts"],
   },
 });
