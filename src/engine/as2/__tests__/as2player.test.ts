@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 // AS2 player semantics against a tiny SWF (TEST FIXTURE ONLY – never imported by the app).
 // Scripts use FFDec's export layout, so this also exercises as2ts project mapping.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseSwfXml } from '../../../lib/parser';
+import { currentHost } from '../../../runtime/as2';
 import { buildAS2Program } from '../program';
 import { AS2Player } from '../player';
 
@@ -157,6 +158,28 @@ describe('AS2 player', () => {
     root.gotoAndStop('menu');
     expect(root.hero).toBeTruthy();
     expect(root.startButton).toBeUndefined();
+  });
+
+  it('routes online help to the offline guide and blocks external navigation', () => {
+    const onHelp = vi.fn();
+    const logs: string[] = [];
+    const player = new AS2Player({
+      doc: parseSwfXml(XML, { fileName: 'fixture.xml' }),
+      program: null,
+      onHelp,
+      onLog: (entry) => logs.push(`${entry.level}: ${entry.message}`),
+    });
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    currentHost()?.getURL('http://example.invalid/info/help.php?view=category&id=23', '_blank');
+    expect(onHelp).toHaveBeenCalledOnce();
+    currentHost()?.getURL('https://example.invalid/external', '_blank');
+    expect(open).not.toHaveBeenCalled();
+    expect(logs).toContain('info: opened built-in offline fishing instructions');
+    expect(logs).toContain('warn: blocked external navigation in offline mode: https://example.invalid/external');
+
+    open.mockRestore();
+    player.dispose();
   });
 
   it('runs setInterval on game time', () => {

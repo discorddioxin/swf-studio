@@ -173,6 +173,8 @@ export interface AS2PlayerOptions {
   flashVars?: Record<string, string>;
   /** Scripts to run on _root right after the first frame (e.g. automation / guest login). */
   afterStart?: (root: any, player: AS2Player) => void;
+  /** Show built-in offline help when a SWF requests its online help page. */
+  onHelp?: () => void;
   /** In-process stand-in for the game's XMLSocket server. See `gameServerStub.ts`. */
   gameServer?: GameServerBackend | null;
 }
@@ -1112,8 +1114,18 @@ export class AS2Player {
       clearInterval: (id) => p.clearTimer(id),
       getURL: (url, win) => {
         if (/^javascript:/i.test(url)) { p.log('info', `getURL(${url}) ignored`); return; }
+        // The bundled game's Instructions action points to an online help page.
+        // Keep it usable offline without opening external tabs or making requests.
+        if (/\/info\/help\.php(?:\?|$)/i.test(url)) {
+          p.log('info', 'opened built-in offline fishing instructions');
+          p.opts.onHelp?.();
+          return;
+        }
+        if (/^(?:https?:)?\/\//i.test(url)) {
+          p.log('warn', `blocked external navigation in offline mode: ${url}`);
+          return;
+        }
         p.log('info', `getURL("${url}"${win ? `, "${win}"` : ''})`);
-        if (win && typeof window !== 'undefined' && /^https?:/i.test(url)) window.open(url, '_blank', 'noopener');
       },
       fscommand: (c, a) => p.log('info', `fscommand("${c}", "${a ?? ''}")`),
       stopAllSounds: () => p.stopAllSounds(),

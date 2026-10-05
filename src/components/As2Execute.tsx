@@ -49,6 +49,7 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
   const [session, setSession] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(false);
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [panel, setPanel] = useState<'console' | 'program' | null>('console');
@@ -168,6 +169,7 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
       fetchText: (url, method, body) =>
         mockServer.fetchText(url, method, body, (level, message, detail) => player.log(level, message, detail ?? '')),
       gameServer: mockServer,
+      onHelp: () => setInstructionsOpen(true),
       afterStart: bootCode ? (root, p) => {
         p.log('info', 'running boot script');
         new Function('_root', 'player', '_global', bootCode)(root, p, as2Global);
@@ -338,6 +340,40 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
           onPointerUp={(e) => { const [x, y] = toStage(e); playerRef.current?.pointerUp(x, y); }}
           onContextMenu={(e) => e.preventDefault()}
         />
+        {instructionsOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="offline-fishing-instructions-title"
+            className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 p-4"
+          >
+            <section className="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 p-5 text-zinc-100 shadow-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 id="offline-fishing-instructions-title" className="text-lg font-semibold">Fishing instructions</h2>
+                  <p className="mt-1 text-xs text-zinc-400">Offline guide for the bundled game.</p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close fishing instructions"
+                  className="rounded px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                  onClick={() => setInstructionsOpen(false)}
+                >
+                  ×
+                </button>
+              </div>
+              <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-zinc-200">
+                <li>Choose a location and select bait before fishing.</li>
+                <li>Click the water once to build casting power, then click again to cast.</li>
+                <li>When a fish bites, move the mouse side to side to keep the fish between the guide lines.</li>
+                <li>Click a spot on the overview map to move your player along the coast.</li>
+              </ol>
+              <div className="mt-5 flex justify-end">
+                <Button variant="primary" onClick={() => setInstructionsOpen(false)}>Got it</Button>
+              </div>
+            </section>
+          </div>
+        )}
       </div>
 
       {panel === 'console' && (

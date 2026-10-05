@@ -222,5 +222,15 @@ const fishingState = await page.evaluate(() => {
 });
 console.log('fishingState:', JSON.stringify(fishingState, null, 2));
 
+// The in-game Instructions control must open a local guide, never a remote tab.
+const helpButton = await centerOf('root.mLoginHolder.bar.instance91');
+if (!helpButton?.x) throw new Error('Could not locate the in-game Instructions button');
+await clickStage(helpButton.x, helpButton.y, 'Instructions button');
+const helpText = await page.$eval('[role="dialog"]', (el) => el.textContent || '').catch(() => '');
+if (!helpText.includes('Fishing instructions')) throw new Error('Instructions did not open the offline guide');
+console.log('offline instructions:', helpText.replace(/\s+/g, ' ').trim());
+await page.screenshot({ path: path.join(outDir, '10-offline-instructions.png') });
+await page.click('[aria-label="Close fishing instructions"]');
+
 await fs.writeFile(path.join(outDir, 'logs.txt'), logs.join('\n'));
 await browser.close();
