@@ -170,7 +170,21 @@ describe('project mapping', () => {
     expect(classify('scripts/%3Cdefault package%3E/themap.as')).toEqual({ kind: 'initByName', name: 'themap' });
     expect(classify('scripts/DefineSprite_10_fisher/frame_1/DoAction.as')).toEqual({ kind: 'frame', timeline: 10, frame: 1 });
     expect(classify('scripts/DefineSprite_9/DoInitAction.as')).toEqual({ kind: 'init', timeline: 9 });
+    expect(classify('scripts/frame_1/DoInitAction_2.as')).toEqual({ kind: 'init', timeline: 0 });
     expect(classify('scripts/__Packages/com/x/Foo.as')).toEqual({ kind: 'class' });
+  });
+
+  it('retains DoInitAction targets and SWF tag order in the runnable program', () => {
+    const r = transpileProject([
+      { path: 'scripts/frame_1/DoInitAction.as', content: 'trace("define map_engine");', tagOrder: 1090, targetSpriteId: 29 },
+      { path: 'scripts/frame_1/DoInitAction_2.as', content: 'Object.registerClass("themap", map_engine);', tagOrder: 1091, targetSpriteId: 28 },
+    ]);
+    const index = r.files.get('index.ts')!;
+    expect(index).toContain('{ order: 1090, targetSpriteId: 29, run: initAction_0 }');
+    expect(index).toContain('{ order: 1091, targetSpriteId: 28, run: initAction_1 }');
+    expect(index.indexOf('order: 1090')).toBeLessThan(index.indexOf('order: 1091'));
+    expect(r.files.has('init/action_1.ts')).toBe(true);
+    expect(r.files.has('init/action_2.ts')).toBe(true);
   });
 
   const project = [

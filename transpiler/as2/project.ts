@@ -21,7 +21,13 @@ export interface ProjectOptions {
   runtime?: string;
 }
 
-export interface ProjectFile { path: string; content: string }
+export interface ProjectFile {
+  path: string;
+  content: string;
+  /** Metadata copied from the SWF tag that supplied a synthesized/external init script. */
+  tagOrder?: number;
+  targetSpriteId?: number;
+}
 
 export interface FileReport {
   source: string;
@@ -76,8 +82,9 @@ export function classify(path: string): Role {
     return { kind: 'placement', timeline, frame: Number(frame[1]), character: place[2] != null ? Number(place[1]) : 0, depth };
   }
   if (RE.init.test(p)) {
-    const own = /DoInitAction(?:Tag)?_(\d+)/i.exec(p);
-    return { kind: 'init', timeline: own ? Number(own[1]) : timeline };
+    // The `_2` suffix is FFDec's ordinal for a second init-action file, not a
+    // sprite id. Only the owning DefineSprite directory carries target scope.
+    return { kind: 'init', timeline };
   }
   if (frame) return { kind: 'frame', timeline, frame: Number(frame[1]) };
   return { kind: 'unknown' };
@@ -99,7 +106,11 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
   for (const file of [...input].sort((a, b) => natural(a.path, b.path))) {
     if (!/\.as$/i.test(file.path)) continue;
     const path = file.path.replace(/\\/g, '/');
+    const projectFile: ProjectFile = { ...file, path };
     let role = classify(path);
+    if (projectFile.targetSpriteId != null && role.kind === 'init') {
+      role = { kind: 'init', timeline: projectFile.targetSpriteId };
+    }
     try {
       const body = inlineIncludes(parseProgram(file.content), path, byPath, new Set([path]));
       if ((role.kind === 'unknown' || role.kind === 'initByName') && body.some((s) => s.k === 'class')) role = { kind: 'class' };
@@ -107,10 +118,10 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
       else if (role.kind === 'unknown' && /^(?:scripts\/)?[^/]+\.as$/i.test(path.replace(/^.*?(scripts\/)/i, 'scripts/')) && !path.includes('__Packages')) {
         role = { kind: 'initByName', name: path.split('/').pop()!.replace(/\.as$/i, '') };
       }
-      parsed.push({ file: { path, content: file.content }, role, body, error: null });
+      parsed.push({ file: projectFile, role, body, error: null });
     } catch (err) {
       const line = err instanceof ParseError || err instanceof LexError ? err.line : undefined;
-      parsed.push({ file: { path, content: file.content }, role, body: null, error: (err as Error).message, line });
+      parsed.push({ file: projectFile, role, body: null, error: (err as Error).message, line });
     }
   }
 
@@ -247,6 +258,40 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
     report.push({ source: list.map((p) => p.file.path).join('\n'), target: `${module}.ts`, role: `init action of "${name}"`, diagnostics: [...diags, ...em.diagnostics] });
   }
 
+  // Emit each DoInitAction separately. Grouping by sprite id or export name is
+  // useful for older consumers, but it loses the SWF's tag order when actions
+  // initialize one sprite and then register another sprite's class.
+  const initActionSources = parsed
+    .filter((p) => p.role.kind === 'init' || p.role.kind === 'initByName')
+    .sort((a, b) => {
+      const ao = a.file.tagOrder, bo = b.file.tagOrder;
+      if (ao != null && bo != null) return ao - bo || natural(a.file.path, b.file.path);
+      if (ao != null) return -1;
+      if (bo != null) return 1;
+      return natural(a.file.path, b.file.path);
+    });
+  const initActionModules: { module: string; p: Parsed; order: number; targetSpriteId?: number; linkageName?: string }[] = [];
+  initActionSources.forEach((p, index) => {
+    const module = `init/action_${index + 1}`;
+    const em = new ModuleEmitter({ runtime, selfModule: module, classes });
+    const diags: Diagnostic[] = [];
+    const body = (p.body ?? []).filter((s) => s.k !== 'on' && s.k !== 'onClipEvent');
+    let fn = em.timelineFunction(body);
+    if (p.error) {
+      em.useRuntime('$rt');
+      fn = fn.replace(/\{\n/, `{\n  $rt.untranslated(${JSON.stringify(p.file.path)}, ${JSON.stringify(p.error)});\n`);
+      diags.push({ level: 'error', message: `${p.file.path}: ${p.error}`, line: p.line });
+    }
+    const role = p.role;
+    const targetSpriteId = p.file.targetSpriteId
+      ?? (role.kind === 'init' && role.timeline !== 0 ? role.timeline : undefined);
+    const linkageName = role.kind === 'initByName' ? role.name : undefined;
+    const order = p.file.tagOrder ?? index;
+    files.set(`${module}.ts`, banner(p.file.path) + em.header() + `/** One ordered SWF DoInitAction tag. */\nexport const init = ${fn};\n`);
+    initActionModules.push({ module, p, order, targetSpriteId, linkageName });
+    report.push({ source: p.file.path, target: `${module}.ts`, role: 'ordered init action', diagnostics: [...diags, ...em.diagnostics] });
+  });
+
   // ------------------------------------------------------------ index
   const idx: string[] = [`import type { AS2Program } from ${JSON.stringify(runtime)};`];
   for (const [id, m] of timelineModules) idx.push(`import * as ${id === 0 ? 'root' : `sprite_${id}`} from './${m}';`);
@@ -254,12 +299,20 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
   const classList = [...classes.values()].sort((a, b) => natural(a.name, b.name));
   classList.forEach((c, i) => idx.push(`import { ${c.name.split('.').pop()} as class_${i} } from './${c.module}';`));
   initModules.forEach(([, m], i) => idx.push(`import { init as init_${i} } from './${m}';`));
+  initActionModules.forEach(({ module }, i) => idx.push(`import { init as initAction_${i} } from './${module}';`));
   idx.push('');
   idx.push('export const program: AS2Program = {');
   idx.push(`  timelines: {${timelineModules.map(([id]) => `\n    ${id}: ${id === 0 ? 'root' : `sprite_${id}`},`).join('')}\n  },`);
   idx.push(`  buttons: {${buttonModules.map(([id]) => `\n    ${id}: button_${id},`).join('')}\n  },`);
   idx.push(`  classes: {${classList.map((c, i) => `\n    ${JSON.stringify(c.name)}: class_${i},`).join('')}\n  },`);
   idx.push(`  initByName: {${initModules.map(([n], i) => `\n    ${JSON.stringify(n)}: init_${i},`).join('')}\n  },`);
+  idx.push(`  initActions: [${initActionModules.map((entry, i) => {
+    const fields = [`order: ${entry.order}`];
+    if (entry.targetSpriteId != null) fields.push(`targetSpriteId: ${entry.targetSpriteId}`);
+    if (entry.linkageName != null) fields.push(`linkageName: ${JSON.stringify(entry.linkageName)}`);
+    fields.push(`run: initAction_${i}`);
+    return `\n    { ${fields.join(', ')} },`;
+  }).join('')}\n  ],`);
   idx.push('};');
   idx.push('');
   idx.push('export default program;');

@@ -71,6 +71,10 @@ export interface FrameEvent {
   tagType: string;
   detail: string;
   characterId?: number;
+  /** Sprite targeted by a DoInitAction tag. */
+  targetSpriteId?: number;
+  /** Ordinal among DoInitAction tags in serialized SWF order. */
+  tagOrder?: number;
   externalActions?: string;
   /** Fallback paths used by JPEXS script exports when the XML has no hint. */
   externalActionCandidates?: string[];
@@ -158,6 +162,9 @@ export interface AssetFile {
   ext: string;
   category: AssetCategory;
   file: File;
+  /** Serialized SWF tag index / DoInitAction target copied from the owning tag. */
+  tagOrder?: number;
+  targetSpriteId?: number;
   /** id guessed from the file / folder name */
   guessedId?: number;
 }

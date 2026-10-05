@@ -76,7 +76,9 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
     let cancelled = false;
     setBuild({ status: 'loading' });
     const files = (assets?.files ?? []).filter((f) => /\.as$/i.test(f.path));
-    Promise.all(files.map(async (f) => ({ path: f.path, text: await readText(f.file) })))
+    Promise.all(files.map(async (f) => ({
+      path: f.path, text: await readText(f.file), tagOrder: f.tagOrder, targetSpriteId: f.targetSpriteId,
+    })))
       .then((sources) => {
         if (cancelled) return;
         // class bodies register on _global while linking; the player re-registers them after its reset
@@ -136,7 +138,9 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
     setLoadedExternals([]);
     const swfs: ExternalSwf[] = extEntries.map((e, i) => ({
       name: e.name, key: e.key, doc: e.pkg.doc, assets: e.pkg.cache, audio: extAudio[i],
-      sources: () => Promise.all(e.pkg.bundle.files.filter((f) => /\.as$/i.test(f.path)).map(async (f) => ({ path: f.path, text: await readText(f.file) }))),
+      sources: () => Promise.all(e.pkg.bundle.files.filter((f) => /\.as$/i.test(f.path)).map(async (f) => ({
+        path: f.path, text: await readText(f.file), tagOrder: f.tagOrder, targetSpriteId: f.targetSpriteId,
+      }))),
     }));
     let playerForLog: AS2Player | null = null;
     const resolveExternal = createExternalResolver(swfs, {
@@ -149,7 +153,9 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
     });
     const bootCode = boot.trim();
     if (!gameServerRef.current) {
-      gameServerRef.current = createMockServer((level, message) => playerForLog?.log(level, message));
+      // Socket logs use the logger passed per connection; do not capture an old
+      // player in the server instance because Restart intentionally reuses it.
+      gameServerRef.current = createMockServer();
     }
     const mockServer = gameServerRef.current;
     const player = new AS2Player({
@@ -273,7 +279,17 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
 
   const togglePlay = () => { playingRef.current = !playingRef.current; setPlaying(playingRef.current); canvasRef.current?.focus(); };
   const step = () => { playingRef.current = false; setPlaying(false); const p = playerRef.current; if (p) { p.tick(); } };
-  const restart = () => { setSession((s) => s + 1); canvasRef.current?.focus(); };
+  const restart = () => {
+    const previous = playerRef.current;
+    playerRef.current = null;
+    previous?.dispose();
+    gameServerRef.current?.reset();
+    playingRef.current = true;
+    setPlaying(true);
+    setInstructionsOpen(false);
+    setSession((s) => s + 1);
+    canvasRef.current?.focus();
+  };
 
   const errorCount = logs.filter((l) => l.level === 'error').length;
   const shownLogs = errorsOnly ? logs.filter((l) => l.level === 'error') : logs;
@@ -298,7 +314,7 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
               aria-label="Start mode"
               className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-[11px] text-zinc-200"
               value={preset?.id ?? 'custom'}
-              onChange={(e) => { const p = BOOT_PRESETS.find((x) => x.id === e.target.value); if (p) { setBoot(p.code); setSession((s) => s + 1); } }}
+              onChange={(e) => { const p = BOOT_PRESETS.find((x) => x.id === e.target.value); if (p) { setBoot(p.code); restart(); } }}
             >
               {BOOT_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
               {!preset && <option value="custom">Custom script</option>}

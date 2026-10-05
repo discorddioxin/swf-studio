@@ -21,11 +21,18 @@ export interface AS2Build {
   warnings: BuildIssue[];
 }
 
-export interface SourceInput { path: string; text: string }
+export interface SourceInput {
+  path: string;
+  text: string;
+  tagOrder?: number;
+  targetSpriteId?: number;
+}
 
 /** Transpile + compile + link. Module bodies (class definitions) run here, so call resetRuntime() first. */
 export function buildAS2Program(sources: SourceInput[]): AS2Build {
-  const project = transpileProject(sources.map((s) => ({ path: s.path, content: s.text })), { runtime: RUNTIME_SPECIFIER });
+  const project = transpileProject(sources.map((s) => ({
+    path: s.path, content: s.text, tagOrder: s.tagOrder, targetSpriteId: s.targetSpriteId,
+  })), { runtime: RUNTIME_SPECIFIER });
   const errors: BuildIssue[] = [];
   const warnings: BuildIssue[] = [];
   for (const r of project.report) {

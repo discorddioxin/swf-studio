@@ -90,6 +90,18 @@ function boot() {
 }
 
 describe('AS2 player', () => {
+  it('runs DoInitAction scripts in SWF tag order rather than sprite-id or filename order', () => {
+    const build = buildAS2Program([
+      { path: 'scripts/frame_1/DoInitAction.as', text: 'order = [29];', tagOrder: 1090, targetSpriteId: 29 },
+      { path: 'scripts/frame_1/DoInitAction_2.as', text: 'order.push(28);', tagOrder: 1091, targetSpriteId: 28 },
+    ]);
+    expect(build.errors).toEqual([]);
+    const player = new AS2Player({ doc: parseSwfXml(XML, { fileName: 'fixture.xml' }), program: build.program });
+    player.start();
+    expect((player.root.obj as any).order).toEqual([29, 28]);
+    player.dispose();
+  });
+
   it('runs frame scripts after placement, honours stop() and never throws on undefined', () => {
     const { player, root, logs } = boot();
     expect(root.log[0]).toBe('frame1 hero=true body=true');

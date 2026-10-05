@@ -158,6 +158,8 @@ export interface SushiServerInterface extends GameServerBackend {
   getMembers(): MockMember[];
   getMember(memberId: number): MockMember | undefined;
   registerPlugin(plugin: SushiPluginInterface): void;
+  /** Restore the configured session, room list, fish inventory and counters. */
+  reset(): void;
   deliver(socket: GameSocket, message: string): void;
 }
 
@@ -182,6 +184,8 @@ export interface MockServerInterface extends GameServerBackend {
   getRooms(): MockRoom[];
   /** Inspect the active mock members on the Sushi server. */
   getMembers(): MockMember[];
+  /** Restore the mocked network/session state for a clean game restart. */
+  reset(): void;
 }
 
 export {

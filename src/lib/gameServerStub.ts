@@ -343,6 +343,14 @@ export class FishPlugin implements SushiPluginInterface {
     };
   }
 
+  reset(state: Partial<FishPluginState> = {}): void {
+    this.state.baitA = state.baitA ?? DEFAULT_FISH_PLUGIN_STATE.baitA;
+    this.state.baitD = state.baitD ?? DEFAULT_FISH_PLUGIN_STATE.baitD;
+    this.state.baitF = state.baitF ?? DEFAULT_FISH_PLUGIN_STATE.baitF;
+    this.state.rods.splice(0, this.state.rods.length, ...(state.rods ? [...state.rods] : [...DEFAULT_FISH_PLUGIN_STATE.rods]));
+    this.state.timeOfDay = state.timeOfDay ?? DEFAULT_FISH_PLUGIN_STATE.timeOfDay;
+  }
+
   handleCall(_callId: string, subOp: string, params: string[]): string {
     if (subOp === '501') {
       const baits = `100003:${this.state.baitA}|100002:${this.state.baitD}|100001:${this.state.baitF}`;
@@ -400,6 +408,15 @@ function cloneMember(m: MockMember): MockMember {
   };
 }
 
+function cloneSession(session: MockSession): MockSession {
+  return {
+    ...session,
+    rooms: (session.rooms ?? []).map(cloneRoom),
+    members: (session.members ?? []).map(cloneMember),
+    data: session.data ? [...session.data] : [],
+  };
+}
+
 /**
  * In-process implementation of the Rawfish `SushiServer` (`com.rawfishsoftware.sushi.*`).
  *
@@ -412,7 +429,10 @@ export class SushiServer implements SushiServerInterface {
   readonly session: MockSession;
   readonly fishPlugin: FishPlugin;
   protected readonly log: (level: 'info' | 'warn' | 'error', message: string) => void;
-  protected readonly decoders = new WeakMap<GameSocket, SushiDecoder>();
+  private readonly initialSession: MockSession;
+  private readonly initialFishState: Partial<FishPluginState>;
+  protected decoders = new WeakMap<GameSocket, SushiDecoder>();
+  protected socketLogs = new WeakMap<GameSocket, (level: 'info' | 'warn' | 'error', message: string) => void>();
   protected readonly plugins = new Map<string, SushiPluginInterface>();
   protected readonly mobs = new Map<string, { id: string; roomId: number; data: string[] }>();
   /** Every message the client sent, for the Execute log / tests. */
@@ -424,23 +444,15 @@ export class SushiServer implements SushiServerInterface {
   constructor(opts: GameServerOptions = {}) {
     this.host = opts.host ?? '127.0.0.1';
     this.port = opts.port ?? 8080;
-    const baseSession = opts.session ?? DEFAULT_TEST_SESSION;
-    const rooms = (baseSession.rooms ?? DEFAULT_MOCK_ROOMS).map(cloneRoom);
-    const members = (baseSession.members ?? DEFAULT_MOCK_MEMBERS).map(cloneMember);
-    this.session = {
-      id: baseSession.id ?? 1,
-      name: baseSession.name ?? 'fishing',
-      version: baseSession.version ?? '1.0',
-      teamId: baseSession.teamId ?? 0,
-      teamName: baseSession.teamName ?? 'default',
-      teamLimit: baseSession.teamLimit ?? 6,
-      maxMembers: baseSession.maxMembers ?? 200,
-      rooms,
-      members,
-      data: baseSession.data ? [...baseSession.data] : [],
+    const baseSession = cloneSession(opts.session ?? DEFAULT_TEST_SESSION);
+    this.initialSession = cloneSession(baseSession);
+    this.session = cloneSession(this.initialSession);
+    this.initialFishState = {
+      ...opts.fishState,
+      ...(opts.fishState?.rods ? { rods: [...opts.fishState.rods] } : {}),
     };
-    this.nextRoomId = Math.max(3, ...rooms.map((r) => r.id)) + 1;
-    this.fishPlugin = new FishPlugin(opts.fishState);
+    this.nextRoomId = Math.max(3, ...this.session.rooms.map((r) => r.id)) + 1;
+    this.fishPlugin = new FishPlugin(this.initialFishState);
     this.registerPlugin(this.fishPlugin);
     this.plugins.set('fish', this.fishPlugin);
     for (const plugin of opts.plugins ?? []) {
@@ -451,6 +463,17 @@ export class SushiServer implements SushiServerInterface {
 
   get fishState(): FishPluginState {
     return this.fishPlugin.state;
+  }
+
+  reset(): void {
+    Object.assign(this.session, cloneSession(this.initialSession));
+    this.fishPlugin.reset(this.initialFishState);
+    this.decoders = new WeakMap<GameSocket, SushiDecoder>();
+    this.socketLogs = new WeakMap<GameSocket, (level: 'info' | 'warn' | 'error', message: string) => void>();
+    this.mobs.clear();
+    this.received.length = 0;
+    this.sent.length = 0;
+    this.nextRoomId = Math.max(3, ...this.session.rooms.map((room) => room.id)) + 1;
   }
 
   registerPlugin(plugin: SushiPluginInterface): void {
@@ -473,9 +496,20 @@ export class SushiServer implements SushiServerInterface {
     return (this.session.members ?? []).find((m) => m.id === memberId);
   }
 
-  connect(host: string, port: number, socket: GameSocket): void {
+  protected logSocket(socket: GameSocket, level: 'info' | 'warn' | 'error', message: string): void {
+    (this.socketLogs.get(socket) ?? this.log)(level, message);
+  }
+
+  connect(
+    host: string,
+    port: number,
+    socket: GameSocket,
+    log?: (level: 'info' | 'warn' | 'error', message: string) => void,
+  ): void {
     this.decoders.set(socket, new SushiDecoder());
-    this.log(
+    if (log) this.socketLogs.set(socket, log);
+    this.logSocket(
+      socket,
       'info',
       `local test game server: accepted ${host}:${port} (session "${this.session.name}", room "${this.session.rooms[1]?.name ?? this.session.rooms[0]?.name ?? '-'}")`,
     );
@@ -487,11 +521,11 @@ export class SushiServer implements SushiServerInterface {
     for (const msg of decoder.push(data)) {
       this.received.push(msg);
       if (Number.isNaN(msg.tag) && !parseHandshake(msg.raw)) {
-        this.log('warn', `test server ← unknown record ${JSON.stringify(msg.raw.slice(0, 120))}`);
+        this.logSocket(socket, 'warn', `test server ← unknown record ${JSON.stringify(msg.raw.slice(0, 120))}`);
         continue;
       }
       if (!parseHandshake(msg.raw)) {
-        this.log('info', `test server ← [${msg.tag}] ${msg.fields.join(' | ').slice(0, 160)}`);
+        this.logSocket(socket, 'info', `test server ← [${msg.tag}] ${msg.fields.join(' | ').slice(0, 160)}`);
       }
       const reply = this.respond(socket, msg);
       if (reply) this.deliver(socket, reply);
@@ -500,14 +534,16 @@ export class SushiServer implements SushiServerInterface {
 
   close(socket: GameSocket): void {
     this.decoders.delete(socket);
-    this.log('info', 'local test game server: client closed the connection');
+    this.logSocket(socket, 'info', 'local test game server: client closed the connection');
+    this.socketLogs.delete(socket);
   }
 
   /** Reply to a client message (`SushiAPI.$p` protocol). */
-  protected respond(_socket: GameSocket, msg: SushiMessage): string | null {
+  protected respond(socket: GameSocket, msg: SushiMessage): string | null {
     const handshake = parseHandshake(msg.raw);
     if (handshake) {
-      this.log(
+      this.logSocket(
+        socket,
         'info',
         `test server ← handshake ${handshake.banner} (${handshake.product} ${handshake.version}, limit ${handshake.limit})`,
       );
@@ -890,7 +926,7 @@ export class SushiServer implements SushiServerInterface {
   /** Push a message to the client (through the socket's `onData`). */
   deliver(socket: GameSocket, message: string): void {
     this.sent.push(message);
-    this.log('info', `test server → ${message.split(SUSHI_FIELD)[0]}`);
+    this.logSocket(socket, 'info', `test server → ${message.split(SUSHI_FIELD)[0]}`);
     socket.deliver(message);
   }
 }
@@ -941,6 +977,10 @@ export class MockServer implements MockServerInterface {
 
   getMembers(): MockMember[] {
     return this.sushiServer.getMembers();
+  }
+
+  reset(): void {
+    this.sushiServer.reset();
   }
 
   handleGsiMethod(method: string, _params?: unknown): PhpValue {
@@ -1010,9 +1050,9 @@ export class MockServer implements MockServerInterface {
     host: string,
     port: number,
     socket: GameSocket,
-    _log?: (level: 'info' | 'warn' | 'error', message: string) => void,
+    log?: (level: 'info' | 'warn' | 'error', message: string) => void,
   ): void {
-    this.sushiServer.connect(host, port, socket);
+    this.sushiServer.connect(host, port, socket, log);
   }
 
   send(socket: GameSocket, data: string): void {

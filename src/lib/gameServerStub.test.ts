@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { GameSocket } from '../engine/as2/player';
 import {
   FishPlugin,
@@ -38,6 +38,28 @@ function createTestSocket(host = '127.0.0.1', port = 8080): {
 }
 
 describe('SushiServer & MockServer', () => {
+  it('routes socket logs to the active player and resets mutable session state', () => {
+    const server = new MockServer();
+    const { socket } = createTestSocket();
+    const log = vi.fn();
+    server.connect('mock.example', 8080, socket, log);
+    server.send(socket, encodeMessage(19, 1, 'G_FISH_PLUGIN', '500', '100003'));
+    expect(server.sushiServer.fishState.baitA).toBe(94);
+    expect(log).toHaveBeenCalledWith('info', expect.stringContaining('accepted mock.example:8080'));
+    expect(log).toHaveBeenCalledWith('info', expect.stringContaining('test server ← [19]'));
+
+    server.sushiServer.getRoom(2)!.name = 'mutated room';
+    server.getMembers()[0].name = 'mutated member';
+    server.sushiServer.sent.push('stale reply');
+    server.reset();
+
+    expect(server.sushiServer.getRoom(2)?.name).toBe("dracogenius's Room|10001");
+    expect(server.getMembers()[0].name).toBe('dracogenius');
+    expect(server.sushiServer.fishState.baitA).toBe(95);
+    expect(server.sushiServer.sent).toEqual([]);
+    expect(server.sushiServer.received).toEqual([]);
+  });
+
   it('decodes fragmented Sushi wire frames and handshakes', () => {
     const decoder = new SushiDecoder();
     const chunk1 = `S55${SUSHI_FIELD}FLASH${SUSHI_FIELD}1${SUSHI_FIELD}0${SUSHI_FIELD}2${SUSHI_FIELD}15${SUSHI_END}2${SUSHI_FIELD}`;

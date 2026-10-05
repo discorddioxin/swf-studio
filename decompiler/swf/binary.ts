@@ -39,6 +39,9 @@ export interface SwfFile {
   name: string;
   ext: string;
   category: 'shapes' | 'images' | 'texts' | 'fonts' | 'sounds' | 'morphshapes' | 'buttons' | 'scripts' | 'other';
+  /** Preserved SWF tag order / DoInitAction target for generated AS2 sources. */
+  tagOrder?: number;
+  targetSpriteId?: number;
   bytes: Uint8Array;
 }
 
@@ -47,7 +50,16 @@ export interface ParsedBinarySwf {
   files: SwfFile[];
 }
 
-interface RawTag { type: number; name: string; data: Uint8Array }
+interface RawTag {
+  type: number;
+  name: string;
+  data: Uint8Array;
+  /** Position in the serialized tag stream, including nested DefineSprite tags. */
+  order: number;
+  /** Ordinal among DoInitAction tags, including nested sprite definitions. */
+  initOrder?: number;
+  children?: RawTag[];
+}
 
 // ---------------------------------------------------------------- helpers ---
 
@@ -123,30 +135,52 @@ function readColor(br: BitReader, shapeNum: number): string {
 
 // tag stream ---------------------------------------------------------------
 
-/** DoInitAction carries the SpriteID it targets before its action records — but
- * some producers (and FFDec's XML `actionBytes`) write the records only.  Pick
- * the reading that walks as a complete action stream. */
-export function doInitActions(data: Uint8Array): Uint8Array {
-  const body = data.subarray(2);
-  if (data.length > 4 && isLikelyActionStream(body) && !isLikelyActionStream(data)) return body;
-  return data;
+export interface DecodedDoInitAction {
+  spriteId?: number;
+  actions: Uint8Array;
+}
+
+/** Decode the binary DoInitAction payload (SpriteID followed by ActionRecords).
+ * FFDec's XML actionBytes field contains only the ActionRecords, so the parser
+ * accepts either form while preserving the target whenever it is present. */
+export function decodeDoInitAction(data: Uint8Array): DecodedDoInitAction {
+  if (data.length > 2) {
+    const actions = data.subarray(2);
+    if (isLikelyActionStream(actions)) {
+      return { spriteId: data[0] | (data[1] << 8), actions };
+    }
+  }
+  return { actions: data };
 }
 
 export function parseTags(data: Uint8Array): RawTag[] {
-  const br = new BitReader(data);
-  const out: RawTag[] = [];
-  while (br.offsetBytes < data.length) {
-    if (br.remaining < 2) break;
-    const h = br.u16();
-    const type = h >> 6;
-    let len = h & 0x3f;
-    if (len === 0x3f) len = br.u32();
-    const payload = br.bytes(len);
-    const name = TAG_NAMES[type] ?? `Unknown${type}`;
-    out.push({ type, name, data: payload });
-    if (type === 0) break;
-  }
-  return out;
+  const order = { next: 0, nextInit: 0 };
+  const parse = (bytes: Uint8Array): RawTag[] => {
+    const br = new BitReader(bytes);
+    const out: RawTag[] = [];
+    while (br.offsetBytes < bytes.length) {
+      if (br.remaining < 2) break;
+      const h = br.u16();
+      const type = h >> 6;
+      let len = h & 0x3f;
+      if (len === 0x3f) len = br.u32();
+      const payload = br.bytes(len);
+      const tag: RawTag = {
+        type, name: TAG_NAMES[type] ?? `Unknown${type}`, data: payload, order: order.next++,
+        ...(type === 59 ? { initOrder: order.nextInit++ } : {}),
+      };
+      if (type === 39 && payload.length >= 4) {
+        const sprite = new BitReader(payload);
+        sprite.u16(); // sprite id
+        sprite.u16(); // frame count
+        tag.children = parse(payload.subarray(sprite.offsetBytes));
+      }
+      out.push(tag);
+      if (type === 0) break;
+    }
+    return out;
+  };
+  return parse(data);
 }
 
 // shape parsing ------------------------------------------------------------
@@ -1080,7 +1114,7 @@ export async function parseSwfBinary(
               frameCount: fc, timelineId: `sprite:${id}`,
               attrs: { spriteId: String(id), frameCount: String(fc), hasEndTag: 'true' },
             });
-            await registerTags(parseTags(tag.data.subarray(br2.offsetBytes)));
+            await registerTags(tag.children ?? []);
             break;
           }
           case 34: { // DefineButton2
@@ -1367,11 +1401,15 @@ export async function parseSwfBinary(
           });
           continue;
         }
-        const actionBytes = type === 'DoInitActionTag' ? doInitActions(tag.data) : tag.data;
+        const init = type === 'DoInitActionTag' ? decodeDoInitAction(tag.data) : undefined;
+        const actionBytes = init?.actions ?? tag.data;
+        const targetSpriteId = init?.spriteId;
         events.push({
           kind: 'action', tagType: type,
           detail: avm1ActionSource(actionBytes),
-          externalActionCandidates: actionFileCandidates(characterId, frameIndex, type),
+          ...(targetSpriteId != null ? { characterId: targetSpriteId, targetSpriteId } : {}),
+          ...(type === 'DoInitActionTag' ? { tagOrder: tag.initOrder } : {}),
+          externalActionCandidates: actionFileCandidates(targetSpriteId ?? characterId, frameIndex, type),
         });
         continue;
       }
@@ -1430,7 +1468,7 @@ export async function parseSwfBinary(
         const br2 = new BitReader(tag.data);
         const id = br2.u16();
         br2.u16(); // frameCount
-        const sub = parseTags(tag.data.subarray(br2.offsetBytes));
+        const sub = tag.children ?? [];
         const tl = buildTimeline(`sprite:${id}`, 'sprite', id, `Sprite ${id}`, sub);
         timelines.set(tl.id, tl);
         const ch = characters.get(id);
@@ -1529,6 +1567,10 @@ export async function parseSwfBinary(
         ev.externalActions = path;
         files.push({
           path, name: path.slice(path.lastIndexOf('/') + 1).replace(/\.as$/i, ''), ext: 'as', category: 'scripts',
+          ...(ev.tagType === 'DoInitActionTag' ? {
+            tagOrder: ev.tagOrder,
+            targetSpriteId: ev.targetSpriteId,
+          } : {}),
           bytes: new TextEncoder().encode(ev.detail.endsWith('\n') ? ev.detail : ev.detail + '\n'),
         });
       }
@@ -1563,11 +1605,7 @@ function countTags(tags: RawTag[]): number {
   for (const t of tags) {
     if (t.type === 0) continue; // End tags are not exported as XML items
     n++;
-    if (t.type === 39) {
-      const br = new BitReader(t.data);
-      br.u16(); br.u16();
-      n += countTags(parseTags(t.data.subarray(br.offsetBytes)));
-    }
+    if (t.type === 39) n += countTags(t.children ?? []);
   }
   return n;
 }
@@ -1594,9 +1632,7 @@ function findButtonTag(tags: RawTag[], id: number): RawTag | undefined {
       if (br.u16() === id) return t;
     }
     if (t.type === 39) {
-      const br = new BitReader(t.data);
-      br.u16(); br.u16();
-      const found = findButtonTag(parseTags(t.data.subarray(br.offsetBytes)), id);
+      const found = findButtonTag(t.children ?? [], id);
       if (found) return found;
     }
   }

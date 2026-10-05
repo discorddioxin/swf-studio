@@ -185,8 +185,10 @@ export interface GameSocket {
   port: number;
   /** Push a message to the game: calls `onData` on the next tick. */
   deliver(data: string): void;
-  /** Close the connection: calls `onClose` (and clears `onData`); `error` = abnormal. */
+  /** Close the connection: calls `onClose`; `error` = abnormal. */
   close(error?: boolean): void;
+  /** Quietly release the backend during player disposal without running game callbacks. */
+  dispose?(): void;
 }
 
 /** Offline game server (the Gaia "Sushi" protocol). */
@@ -231,6 +233,7 @@ export class AS2Player {
   private ctx: CanvasRenderingContext2D | null = null;
   private measureCtx: CanvasRenderingContext2D | null | undefined;
   private channels = new Set<{ id: number | null; movie: Movie; handle: AudioHandle }>();
+  private gameSockets = new Set<GameSocket>();
   private started = false;
   private disposed = false;
   private hitCanvas: HTMLCanvasElement | null = null;
@@ -295,11 +298,23 @@ export class AS2Player {
     this.started = true;
     const prog = this.movie.program;
     if (prog) {
-      for (const [name, fn] of Object.entries(prog.initByName ?? {})) this.guard(`init action "${name}"`, () => fn.call(this.root.obj));
-      for (const [id, mod] of Object.entries(prog.timelines)) {
-        if (mod.init && Number(id) !== 0) this.guard(`init action of sprite ${id}`, () => mod.init!.call(this.root.obj));
+      if (prog.initActions?.length) {
+        for (const action of [...prog.initActions].sort((a, b) => a.order - b.order)) {
+          const label = action.targetSpriteId != null
+            ? `init action of sprite ${action.targetSpriteId}`
+            : action.linkageName
+              ? `init action "${action.linkageName}"`
+              : 'init action';
+          this.guard(label, () => action.run.call(this.root.obj));
+        }
+      } else {
+        // Compatibility for older transpiled programs without per-tag metadata.
+        for (const [name, fn] of Object.entries(prog.initByName ?? {})) this.guard(`init action "${name}"`, () => fn.call(this.root.obj));
+        for (const [id, mod] of Object.entries(prog.timelines)) {
+          if (mod.init && Number(id) !== 0) this.guard(`init action of sprite ${id}`, () => mod.init!.call(this.root.obj));
+        }
+        prog.timelines[0]?.init && this.guard('init action of the main timeline', () => prog.timelines[0].init!.call(this.root.obj));
       }
-      prog.timelines[0]?.init && this.guard('init action of the main timeline', () => prog.timelines[0].init!.call(this.root.obj));
     }
     for (const [k, v] of Object.entries(this.opts.flashVars ?? {})) this.root.obj[k] = v;
     this.enterFirstFrame(this.root);
@@ -339,6 +354,8 @@ export class AS2Player {
 
   get isRunning() { return this.running; }
   isDisposedFor(_node: DisplayNode) { return this.disposed; }
+  trackSocket(socket: GameSocket) { if (!this.disposed) this.gameSockets.add(socket); }
+  untrackSocket(socket: GameSocket) { this.gameSockets.delete(socket); }
 
   /** Advance by real time: timers + as many ticks as are due. */
   step(now: number) {
@@ -356,13 +373,25 @@ export class AS2Player {
   }
 
   dispose() {
+    if (this.disposed) return;
     this.pause();
     this.disposed = true;
+    for (const socket of [...this.gameSockets]) {
+      try {
+        if (socket.dispose) socket.dispose();
+        else this.opts.gameServer?.close(socket);
+      } catch (error) {
+        this.log('warn', `XMLSocket.dispose: ${(error as Error)?.message ?? String(error)}`);
+      }
+    }
+    this.gameSockets.clear();
     this.stopAllSounds();
     this.timers.clear();
+    this.queue.length = 0;
     for (const off of this.listeners) off();
     this.listeners = [];
     if (RT.currentHost() && (RT.currentHost() as any).__player === this) RT.installHost(null);
+    if ((globalThis as any).__as2player === this) delete (globalThis as any).__as2player;
   }
 
   // ------------------------------------------------------------ the frame loop
@@ -744,7 +773,13 @@ export class AS2Player {
   /** Clips with on(...) mouse handlers or onPress/onRelease… behave like buttons. */
   isMouseTarget(node: DisplayNode): boolean {
     if (node.removed || !node.obj) return false;
-    if (node.kind === 'button') return node.obj.enabled !== false;
+    if (node.kind === 'button') {
+      if (node.obj.enabled === false) return false;
+      const handlers = [...node.handlers, ...(node.movie.program?.buttons[node.characterId] ?? [])];
+      return handlers.some((h) => h.kind === 'on' && h.events.some((e) => !e.startsWith('keyPress')))
+        || ['onPress', 'onRelease', 'onReleaseOutside', 'onRollOver', 'onRollOut', 'onDragOver', 'onDragOut']
+          .some((k) => typeof node.obj[k] === 'function');
+    }
     if (node.kind === 'text') return !!node.text && (node.text.input || node.text.selectable) && false;
     if (node.kind !== 'clip' || node.obj.enabled === false) return false;
     if (node.handlers.some((h) => h.kind === 'on' && h.events.some((e) => !e.startsWith('keyPress')))) return true;
@@ -901,7 +936,7 @@ export class AS2Player {
     }
     if (!shape) return inRect(this.localBounds(node), p.x, p.y);
     if (node.drawing?.length && inRect(this.drawingBounds(node.drawing), p.x, p.y)) return true;
-    return node.children.some((c) => !c.clipDepth && this.hitTestPoint(c, x, y, true, forButton));
+    return node.children.some((c) => !c.clipDepth && this.hitTestPoint(c, x, y, c.kind === 'button' ? false : true, forButton));
   }
 
   private buttonShapeHit(node: DisplayNode, x: number, y: number): boolean {

@@ -103,6 +103,7 @@ class Parser {
   classNames = new Map<number, string>();
   backgroundColor: number | undefined;
   exportNames = new Map<number, string>();
+  tagOrderByElement = new WeakMap<Element, number>();
 
   detectNumberFormat(doc: Document) {
     const mats = doc.querySelectorAll('[scaleX],[translateX],[rotateSkew0]');
@@ -547,6 +548,10 @@ export function actionFileCandidates(characterId: number | undefined, frameIndex
   const add = (prefix: string) => names.forEach((name) => paths.push(`${prefix}/${name}`));
 
   if (characterId != null) {
+    if (tagType.includes('Init')) {
+      paths.push(`scripts/DefineSprite_${characterId}/DoInitAction.as`);
+      paths.push(`scripts/DefineSpriteTag_${characterId}/DoInitAction.as`);
+    }
     add(`scripts/DefineSprite_${characterId}/frame_${frame}`);
     add(`scripts/DefineSpriteTag_${characterId}/frame_${frame}`);
     add(`scripts/DefineSprite_${characterId}/Frame_${frame}`);
@@ -586,6 +591,17 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
 
   // ------------------------------------------------------- tag traversal ---
   const rootTags = tagChildren(rootEl);
+  // Keep the serialized order across nested DefineSprite tag lists. Only the
+  // ordinal among init tags is needed at runtime; XML exports may omit some
+  // non-action bookkeeping tags that are present in the binary stream.
+  let initOrder = 0;
+  const markTagOrder = (tags: Element[]) => {
+    for (const tag of tags) {
+      if (/^DoInitAction/.test(tagTypeOf(tag) ?? '')) P.tagOrderByElement.set(tag, initOrder++);
+      if (tagTypeOf(tag) === 'DefineSpriteTag') markTagOrder(tagChildren(tag));
+    }
+  };
+  markTagOrder(rootTags);
 
   const spriteQueue: { id: number; el: Element }[] = [];
 
@@ -843,12 +859,15 @@ function buildTimeline(
     }
     if (/^(DoAction|DoInitAction|DoABC|RawABC)/.test(type)) {
       const extAct = el.getAttribute('_externalActions') || undefined;
+      const targetSpriteId = /^DoInitAction/.test(type) ? charIdOf(el) : undefined;
       events.push({
         kind: 'action',
         tagType: type,
         detail: actionDetail(el),
+        ...(targetSpriteId != null ? { characterId: targetSpriteId, targetSpriteId } : {}),
+        ...(targetSpriteId != null ? { tagOrder: P.tagOrderByElement.get(el) } : {}),
         externalActions: extAct,
-        externalActionCandidates: actionFileCandidates(characterId ?? charIdOf(el), frameIndex, type),
+        externalActionCandidates: actionFileCandidates(targetSpriteId ?? characterId, frameIndex, type),
       });
       continue;
     }

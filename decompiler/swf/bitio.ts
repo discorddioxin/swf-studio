@@ -113,7 +113,16 @@ export function isLikelyActionStream(data: Uint8Array): boolean {
   let pc = 0;
   while (pc < data.length) {
     const op = data[pc++];
-    if (op === 0) return true; // End record reached
+    if (op === 0) {
+      // End is a one-byte terminator, not permission to silently ignore the
+      // remainder of the tag. In particular, a DoInitAction SpriteID may look
+      // like an AVM1 opcode followed by 0x00; treating that as an End record
+      // makes the parser eat the ID and execute the sprite id as script data.
+      // A few exporters pad action records with zeroes, so only accept NUL
+      // padding after the terminator.
+      for (; pc < data.length; pc++) if (data[pc] !== 0) return false;
+      return true;
+    }
     if (!AVM1_OPCODES.has(op)) return false;
     if (op >= 0x80) {
       if (pc + 2 > data.length) return false;

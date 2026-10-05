@@ -60,6 +60,8 @@ export function swfFilesToFiles(files: SwfFile[], prefix: string): File[] {
       value: `${prefix}/${f.path}`,
       configurable: true,
     });
+    if (f.tagOrder != null) Object.defineProperty(file, '__swfTagOrder', { value: f.tagOrder, configurable: true });
+    if (f.targetSpriteId != null) Object.defineProperty(file, '__swfTargetSpriteId', { value: f.targetSpriteId, configurable: true });
     return file;
   });
 }

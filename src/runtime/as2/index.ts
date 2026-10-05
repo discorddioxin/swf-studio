@@ -36,6 +36,16 @@ export interface AS2TimelineModule {
   init?: (this: AS2Clip) => void;
 }
 
+export interface AS2InitAction {
+  /** Position in the serialized SWF tag stream (or stable fallback order). */
+  order: number;
+  /** Character id in the DoInitAction payload; used for diagnostics and scope. */
+  targetSpriteId?: number;
+  /** Export name for FFDec's `<default package>/<linkage>.as` form. */
+  linkageName?: string;
+  run: (this: AS2Clip) => void;
+}
+
 export interface AS2Program {
   /** timeline modules keyed by character id (0 = main timeline) */
   timelines: Record<number, AS2TimelineModule>;
@@ -45,6 +55,8 @@ export interface AS2Program {
   classes: Record<string, unknown>;
   /** DoInitAction code of exported sprites, keyed by linkage (export) name */
   initByName?: Record<string, (this: AS2Clip) => void>;
+  /** Individual init tags in serialized SWF order, independent of target sprite id. */
+  initActions?: AS2InitAction[];
 }
 
 /** Everything the runtime needs from the engine. */

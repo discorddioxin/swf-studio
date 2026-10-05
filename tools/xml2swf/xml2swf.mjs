@@ -681,7 +681,12 @@ function tagPayload(itemEl, type) {
       break;
     }
     case 'DoActionTag':
+      w.hex(itemEl.getAttribute('actionBytes'));
+      break;
     case 'DoInitActionTag':
+      // The XML actionBytes field contains only ActionRecords; the SWF tag
+      // payload begins with the SpriteID that owns those initialization actions.
+      w.u16(num(itemEl, 'spriteId'));
       w.hex(itemEl.getAttribute('actionBytes'));
       break;
     case 'PlaceObject2Tag':
