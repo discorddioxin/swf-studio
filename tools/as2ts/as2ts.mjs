@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Launcher for the as2ts CLI: bundles tools/as2ts/cli.ts (and the transpiler
-// under src/transpiler/as2) with esbuild in memory, then runs it. Works on any
+// under transpiler/as2) with esbuild in memory, then runs it. Works on any
 // Node >= 18 without TypeScript loaders.
 import { build } from 'esbuild';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';

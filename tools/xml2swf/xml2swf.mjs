@@ -414,49 +414,61 @@ function writePlace2(w, el) {
   if (clipActions) writeClipActions(w, clipActions);
 }
 
-function clipEventBits(allEl, recEl) {
-  // CLIPEVENTFLAGS: 16 named low bits + (SWF6+) 5 reserved, construct, keyPress, dragOut, reserved2
-  const names = [
-    'clipEventKeyUp', 'clipEventKeyDown', 'clipEventMouseUp', 'clipEventMouseDown',
-    'clipEventMouseMove', 'clipEventUnload', 'clipEventEnterFrame', 'clipEventLoad',
-    'clipEventDragOver', 'clipEventRollOut', 'clipEventRollOver', 'clipEventReleaseOutside',
-    'clipEventRelease', 'clipEventPress', 'clipEventInitialize', 'clipEventData',
+function clipEventMask(el) {
+  if (!el) return 0;
+  // CLIPEVENTFLAGS bytes in SWF stream order (little-endian u32):
+  //   byte 0: keyUp(7) keyDown(6) mouseUp(5) mouseDown(4) mouseMove(3) unload(2) enterFrame(1) load(0)
+  //   byte 1: dragOver(7) rollOut(6) rollOver(5) releaseOutside(4) release(3) press(2) initialize(1) data(0)
+  //   byte 2: reserved(7..3) construct(2) keyPress(1) dragOut(0)
+  //   byte 3: reserved(7..0)
+  const bits = [
+    ['clipEventLoad', 0],
+    ['clipEventEnterFrame', 1],
+    ['clipEventUnload', 2],
+    ['clipEventMouseMove', 3],
+    ['clipEventMouseDown', 4],
+    ['clipEventMouseUp', 5],
+    ['clipEventKeyDown', 6],
+    ['clipEventKeyUp', 7],
+    ['clipEventData', 8],
+    ['clipEventInitialize', 9],
+    ['clipEventPress', 10],
+    ['clipEventRelease', 11],
+    ['clipEventReleaseOutside', 12],
+    ['clipEventRollOver', 13],
+    ['clipEventRollOut', 14],
+    ['clipEventDragOver', 15],
+    ['clipEventDragOut', 16],
+    ['clipEventKeyPress', 17],
+    ['clipEventConstruct', 18],
   ];
-  let lo = 0;
-  names.forEach((n, i) => { if (BOOL(recEl?.getAttribute(n)) || (recEl == null && BOOL(allEl?.getAttribute(n)))) lo |= (1 << (15 - i)); });
-  let hi = 0; // 16 bits: reserved(5) construct keyPress dragOut reserved2(8)
-  const put = (bit, on) => { if (on) hi |= 1 << bit; };
-  // bit positions counted from MSB of the 16-bit field
-  if (BOOL(recEl?.getAttribute('clipEventConstruct')) || (recEl == null && BOOL(allEl?.getAttribute('clipEventConstruct')))) hi |= 1 << 10;
-  if (BOOL(recEl?.getAttribute('clipEventKeyPress')) || (recEl == null && BOOL(allEl?.getAttribute('clipEventKeyPress')))) hi |= 1 << 9;
-  if (BOOL(recEl?.getAttribute('clipEventDragOut')) || (recEl == null && BOOL(allEl?.getAttribute('clipEventDragOut')))) hi |= 1 << 8;
-  void put;
-  return [lo >>> 0, hi >>> 0];
+  let mask = 0;
+  for (const [attr, bit] of bits) {
+    if (BOOL(el.getAttribute(attr))) mask |= (1 << bit);
+  }
+  return mask >>> 0;
 }
 
 function writeClipActions(w, clipEl) {
   w.u16(num(clipEl, 'reserved'));
   const allEl = childByTag(clipEl, 'allEventFlags');
-  const [lo, hi] = clipEventBits(allEl, null);
-  w.u16(lo); w.u16(hi);
+  w.u32(clipEventMask(allEl));
   const recordsWrap = childByTag(clipEl, 'clipActionRecords');
   const recs = recordsWrap ? [...recordsWrap.children] : [...clipEl.children].filter((c) => c.tagName === 'clipActionRecords' || c.getAttribute('type') === 'CLIPACTIONRECORD');
   const list = recs.length ? recs : childrenByTag(clipEl, 'clipActionRecords');
   for (const rec of list) {
-    const [rlo, rhi] = clipEventBits(allEl, rec);
-    w.u16(rlo); w.u16(rhi);
+    const flagsEl = childByTag(rec, 'eventFlags') ?? rec;
+    const rmask = clipEventMask(flagsEl);
+    w.u32(rmask);
     const bytes = Buffer.from(rec.getAttribute('actionBytes') ?? '', 'hex');
-    const keyPress = BOOL(rec.getAttribute('eventFlags')?.includes?.('keyPress') ?? false);
-    const flagsEl = childByTag(rec, 'eventFlags');
-    const kp = flagsEl ? BOOL(flagsEl.getAttribute('clipEventKeyPress')) : false;
-    const size = 4 + (kp ? 1 : 0) + bytes.length;
+    const kp = (rmask & (1 << 17)) !== 0;
+    const size = (kp ? 1 : 0) + bytes.length;
     w.u32(size);
     if (kp) w.u8(num(rec, 'keyCode'));
     for (const b of bytes) w.u8(b);
-    void keyPress;
   }
   // terminator: zero flags
-  w.u16(0); w.u16(0);
+  w.u32(0);
 }
 
 function writeRemove2(w, el) {

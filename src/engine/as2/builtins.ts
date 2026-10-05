@@ -122,7 +122,8 @@ export function installBuiltins(p: AS2Player): BuiltinState {
       }
       p.runQueue();
     };
-    const u = String(url);
+    const u = String(url).trim();
+    if (!u) return;
     if (/\.(jpe?g|png|gif)(\?|$)/i.test(u)) {
       p.log('warn', `loadMovie("${u}"): external images are not supported offline`);
     }
@@ -138,6 +139,15 @@ export function installBuiltins(p: AS2Player): BuiltinState {
           fire('onLoadComplete', 200);
           p.enqueue(target, `onLoadInit ${u}`, () => fire('onLoadInit'));
           p.runQueue();
+          return;
+        }
+        // Optional Gaia dynamic member avatar strips (`a2.cdn.gaiaonline.com/gaia/members/*.swf`)
+        // and moderator report-abuse overlays (`avatar_reporting*.swf`) are not bundled SWFs;
+        // keep the built-in avatar silhouette clip intact without reporting a missing external SWF.
+        if (
+          /gaiaonline\.com\/gaia\/members\//i.test(u) ||
+          /(^|[\\/])avatar(_reporting(_low)?)?\.swf(\?|$)/i.test(u)
+        ) {
           return;
         }
         if ((p.opts.missingExternal ?? 'empty') === 'error') {

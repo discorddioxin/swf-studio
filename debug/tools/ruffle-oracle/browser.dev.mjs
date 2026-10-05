@@ -4,9 +4,10 @@
 // offline reference (oracle.html) and is never part of the product. The browser
 // is launched over a pipe instead of a TCP debugging port so that running these
 // checks never opens another preview port next to the app.
+import fs from 'node:fs';
 import puppeteer from 'puppeteer-core';
 
-const EXE = process.env.CHROME ?? '/tmp/chromium/chrome';
+const EXE = process.env.CHROME ?? (fs.existsSync('/tmp/chromium/chrome') ? '/tmp/chromium/chrome' : '/tmp/chromium');
 const LIBS = process.env.CHROME_LIBS ?? '/tmp/al2023/lib';
 
 export async function launch() {

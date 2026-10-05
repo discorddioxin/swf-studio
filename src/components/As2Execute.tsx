@@ -13,8 +13,7 @@ import { createExternalResolver, swfNameOf, type ExternalSwf } from '../engine/a
 import { buildAS2Program, type AS2Build } from '../engine/as2/program';
 import { _global as as2Global } from '../runtime/as2';
 import { AS2AudioBackend, embeddedFontFamily, registerFonts, soundFilesOf } from '../engine/as2/audio';
-import { gsiStubFetchText } from '../lib/gsiStub';
-import { createGameServerStub } from '../lib/gameServerStub';
+import { createMockServer, type MockServer } from '../lib/gameServerStub';
 
 const MAX_LOG = 500;
 const BOOT_KEY = 'swf-studio.as2.boot';
@@ -42,7 +41,7 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<AS2Player | null>(null);
-  const gameServerRef = useRef<ReturnType<typeof createGameServerStub> | null>(null);
+  const gameServerRef = useRef<MockServer | null>(null);
   const audioRef = useRef<AS2AudioBackend | null>(null);
   const extAudioRef = useRef<AS2AudioBackend[]>([]);
   const playingRef = useRef(true);
@@ -149,8 +148,9 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
     });
     const bootCode = boot.trim();
     if (!gameServerRef.current) {
-      gameServerRef.current = createGameServerStub((level, message) => playerForLog?.log(level, message));
+      gameServerRef.current = createMockServer((level, message) => playerForLog?.log(level, message));
     }
+    const mockServer = gameServerRef.current;
     const player = new AS2Player({
       doc,
       program: build.build.program,
@@ -163,13 +163,11 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
         pendingLogs.current.push(entry);
         if (entry.level === 'error') console.error('[game]', entry.message, entry.detail ?? '');
       },
-      // Offline GSI stub: the game's inventory/room/score requests against
-      // gaiaonline.com are answered locally (25× every bait, all rods).
+      // Offline MockServer: answers GSI/inventory HTTP requests and Sushi XMLSocket
+      // session/room/plugin messages locally with zero real network connections.
       fetchText: (url, method, body) =>
-        gsiStubFetchText(url, method, body, (level, message, detail) => player.log(level, message, detail ?? '')),
-      // Offline game server: the multiplayer games open an XMLSocket to the
-      // game server; this answers it locally with one test session/room.
-      gameServer: gameServerRef.current,
+        mockServer.fetchText(url, method, body, (level, message, detail) => player.log(level, message, detail ?? '')),
+      gameServer: mockServer,
       afterStart: bootCode ? (root, p) => {
         p.log('info', 'running boot script');
         new Function('_root', 'player', '_global', bootCode)(root, p, as2Global);

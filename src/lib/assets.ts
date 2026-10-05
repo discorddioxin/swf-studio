@@ -375,6 +375,7 @@ export class AssetCache {
 
   private patchSvgResources(text: string): string {
     return text.replace(/(href|xlink:href)\s*=\s*["']([^"']+)["']/g, (match, attr, ref) => {
+      if (ref.startsWith('data:')) return match;
       const parts = ref.split('/');
       const filename = parts[parts.length - 1];
       const filenameLower = filename.toLowerCase();

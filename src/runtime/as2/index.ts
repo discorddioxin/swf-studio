@@ -1,5 +1,5 @@
 // AS2 runtime contract for code produced by the as2ts transpiler
-// (src/transpiler/as2). Everything the generated TypeScript imports lives here.
+// (transpiler/as2). Everything the generated TypeScript imports lives here.
 //
 // Pure language-level pieces (trace, int, typeOf, eval paths, class registry,
 // _global …) are implemented here. Anything that needs the display list, the

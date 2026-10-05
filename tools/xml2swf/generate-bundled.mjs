@@ -48,5 +48,14 @@ for (const name of EXPORTS) {
   manifest.swfs.push(fonts.length ? { name, path: rel, fonts } : { name, path: rel });
   console.log(`${rel} — ${bytes.length} bytes${fonts.length ? `, ${fonts.length} ttf` : ''}`);
 }
+// Pre-built binary SWFs that have no XML export in external/ but ship in swfs/
+const EXTRA_BINARIES = [
+  { name: 'OmnitureActionSource', path: 'fish-full/swfs/OmnitureActionSource.swf' },
+];
+for (const extra of EXTRA_BINARIES) {
+  if (existsSync(resolve(root, 'game-files', extra.path))) {
+    manifest.swfs.push(extra);
+  }
+}
 writeFileSync(resolve(root, 'game-files/manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log(`game-files/manifest.json — ${manifest.swfs.length} swfs`);

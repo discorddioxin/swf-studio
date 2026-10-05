@@ -6,7 +6,7 @@
 import { transform } from 'sucrase';
 import * as runtime from '../../runtime/as2';
 import type { AS2Program } from '../../runtime/as2';
-import { transpileProject, type ProjectResult } from '../../transpiler/as2/project';
+import { transpileProject, type ProjectResult } from '../../../transpiler/as2/project';
 
 export const RUNTIME_SPECIFIER = 'as2-runtime';
 

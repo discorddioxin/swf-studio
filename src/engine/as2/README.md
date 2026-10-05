@@ -4,7 +4,7 @@ Runs ActionScript 1/2 games (SWF ≤ 8), without Ruffle or any Flash bytecode:
 
 ```
 FFDec export (.xml + scripts/*.as + shapes/images/sounds/fonts)
-   │ parser (src/lib/parser.ts)        │ as2ts (src/transpiler/as2)
+   │ decompiler (decompiler/)        │ transpiler (transpiler/as2)
    ▼                                   ▼
 SwfDocument (symbols, timelines)   TypeScript modules ──sucrase──▶ AS2Program
                    └──────────── AS2Player ────────────┘

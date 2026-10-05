@@ -1,4 +1,4 @@
-// AS2 player: runs the TypeScript produced by as2ts (src/transpiler/as2)
+// AS2 player: runs the TypeScript produced by as2ts (transpiler/as2)
 // against a parsed SWF document.
 //
 // This is a Flash-7-style (AVM1) player. Its behaviour is modelled on how the
@@ -518,13 +518,15 @@ export class AS2Player {
     for (const c of [...node.children]) {
       if (!c.fromTimeline || c.depth >= 0) continue;
       const d = want.get(c.depth);
-      if (!d || d.characterId !== c.characterId || d.startFrame !== c.startFrame) this.removeNode(c);
+      const sameChar = d != null && (d.characterId === c.characterId || c.url !== null);
+      if (!d || !sameChar || d.startFrame !== c.startFrame) this.removeNode(c);
     }
     node.frame = target;
     for (const d of snapshot) {
       const depth = d.depth - DEPTH_OFFSET;
       const c = node.childAtDepth(depth);
-      if (c && c.fromTimeline && c.characterId === d.characterId && c.startFrame === d.startFrame) {
+      const sameChar = c != null && (c.characterId === d.characterId || c.url !== null);
+      if (c && c.fromTimeline && sameChar && c.startFrame === d.startFrame) {
         if (!c.scriptMoved) { c.matrix = { ...d.matrix }; c.comps = null; if (d.colorTransform) c.ct = d.colorTransform; }
         c.ratio = d.ratio;
         continue;
@@ -582,14 +584,17 @@ export class AS2Player {
       built = true;
       this.bind(obj, node);
       if (o.initObject) for (const [k, v] of Object.entries(o.initObject)) obj[k] = v;
-      if (kind === 'clip') this.enterFirstFrame(node);
+      if (kind === 'clip') {
+        this.enterFirstFrame(node);
+        this.runHandlers(node, 'initialize');
+        this.runHandlers(node, 'construct');
+      }
       if (kind === 'button') this.buildButtonState(node);
     };
     if (kind === 'clip') {
       const cls = (o.cls ?? (ch?.exportName ? RT.$rt.linkedClass(ch.exportName, this.linkageScope(movie)) : undefined)) as (new () => any) | undefined;
       const Ctor = typeof cls === 'function' ? cls : RT.MovieClip;
       RT.MovieClip.__construct = build;
-      this.runHandlers(node, 'construct');
       let instance: any = null;
       // Flash creates the clip first (so `_name`, depth and the display list are
       // available) and then runs the class constructor with that clip as `this`.
@@ -642,7 +647,6 @@ export class AS2Player {
         if (!built) { RT.MovieClip.__construct = null; build(instance ?? Object.create(RT.MovieClip.prototype)); }
       }
       RT.MovieClip.__construct = null;
-      this.queueClipEvent(node, 'initialize');
       this.enqueue(node, `${this.describe(node)} load`, () => this.dispatchClipEvent(node, 'load'));
     } else if (kind === 'button') {
       RT.Button.__construct = build;
@@ -1451,7 +1455,7 @@ export class AS2Player {
     let open = false;
     const finish = () => {
       if (!open) return;
-      if (fill?.color) { ctx.globalAlpha = base * fill.alpha; ctx.fillStyle = fill.color; ctx.fill(); }
+      if (fill?.color) { ctx.globalAlpha = base * fill.alpha; ctx.fillStyle = fill.color; ctx.fill('evenodd'); }
       if (line?.color) { ctx.globalAlpha = base * line.alpha; ctx.strokeStyle = line.color; ctx.lineWidth = Math.max(TWIPS, line.width); ctx.stroke(); }
       ctx.globalAlpha = base;
       open = false;

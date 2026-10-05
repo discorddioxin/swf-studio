@@ -26,11 +26,13 @@ console.log('load bundled:', await clickText(/bundled/));
 await sleep(12000);
 console.log('execute tab:', await clickText(/^execute$/));
 await sleep(2000);
-// Start mode: "Gaia: play as guest" (the offline entry point the app offers).
+// Start mode: "None" (start exactly like the SWF does: server select -> room select -> bait -> fishing).
 const mode = await page.evaluate(() => {
+  localStorage.removeItem('swf-studio.as2.boot');
   const sel = document.querySelector('select[aria-label="Start mode"]');
   if (!sel) return 'no select';
-  sel.value = 'gaia-guest';
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+  setter?.call(sel, 'none');
   sel.dispatchEvent(new Event('change', { bubbles: true }));
   return sel.value;
 });
@@ -41,14 +43,16 @@ const state = () => page.evaluate(() => {
   const root = p?.root?.obj;
   const g = root?.gsecs;
   const lb = g?.mc_ServerChooser?.serverListing_lt;
+  const rlb = g?.mChooser?.gameListing_lt;
   return {
     rootFrame: root?._currentframe,
     gsecsFrame: g?._currentframe,
     title: g?.bar?.maintitle ?? null,
     servers: (() => { try { return lb?.getLength?.() ?? null; } catch { return null; } })(),
     items: [0, 1, 2].map((i) => { try { return JSON.stringify(lb?.getItemAt?.(i)); } catch { return null; } }),
+    rooms: (() => { try { return rlb?.getLength?.() ?? null; } catch { return null; } })(),
+    roomItems: [0, 1, 2].map((i) => { try { return JSON.stringify(rlb?.getItemAt?.(i)); } catch { return null; } }),
     chooserVisible: g?.mc_ServerChooser?._visible ?? null,
-    children: (() => { const out = []; const walk = (o, d) => { if (!o || d > 2) return; for (const k of Object.keys(o).slice(0, 30)) { if (!/^_|^__/.test(k)) out.push(`${k}`); } }; walk(g, 0); return out.slice(0, 20).join(','); })(),
   };
 });
 

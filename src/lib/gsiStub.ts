@@ -121,6 +121,19 @@ export function gsiGatewayAnswer(method: string): PhpValue {
       return GSI_SERVER_LIST.map((s) => ({ ip: s.ip, port: s.port, name: s.name }));
     case '109': // "checking Gaia session" — a guest session is good enough
       return ['gaiafishing_guest'];
+    case '107': // user data & session keep-alive
+      return {
+        gaia_id: 10002,
+        username: 'GaiaPlayer',
+        avatar: 'avatar_1',
+        user_level: 2,
+        filter_level: 0,
+        user_active: 1,
+      };
+    case '3009': // captcha
+      return [''];
+    case '1001': // abuse report
+      return [1];
     default:
       return [];
   }
