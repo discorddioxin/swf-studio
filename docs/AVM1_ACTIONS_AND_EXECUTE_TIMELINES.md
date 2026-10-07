@@ -1,5 +1,9 @@
 # AVM1 action streams and Execute timelines
 
+> Historical audit: supported AVM1 blocks now compile to executable TypeScript.
+> See [AVM1 decoding and migration](./AVM1_ACTIONS_ENCODING.md) for the current
+> decoder, interpreter fallback policy, actor modules, and source export.
+
 ## Findings from the bundled SWFs
 
 The `avm1Actions` Base64 value is **not** a list of ordinary function arguments. It is a byte-for-byte encoding of SWF AVM1 ActionRecords. The SWF parser preserves those bytes and the generated TypeScript calls the interpreter with the owning timeline clip (`$t`) plus that Base64 payload. Older traced builds appended source file, line, and generated module as report metadata; those were never AVM1 arguments and have now been removed from the runtime call. Source paths remain available in the static ActionScript and generated-module views.

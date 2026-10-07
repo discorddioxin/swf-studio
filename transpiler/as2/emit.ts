@@ -11,6 +11,7 @@
 //   * Class methods resolve unqualified member names to `this.x` /
 //     `ClassName.x` exactly like the AS2 compiler does.
 
+import { decodeAVM1Actions } from './avm1';
 import type { ClassDecl, Expr, Param, Stmt, TypeRef } from './ast';
 
 export interface KnownClass {
@@ -24,6 +25,8 @@ export interface KnownClass {
 }
 
 export interface EmitOptions {
+  /** Decode supported AVM1 blocks by default; interpret preserves all original bytes. */
+  avm1?: 'decode' | 'interpret';
   /** module specifier the generated code imports its runtime from */
   runtime: string;
   /** output path of the module being generated, relative to project root, no extension */
@@ -428,6 +431,24 @@ export class ModuleEmitter {
     const p = this.pad();
     switch (s.k) {
       case 'expr': {
+        const action = s.e;
+        if (this.opts.avm1 !== 'interpret' && kindOf(ctx.scope) === 'timeline' && !ctx.cls && !ctx.withs.length
+          && action.k === 'call' && action.callee.k === 'id'
+          && action.callee.name === 'avm1Actions' && !this.isLocal('avm1Actions', ctx)
+          && action.args.length === 1 && action.args[0].k === 'str') {
+          const decoded = decodeAVM1Actions(action.args[0].v, {
+            target: ctx.timeline, identifier: (name) => this.identifier(name, ctx),
+          });
+          if (decoded.code !== null) {
+            if (decoded.code.includes('$rt.')) this.useRuntime('$rt');
+            // Block scope keeps decoder temporaries private across adjacent tags.
+            return `${p}// Decoded AVM1 — editable TypeScript.\n${p}{\n${decoded.code.split('\n').filter(Boolean).map((line) => `${p}  ${line}\n`).join('')}${p}}\n`;
+          }
+          const reason = decoded.diagnostics.map((d) => `byte ${d.offset}: ${d.message}`).join('; ');
+          this.warn(`AVM1 interpreter fallback (${reason})`);
+          this.useRuntime('$rt');
+          return `${p}// AVM1 fallback: ${reason.replace(/[\r\n\u2028\u2029]/g, ' ')}\n${p}$rt.avm1Actions(${ctx.timeline}, ${JSON.stringify(action.args[0].v)});\n`;
+        }
         const code = this.expr(s.e, ctx, 0);
         // object literals / function expressions at statement start need parens
         return `${p}${/^(\{|function\b)/.test(code) ? `(${code})` : code};\n`;

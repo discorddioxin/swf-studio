@@ -129,11 +129,11 @@ describe('AS2 player', () => {
     expect(logs.filter((l) => l.startsWith('error'))).toEqual([]);
   });
 
-  it('executes avm1Actions bytecode without producing expensive per-call reports', () => {
+  it('executes decoded AVM1 logic without producing expensive per-call reports', () => {
     const build = buildAS2Program([{ path: 'scripts/frame_1/DoAction.as', text: 'avm1Actions("BwA=");' }]);
     expect(build.errors).toEqual([]);
     // Source location is retained in the source/export views, not copied into every runtime call.
-    expect(build.files.get('timelines/root.ts')).toContain('$rt.avm1Actions($t, "BwA=")');
+    expect(build.files.get('timelines/root.ts')).toContain('$t.stop();');
     expect(build.files.get('timelines/root.ts')).not.toContain('scripts/frame_1/DoAction.as", 1');
     const logs: LogEntry[] = [];
     const player = new AS2Player({ doc: parseSwfXml(XML, { fileName: 'fixture.xml' }), program: build.program, onLog: (entry) => logs.push(entry) });

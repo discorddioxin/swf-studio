@@ -1,3 +1,4 @@
+import { decodeAVM1Actions } from '../../transpiler/as2/avm1';
 import { decodeActionBytes } from '../../decompiler/parser';
 
 export interface AVM1Disassembly {
@@ -31,10 +32,11 @@ function base64ToHex(base64: string): string {
 
 /**
  * Raw SWFs store AVM1 ActionRecords, not `.as` source. The asset parser keeps
- * them as avm1Actions(base64) calls so Execute can interpret the exact bytes.
+ * them as avm1Actions(base64) calls for lossless source inspection. Execute now
+ * decodes supported blocks at transpile time and interprets only fallbacks.
  * Generated TypeScript adds the owning timeline as a first argument, so this
  * display-only helper recognizes both wrapper shapes and replaces each with a
- * best-effort decoder listing; `rawText` remains available for inspection.
+ * decoded logic or a best-effort diagnostic listing; `rawText` remains available.
  */
 export function disassembleAVM1Source(rawText: string): AVM1Disassembly | null {
   let blockCount = 0;
@@ -42,10 +44,12 @@ export function disassembleAVM1Source(rawText: string): AVM1Disassembly | null {
     blockCount++;
     try {
       const hex = base64ToHex(payload);
+      const decoded = decodeAVM1Actions(payload, { target: 'this', identifier: (name) => ['trace', 'random', 'getTimer', 'stopAllSounds'].includes(name) ? name : `this.${name}` });
+      const listing = decodeActionBytes(hex);
       return [
         `// AVM1 ActionRecord block ${blockCount}: ${hex.length / 2} byte(s).`,
-        '// Best-effort pseudo-source followed by the original opcode listing.',
-        decodeActionBytes(hex).source,
+        decoded.code !== null ? '// Decoded imperative logic (the TypeScript project adds scope/runtime imports).' : '// Unsupported block: best-effort pseudo-source only; TypeScript retains the interpreter fallback.',
+        decoded.code !== null ? `${decoded.code}\n\n/* Raw ActionRecord listing\n${listing.listing.join('\n')}\n*/` : listing.source,
       ].join('\n');
     } catch (error) {
       const message = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ');

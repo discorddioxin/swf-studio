@@ -1,73 +1,137 @@
-# Why `$rt.avm1Actions` Has a Base64 Argument
+# AVM1 decoding and editable TypeScript
 
-## Short answer
+Raw SWFs contain binary AVM1 ActionRecords, not formatted ActionScript source.
+The importer still preserves them losslessly as `avm1Actions("<base64>")` in the
+original source view. **The TypeScript transpiler now decodes supported blocks
+into executable imperative code by default**, rather than passing every block
+to the interpreter.
 
-A generated call currently looks like:
+## The setMessage example
+
+Input:
 
 ```ts
-$rt.avm1Actions($t, "B5YcAAYAAAAAAAAAAABsb2FkQnV0dG9ucwA9FwA=");
+avm1Actions("lg4AAAAHAQAAAABfcm9vdAAclgYAAG1haW4ATpYMAABzZXRNZXNzYWdlAFIXAA==");
 ```
 
-`$t` is the target timeline clip. The second argument is **Base64-encoded AVM1 ActionRecords**, not ordinary function arguments, a hash, or encrypted source. Raw SWFs store ActionScript 1/2 behavior as binary records; Base64 transports those exact bytes safely through generated TypeScript. The runtime decodes the string and executes the original records.
+Generated behavior:
 
-Older tracing builds also appended the source path, source line, and generated module. These were per-call reporting metadata—not AVM1 arguments—and have been removed with the runtime Action reports. Original source paths remain in the read-only ActionScript view and generated module banners.
-
-## Encoding and ActionRecord framing
-
-Base64 is reversible, printable transport encoding. It does not recover original comments/formatting and is not an obfuscation or security boundary. SWF AVM1 records are framed as follows (confirmed against [Ruffle's AVM1 reader](https://github.com/ruffle-rs/ruffle/blob/master/swf/src/avm1/read.rs)):
-
-- opcodes below `0x80` are one byte;
-- opcodes at or above `0x80` have a little-endian 16-bit payload length and then that payload;
-- an `ActionPush` payload (`0x96`) stores typed values such as strings, numbers, booleans, registers, and constant-pool references.
-
-For a concrete example, `B5YcAAYAAAAAAAAAAABsb2FkQnV0dG9ucwA9FwA=` decodes to 35 bytes:
-
-```text
-07 96 1c 00 06 00 00 00 00 00 00 00 00 00
-6c 6f 61 64 42 75 74 74 6f 6e 41 63 74 69 6f 6e 73 00
-3d 17 00
+```ts
+$rt.invoke($t._root?.main, "setMessage", "");
 ```
 
-| Byte offset | Bytes | Meaning |
-|---:|---|---|
-| 0 | `07` | `ActionStop` — stop timeline playback; the current script continues executing. |
-| 1–31 | `96 1c 00 …` | `ActionPush` with a 28-byte payload; pushes numeric zero and the NUL-terminated function name `loadButtonActions`. |
-| 32 | `3d` | `ActionCallFunction`; the stack contains a zero-argument call. |
-| 33 | `17` | `ActionPop`; discard the return value. |
-| 34 | `00` | `ActionEnd`; end the stream. |
+This calls `_root.main.setMessage("")`. There are no encoded arguments or hidden
+instructions left in this block. Change the receiver, method, or message in the
+generated TypeScript. `$rt.invoke` keeps the receiver as `this` and ignores
+missing/non-function methods, as AS2 does. Once your destination types guarantee
+the method exists, replace it with a direct `main.setMessage("")` call.
 
-A useful high-level approximation is:
+A Stop action (`BwA=`) now emits `$t.stop();`. GotoFrame uses one-based frame
+numbers. Arithmetic, property reads/writes, calls, local functions and supported
+branches become ordinary expressions, assignments, functions, `if/else`, and
+`while` blocks. There is no emitted operand-stack interpreter or opcode switch.
 
-```actionscript
-stop();
-loadButtonActions();
+## Decoder architecture
+
+`transpiler/as2/avm1.ts` is DOM-independent and does not execute input code:
+
+1. Validate Base64, record lengths, terminated UTF-8 strings, function bodies,
+   and branch boundaries. Function bodies are outside the header's record length.
+2. Resolve constant pools and all Push literal encodings (including SWF's
+   word-swapped doubles), lift the operand stack into expressions, and snapshot
+   values live across other operations into block-local temporaries.
+3. Recover empty-stack, reducible forward conditionals and pre-test loops.
+   Preserve reverse-pushed argument order, register snapshots, single evaluation
+   of duplicate values, and dynamic function receivers.
+4. Emit TypeScript inside a lexical block. The regular AS2 emitter supplies
+   timeline/global imports. `$rt.avm1` contains small conversion/call helpers,
+   **not** a second bytecode interpreter.
+
+The generated loop guard shares a one-million-iteration budget across loops in each decoded invocation. Input size,
+function nesting, and control-flow nesting also have decoder limits.
+
+## Coverage and safe fallback
+
+Supported families include constants, variables with literal identifier names,
+members, arithmetic/comparisons/conversions, calls/construction, arrays/objects,
+registers, Trace, basic timeline controls, numeric property access, DefineFunction,
+a subset of DefineFunction2 preloads, and structured conditionals/pre-test loops.
+
+This is not a complete AVM1 decompiler. `with`, `try/catch`, enumeration,
+`super`, special arguments/scope behavior, target changes, dynamic variable paths,
+context-sensitive global calls, stack-valued joins, irreducible jumps, unsupported
+preloads, scene-biased jumps, and unknown/malformed records retain the interpreter.
+Function-local declarations whose scope cannot safely be reconstructed also fall
+back. Constants changing across control-flow paths are not guessed.
+
+**Fallback is atomic per action block.** No decoded prefix is executed before
+replaying the original bytes. A warning and generated comment identify the byte
+offset and reason; `game/as2ts-report.md` lists them. Source wrappers are recognized
+in the parsed AST, not replaced by a regex inside comments or string literals.
+
+To force original-byte execution for an export:
+
+```sh
+npm run as2ts -- scripts -o converted --interpret-avm1
 ```
 
-That is explanatory pseudocode only. Execute uses the original bytecode, not a source reconstruction.
+The library APIs `transpileScript` and `transpileProject` also accept
+`{ avm1: 'interpret' }`. The default is `decode`.
 
-Ruffle's [AVM1 types](https://github.com/ruffle-rs/ruffle/blob/master/swf/src/avm1/types.rs) and [runtime](https://github.com/ruffle-rs/ruffle/blob/master/core/src/avm1/runtime.rs) are useful references for interpreting the typed stack values and their execution semantics. The best-effort decoder in this repository does not reconstruct every branch/function in a complex stream; the original bytes remain authoritative.
+## Actors, animations, sprites and graphics
 
-## Current path through the app
+Each generated timeline also has an `actors/<name>.ts` migration entry point.
+Workbench names and frame labels become class names and explicit `action_*`
+methods. Actor construction does not run scripts or introduce another clock.
 
-```text
-raw SWF ActionRecord bytes
-  → decompiler/swf/bitio.ts: avm1ActionSource() / bytesToBase64()
-  → avm1Actions("<base64>") in a synthesized source file
-  → transpiler emits $rt.avm1Actions($t, "<base64>")
-  → runtime decodes and executes the original AVM1 instructions
+The composition-based `Actor` API exposes:
+
+- `sprite`: pixel position, normalized scale/opacity, rotation in degrees,
+  visibility;
+- `animation`: play a named animation/frame, pause, seek, read current frame;
+- optional `graphics`: drawing operations using normalized opacity;
+- `children` and `update(deltaSeconds)` for authored game behavior.
+
+`TimelineActor` and `flashActorPorts` are explicit compatibility adapters. For
+example, after constructing a generated `HeroBallActor` around a host sprite:
+
+```ts
+hero.moveTo(160, 90);
+hero.sprite.opacity = 0.8;
+hero.animation.play("run");
+hero.graphics?.beginFill(0xffcc00);
 ```
 
-The synthesized `.as` path is a useful tag/source location, not proof that a raw SWF retained formatted ActionScript source. Action streams can come from `DoAction`, `DoInitAction`, button conditions, and clip actions.
+Move decoded behavior from `timelines/` into the actor's own game methods as you
+adapt it. Do **not** dispatch `action_*` methods at the same time as the legacy
+host dispatches those frame callbacks. The host still owns animation timing and
+SWF rendering. This layer does not infer game entities, animation ranges, physics,
+or a scene hierarchy from arbitrary bytecode; it provides typed boundaries for
+incrementally replacing those legacy dependencies with your destination engine.
 
-Per-opcode/runtime Action reports were removed because recording instruction names, stack snapshots, formatted bytes, and hundreds of log rows per script added avoidable work to normal execution. AVM1 bytecode still executes. The Code Editor retains a read-only, clearly labeled, best-effort disassembly with a raw-bytecode toggle; Logs, Problems, and mocked Req/Res diagnostics remain separate.
+## Using the app
 
-For the per-SWF payload counts, paths, decoded examples, and analytics-stream investigation, see [AVM1 action audit and Execute timelines](./AVM1_ACTIONS_AND_EXECUTE_TIMELINES.md).
+- The TypeScript project view shows the same decoded executable modules used by
+  Execute, plus actor migration modules.
+- The ActionScript view uses decoded imperative logic where possible, retains a
+  diagnostic listing for unsupported blocks, and offers the untouched wrapper.
+- **Export TypeScript** downloads generated sources, actor modules, all AS2
+  runtime sources, a diagnostics report, and an npm/TypeScript configuration.
+  Run `npm install` then `npm run check` in the extracted folder.
+- This is a source export, not a self-running game. Assets and the renderer/host,
+  input and networking integrations are separate. Legacy dynamic typing and
+  interpreter fallbacks still require review during migration.
+
+Original comments, variable names lost by compilation, and application intent
+cannot in general be recovered. Original bytes remain available for comparison.
 
 ## Code references
 
-- `decompiler/swf/bitio.ts` — byte-to-Base64 wrapper (`avm1ActionSource`, `bytesToBase64`).
-- `decompiler/swf/binary.ts` — extracts ActionRecord bytes from SWF tags.
-- `transpiler/as2/emit.ts` — emits a minimal timeline-context runtime call.
-- `src/runtime/as2/index.ts` — `$rt.avm1Actions(from, base64)` runtime entry point.
-- `src/runtime/as2/avm1.ts` — bytecode decoder/interpreter.
-- `src/lib/avm1Disassembly.ts` and `src/components/CodeWorkspace.tsx` — read-only disassembly and raw-bytecode views.
+- `decompiler/swf/bitio.ts`: original ActionRecord transport.
+- `transpiler/as2/avm1.ts`: validated decoding, expression lifting and control flow.
+- `transpiler/as2/emit.ts`: executable decoder integration and diagnostics.
+- `transpiler/as2/project.ts`: timeline wiring and actor entry points.
+- `src/runtime/as2/actor.ts`: actor/renderer ports and the Flash adapter.
+- `src/runtime/as2/avm1.ts`: fallback interpreter and shared semantic helpers.
+- `src/lib/typescriptExport.ts`: editable project ZIP.
+- `src/lib/avm1Disassembly.ts`: source inspection, not an execution path.

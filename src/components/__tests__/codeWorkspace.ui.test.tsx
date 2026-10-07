@@ -54,6 +54,8 @@ describe('CodeWorkspace', () => {
     expect(expected).toContain("import * as timeline_hero_ball from './timelines/hero_ball';");
     expect(expected).toContain('10: timeline_hero_ball, // "Hero Ball"');
     expect(container.textContent).toContain('hero_ball.ts');
+    expect(screen.getByRole('button', { name: 'Export TypeScript' })).toBeTruthy();
+    expect(await screen.findByTitle('actors/hero_ball.ts')).toBeTruthy();
     const namedSprite = generateAS2Project(sources, timelineMetadata).files.get('timelines/hero_ball.ts')!;
     expect(namedSprite).toContain('Workbench timeline name: "Hero Ball" (sprite 10)');
     expect(namedSprite).toContain('frameLabels');
@@ -110,14 +112,15 @@ describe('CodeWorkspace', () => {
     expect(editor.textContent).toContain('trace("hello");');
 
     const generated = generateAS2Project(await readAS2Sources(assets), buildWorkbenchTimelineMetadata(doc, project)).files;
-    const bytecodeModule = [...generated.entries()].find(([, text]) => text.includes('avm1Actions('));
+    const bytecodeModule = [...generated.entries()].find(([, text]) => text.includes('Decoded AVM1'));
+    expect([...generated.values()].join('\n')).not.toContain(payload);
     expect(bytecodeModule).toBeTruthy();
     fireEvent.change(screen.getByRole('textbox', { name: 'Search project files and source' }), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Show TypeScript Project' }));
     fireEvent.click(screen.getByRole('button', { name: 'Show Application' }));
     fireEvent.click(await screen.findByTitle(bytecodeModule![0]));
-    expect(screen.getByRole('note').textContent).toContain('original AVM1 bytes for faithful execution');
-    expect(screen.getByLabelText(`${bytecodeModule![0]} source`).textContent).toContain(payload);
+    expect(screen.getByLabelText(`${bytecodeModule![0]} source`).textContent).toContain('trace("hello");');
+    expect(screen.getByLabelText(`${bytecodeModule![0]} source`).textContent).not.toContain(payload);
   });
 
   it('opens the IDE from the Inspector code shortcut', () => {

@@ -1267,3 +1267,23 @@ export function bytesToBase64(bytes: Uint8Array): string {
   if (typeof host.btoa === 'function') return host.btoa(bin);
   return host.Buffer.from(bin, 'binary').toString('base64');
 }
+
+/** Small semantic helpers for decoded TypeScript; these do not run bytecode. */
+export const avm1Semantics = {
+  typeOf,
+  number: numberValue,
+  string: stringValue,
+  equals: abstractEquals,
+  strictEquals: (a: any, b: any) => a === b,
+  less: lessThan,
+  greater: (a: any, b: any) => lessThan(b, a) ?? false,
+  add(left: any, right: any): any {
+    const a = primitiveOf(right, false), b = primitiveOf(left, false);
+    return typeof a === 'string' || typeof b === 'string'
+      ? stringValue(b) + stringValue(a) : numberValue(b) + numberValue(a);
+  },
+  call: callFunctionValue,
+  construct: constructValue,
+  instanceOf: isInstance,
+  raise(value: any): never { throw new Avm1Thrown(value); },
+};
