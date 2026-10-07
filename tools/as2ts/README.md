@@ -25,7 +25,7 @@ npm run as2ts -- ./ffdec-out -o src/games/gaia-fishing
 npm run as2ts -- ./ffdec-out/scripts/frame_1/DoAction.as
 ```
 
-The input can be an FFDec export folder, a `.zip` of one, or a single `.as` file.
+The input can be an FFDec export folder, a `.zip` of one, or a single `.as` file. The CLI only sees exported scripts, so it keeps numeric `sprite_<id>` module names unless metadata is supplied through the library API. The Workbench passes its character names and SWF frame labels to that API: a sprite named `rod 3` becomes `timelines/rod_3.ts`, with frame callbacks such as `rod_3_idle` and `rod_3_throw`; the runtime still dispatches through the original numeric frame and character IDs.
 
 | Option | Meaning |
 |---|---|

@@ -1,12 +1,13 @@
 // Build a runnable AS2Program in the browser:
 //   FFDec .as exports ──as2ts──▶ TypeScript modules ──sucrase──▶ CommonJS ──link──▶ AS2Program
-// The generated TypeScript is exactly what the as2ts CLI writes to disk, so
-// what runs here is what gets committed to a repo.
+// Without Workbench metadata, the generated TypeScript is the same form the
+// as2ts CLI writes. In Workbench, names and frame labels add readable module
+// and callback identifiers; the numeric SWF mappings remain unchanged.
 
 import { transform } from 'sucrase';
 import * as runtime from '../../runtime/as2';
 import type { AS2Program } from '../../runtime/as2';
-import { transpileProject, type ProjectResult } from '../../../transpiler/as2/project';
+import { transpileProject, type ProjectResult, type TimelineNameIndex } from '../../../transpiler/as2/project';
 
 export const RUNTIME_SPECIFIER = 'as2-runtime';
 
@@ -29,10 +30,14 @@ export interface SourceInput {
 }
 
 /** Transpile + compile + link. Module bodies (class definitions) run here, so call resetRuntime() first. */
-export function buildAS2Program(sources: SourceInput[]): AS2Build {
-  const project = transpileProject(sources.map((s) => ({
+export function generateAS2Project(sources: SourceInput[], timelineMetadata?: TimelineNameIndex): ProjectResult {
+  return transpileProject(sources.map((s) => ({
     path: s.path, content: s.text, tagOrder: s.tagOrder, targetSpriteId: s.targetSpriteId,
-  })), { runtime: RUNTIME_SPECIFIER });
+  })), { runtime: RUNTIME_SPECIFIER, timelineMetadata });
+}
+
+export function buildAS2Program(sources: SourceInput[], timelineMetadata?: TimelineNameIndex): AS2Build {
+  const project = generateAS2Project(sources, timelineMetadata);
   const errors: BuildIssue[] = [];
   const warnings: BuildIssue[] = [];
   for (const r of project.report) {

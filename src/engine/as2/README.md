@@ -14,7 +14,7 @@ SwfDocument (symbols, timelines)   TypeScript modules ──sucrase──▶ AS2
 |---|---|
 | `player.ts` | Display list, AVM1-style frame loop and action queue, gotos, instance construction, hit testing, input, canvas rendering |
 | `builtins.ts` | Flash 7 API installed onto the runtime classes: MovieClip, Button, TextField, Key, Mouse, Stage, Selection, Sound, Color, LoadVars, MovieClipLoader, SharedObject, XML, XMLSocket, LocalConnection, ContextMenu, System |
-| `program.ts` | In-browser build: `.as` → as2ts → sucrase → linked `AS2Program` |
+| `program.ts` | In-browser build: `.as` → as2ts → sucrase → linked `AS2Program`; Workbench sprite names and frame labels become module/callback names while character IDs and 1-based frame dispatch remain numeric |
 | `text.ts` | HTML subset parser and word-wrap layout for TextFields |
 | `audio.ts`, `adpcm.ts` | Sounds (MP3 as-is; ADPCM `.flv` exports decoded to WAV); embedded TTF fonts |
 | `geom.ts` | Matrix, rect and colour-transform math (TWIPS) |
@@ -27,6 +27,8 @@ SwfDocument (symbols, timelines)   TypeScript modules ──sucrase──▶ AS2
 - **Construction order.** A clip gets its display state, name, init object and first-frame children *before* its AS2 class constructor body runs. `MovieClip.__construct` in the runtime makes this possible.
 - **Class registration.** Linked classes come from `Object.registerClass` in DoInitAction scripts. Those scripts run before root frame 1.
 - **Undefined values never throw.** as2ts emits `?.` and `$rt.sink`, so reading or writing through `undefined` is a no-op, as in AS2.
+- **Execution diagnostics.** Script exceptions and promise rejections are logged with the frame/event/timer context and stack. Execute separates app, engine, and Forge Problems from normal Logs and shows structured mocked HTTP/XMLSocket Req/Res payloads. AVM1 ActionRecords still execute, but Execute does not build per-instruction action reports.
+- **Running timeline inspection.** `AS2Player.runningTimelines()` returns read-only snapshots for live, playing multi-frame clips. Execute renders them in a Workbench-style sidebar with frame-event strips and a current-frame playhead; the global pause state is shown separately.
 - **Missing external SWFs.** A `loadMovie` or `MovieClipLoader` request for a SWF that isn't available loads as an empty clip, with one warning per URL.
 - **Class instance initialisers** (`var x = value` in a class body) live on the prototype, as AS2 compiles them. They are visible while superclass constructors run, and object values are shared by all instances.
 - **Calling a non-function is a no-op.** Calls through a class's `var` members go through `$rt.invoke`.
@@ -58,7 +60,7 @@ fish-full/external/game_chat/game_chat.xml, …               loadMovie("../shar
 - Masks clip to the mask's bounding box.
 - Gradient fills in the drawing API use their first colour.
 - Filters and blend modes are ignored.
-- There are no network servers: `LoadVars`, `XMLSocket` and `XML.load` report failure unless `fetchText` is provided.
+- All game traffic stays offline. The bundled Execute tab injects a mock GSI/Sushi backend; custom `fetchText` and server implementations remain supported. Unhandled URL/socket requests are blocked, and request/response payloads (including blocked responses) are recorded in Req/Res.
 - Only `_level0` exists. `_lockroot` is not supported.
 
 Screenshots of Gaia Fishing running on this player are in `audits/as2-player/`.

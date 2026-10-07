@@ -246,7 +246,7 @@ const sink: any = new Proxy(Object.create(null), { set: () => true, get: () => u
 export const $rt = {
   sink,
 
-  /** Executes a raw AVM1 action stream (base64) captured from a SWF tag. */
+  /** Executes the SWF's original AVM1 stream without constructing per-call action reports. */
   avm1Actions(from: AS2Clip, base64: string): void {
     runActionsBase64(from, base64);
   },

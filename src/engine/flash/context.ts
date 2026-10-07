@@ -6,6 +6,7 @@
 // symbol data, time, input and error reporting through it. Only one player is
 // active at a time (the Execute tab), and tests create/dispose their own.
 
+import type { LogSource, NetworkEvent } from './player';
 import type { EventDispatcher } from './events';
 
 /** What the flash.* classes need from the player. Implemented by FlashPlayer. */
@@ -14,24 +15,37 @@ export interface PlayerContext {
   readonly time: number;
   listenerAdded(target: EventDispatcher, type: string): void;
   listenerRemoved(target: EventDispatcher, type: string): void;
-  reportError(error: unknown, where: string): void;
+  reportError(error: unknown, where: string, source?: LogSource): void;
   trace(message: string): void;
+  recordNetwork?(event: NetworkEvent): void;
 }
 
 interface Runtime {
   player: (PlayerContext & Record<string, unknown>) | null;
   /** Run a callback from game code, reporting (not propagating) errors. */
-  guard<T>(fn: () => T, where: string): T | undefined;
+  guard<T>(fn: () => T, where: string, source?: LogSource): T | undefined;
 }
 
 export const runtime: Runtime = {
   player: null,
-  guard(fn, where) {
+  guard(fn, where, source = 'app') {
+    const player = runtime.player;
     try {
-      return fn();
+      const result = fn();
+      if (result && typeof (result as { then?: unknown }).then === 'function') {
+        // EventDispatcher intentionally does not await listeners. Attach a
+        // rejection handler here so async game handlers reach Problems too,
+        // instead of escaping as an unhandled browser rejection.
+        return Promise.resolve(result).catch((error: unknown) => {
+          if (error instanceof ScriptAbort) return undefined;
+          if (player) player.reportError(error, where, source);
+          else throw error;
+        }) as unknown as typeof result;
+      }
+      return result;
     } catch (error) {
       if (error instanceof ScriptAbort) throw error;
-      if (runtime.player) runtime.player.reportError(error, where);
+      if (player) player.reportError(error, where, source);
       else throw error;
       return undefined;
     }

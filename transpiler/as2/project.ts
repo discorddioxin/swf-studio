@@ -16,9 +16,20 @@ import { ModuleEmitter, type Diagnostic, type KnownClass } from './emit';
 import { LexError } from './lexer';
 import { ParseError, parseProgram } from './parser';
 
+export interface TimelineNameMetadata {
+  /** Human-readable name shown in Workbench (for example, "rod 3"). */
+  name?: string;
+  /** 1-based SWF frame number to Workbench frame label (for example, 1 → "idle"). */
+  frameLabels?: ReadonlyMap<number, string> | Readonly<Record<number, string>>;
+}
+
+export type TimelineNameIndex = ReadonlyMap<number, TimelineNameMetadata> | Readonly<Record<number, TimelineNameMetadata>>;
+
 export interface ProjectOptions {
   /** module specifier the generated code imports its runtime from (default "@/runtime/as2") */
   runtime?: string;
+  /** Optional names/labels from the Workbench SWF document and project annotations. */
+  timelineMetadata?: TimelineNameIndex;
 }
 
 export interface ProjectFile {
@@ -95,6 +106,60 @@ interface Parsed { file: ProjectFile; role: Role; body: Stmt[] | null; error: st
 // "frame_1/DoAction.as" must come before "frame_1/DoAction_2.as" (tag order in the SWF)
 const natural = (a: string, b: string) => a.replace(/\.as$/i, '').localeCompare(b.replace(/\.as$/i, ''), undefined, { numeric: true });
 
+function timelineMetadataAt(index: TimelineNameIndex | undefined, id: number): TimelineNameMetadata | undefined {
+  if (!index) return undefined;
+  return typeof (index as ReadonlyMap<number, TimelineNameMetadata>).get === 'function'
+    ? (index as ReadonlyMap<number, TimelineNameMetadata>).get(id)
+    : (index as Readonly<Record<number, TimelineNameMetadata>>)[id];
+}
+
+function frameLabelAt(metadata: TimelineNameMetadata | undefined, frame: number): string | undefined {
+  const labels = metadata?.frameLabels;
+  if (!labels) return undefined;
+  const value = typeof (labels as ReadonlyMap<number, string>).get === 'function'
+    ? (labels as ReadonlyMap<number, string>).get(frame)
+    : (labels as Readonly<Record<number, string>>)[frame];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function timelineFrameLabels(metadata: TimelineNameMetadata | undefined): [number, string][] {
+  const labels = metadata?.frameLabels;
+  if (!labels) return [];
+  let entries: [number, string][];
+  if (typeof (labels as ReadonlyMap<number, string>).entries === 'function') {
+    entries = [...(labels as ReadonlyMap<number, string>).entries()];
+  } else {
+    entries = Object.entries(labels as Readonly<Record<number, string>>)
+      .map(([frame, label]) => [Number(frame), label] as [number, string]);
+  }
+  return entries
+    .filter(([frame, label]) => Number.isInteger(frame) && frame > 0 && typeof label === 'string' && !!label.trim())
+    .map(([frame, label]) => [frame, label.trim()] as [number, string])
+    .sort((a, b) => a[0] - b[0]);
+}
+
+/** Stable, readable path/identifier fragment derived from a Workbench label. */
+function nameSegment(value: string, fallback: string): string {
+  const cleaned = value.normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[^A-Za-z0-9_$]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .replace(/_+/g, '_')
+    .toLowerCase();
+  const segment = cleaned || fallback;
+  return /^[a-z_$]/.test(segment) ? segment : `_${segment}`;
+}
+
+function uniqueSegment(base: string, used: Set<string>, suffix: string): string {
+  let candidate = base;
+  if (used.has(candidate)) candidate = `${base}_${suffix}`;
+  let index = 2;
+  while (used.has(candidate)) candidate = `${base}_${suffix}_${index++}`;
+  used.add(candidate);
+  return candidate;
+}
+
 export function transpileProject(input: ProjectFile[], options: ProjectOptions = {}): ProjectResult {
   const runtime = options.runtime ?? '@/runtime/as2';
   const files = new Map<string, string>();
@@ -112,7 +177,8 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
       role = { kind: 'init', timeline: projectFile.targetSpriteId };
     }
     try {
-      const body = inlineIncludes(parseProgram(file.content), path, byPath, new Set([path]));
+      const sourceBody = parseProgram(file.content);
+      const body = inlineIncludes(sourceBody, path, byPath, new Set([path]));
       if ((role.kind === 'unknown' || role.kind === 'initByName') && body.some((s) => s.k === 'class')) role = { kind: 'class' };
       // FFDec names a DoInitAction of an exported sprite after its linkage name: scripts/<exportName>.as
       else if (role.kind === 'unknown' && /^(?:scripts\/)?[^/]+\.as$/i.test(path.replace(/^.*?(scripts\/)/i, 'scripts/')) && !path.includes('__Packages')) {
@@ -185,9 +251,32 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
     }
   }
 
-  const timelineModules: [number, string][] = [];
+  interface TimelineModule { id: number; module: string; alias: string; displayName?: string; metadata?: TimelineNameMetadata }
+  const timelineModules: TimelineModule[] = [];
+  const timelineBindings = new Map<number, TimelineModule>();
+  const usedTimelinePaths = new Set<string>();
+  const usedTimelineAliases = new Set<string>();
+  for (const [id] of [...timelines].sort((a, b) => a[0] - b[0])) {
+    const metadata = timelineMetadataAt(options.timelineMetadata, id);
+    const displayName = metadata?.name?.trim() || undefined;
+    if (id === 0) {
+      usedTimelinePaths.add('root');
+      usedTimelineAliases.add('root');
+      timelineBindings.set(id, { id, module: 'timelines/root', alias: 'root', displayName, metadata });
+      continue;
+    }
+    const fallback = `sprite_${id}`;
+    const slug = displayName ? nameSegment(displayName, fallback) : fallback;
+    const moduleName = uniqueSegment(slug, usedTimelinePaths, String(id));
+    const aliasBase = displayName ? `timeline_${slug}` : fallback;
+    const alias = uniqueSegment(aliasBase, usedTimelineAliases, String(id));
+    timelineBindings.set(id, { id, module: `timelines/${moduleName}`, alias, displayName, metadata });
+  }
+
   for (const [id, acc] of [...timelines].sort((a, b) => a[0] - b[0])) {
-    const module = id === 0 ? 'timelines/root' : `timelines/sprite_${id}`;
+    const binding = timelineBindings.get(id)!;
+    const { module, displayName, metadata } = binding;
+    const stem = nameSegment(displayName ?? (id === 0 ? 'main_timeline' : `sprite_${id}`), id === 0 ? 'main_timeline' : `sprite_${id}`);
     const em = new ModuleEmitter({ runtime, selfModule: module, classes });
     const diags: Diagnostic[] = [];
     const sources: string[] = [];
@@ -212,8 +301,75 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
 
     if (acc.init.length) parts.push(`/** DoInitAction (runs once before the sprite's first frame). */\nexport const init = ${indent(fnFor(acc.init), 0)};`);
     if (acc.frames.size) {
-      const entries = [...acc.frames].sort((a, b) => a[0] - b[0]).map(([frame, list]) => `  ${frame}: ${indent(fnFor(list), 1)},`);
-      parts.push(`/** Frame scripts, keyed by 1-based frame number. */\nexport const frames: Record<number, (this: AS2Clip) => void> = {\n${entries.join('\n')}\n};`);
+      const frameCode = [...acc.frames]
+        .sort((a, b) => a[0] - b[0])
+        .map(([frame, list]) => ({ frame, code: fnFor(list), label: frameLabelAt(metadata, frame) }));
+      const counts = new Map<string, number>();
+      for (const { code } of frameCode) counts.set(code, (counts.get(code) ?? 0) + 1);
+
+      // Workbench labels turn anonymous numeric callbacks into named code while
+      // the exported frame map keeps its original 1-based numeric keys.
+      const workbenchLabels = timelineFrameLabels(metadata);
+      if (displayName || workbenchLabels.length) {
+        const labelCounts = new Map<string, number>();
+        for (const { label } of frameCode) {
+          if (!label) continue;
+          const key = nameSegment(label, 'frame');
+          labelCounts.set(key, (labelCounts.get(key) ?? 0) + 1);
+        }
+        const usedFrameNames = new Set<string>();
+        const frameNames = new Map<number, string>();
+        for (const { frame, label } of frameCode) {
+          const labelPart = label ? nameSegment(label, `frame_${frame}`) : `frame_${frame}`;
+          const duplicateLabel = label && (labelCounts.get(labelPart) ?? 0) > 1;
+          const base = `${stem}_${labelPart}${duplicateLabel ? `_frame_${frame}` : ''}`;
+          frameNames.set(frame, uniqueSegment(base, usedFrameNames, `frame_${frame}`));
+        }
+
+        const callbackByFrame = new Map<number, string>();
+        const callbackDeclarations: string[] = [];
+        const emitted = new Set<string>();
+        for (const { frame, code } of frameCode) {
+          if (emitted.has(code)) continue;
+          emitted.add(code);
+          const matchingFrames = frameCode.filter((entry) => entry.code === code);
+          const firstFrameName = frameNames.get(matchingFrames[0].frame)!;
+          const callbackName = (counts.get(code) ?? 0) > 1
+            ? uniqueSegment(`${firstFrameName}_shared`, usedFrameNames, `frame_${frame}`)
+            : firstFrameName;
+          for (const entry of matchingFrames) callbackByFrame.set(entry.frame, callbackName);
+          callbackDeclarations.push(`const ${callbackName} = ${indent(code, 0)};`);
+        }
+
+        const labels = workbenchLabels.length
+          ? `/** 1-based SWF frame numbers to labels shown in Workbench. */\nexport const frameLabels: Readonly<Record<number, string>> = {\n${workbenchLabels.map(([frame, label]) => `  ${frame}: ${JSON.stringify(label)},`).join('\n')}\n};\n\n`
+          : '';
+        const declarations = callbackDeclarations.length ? `${callbackDeclarations.join('\n\n')}\n\n` : '';
+        const entries = frameCode.map(({ frame, label }) => {
+          const comment = label
+            ? `  // Workbench frame ${frame}: ${JSON.stringify(label).split('*/').join('* /')}\n`
+            : '';
+          return `${comment}  ${frame}: ${callbackByFrame.get(frame)},`;
+        });
+        parts.push(`${labels}${declarations}/** Frame scripts, keyed by 1-based frame number. */\nexport const frames: Record<number, (this: AS2Clip) => void> = {\n${entries.join('\n')}\n};`);
+      } else {
+        // Preserve the ID-only output for callers that have no Workbench metadata.
+        // Identical bodies still execute on every scheduled frame.
+        const sharedNames = new Map<string, string>();
+        const sharedDeclarations: string[] = [];
+        for (const { code } of frameCode) {
+          if ((counts.get(code) ?? 0) < 2 || sharedNames.has(code)) continue;
+          const name = `$sharedFrameAction${sharedNames.size + 1}`;
+          sharedNames.set(code, name);
+          sharedDeclarations.push(`const ${name} = ${indent(code, 0)};`);
+        }
+        const entries = frameCode.map(({ frame, code }) => {
+          const callback = sharedNames.get(code) ?? indent(code, 1);
+          return `  ${frame}: ${callback},`;
+        });
+        const declarations = sharedDeclarations.length ? `${sharedDeclarations.join('\n\n')}\n\n` : '';
+        parts.push(`${declarations}/** Frame scripts, keyed by 1-based frame number. */\nexport const frames: Record<number, (this: AS2Clip) => void> = {\n${entries.join('\n')}\n};`);
+      }
     }
     if (acc.placements.size) {
       em.useRuntime('AS2Handler', true);
@@ -224,10 +380,14 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
       }
       parts.push(`/** Clip actions of instances placed on this timeline, keyed by "frame:depth". */\nexport const placements: Record<string, AS2Handler[]> = {\n${entries.join('\n')}\n};`);
     }
-    const code = banner(sources.join(', ')) + em.header() + parts.join('\n\n') + '\n';
+    const identity = displayName
+      ? `// Workbench timeline name: ${JSON.stringify(displayName)}${id === 0 ? '' : ` (sprite ${id})`}\n`
+      : '';
+    const code = banner(sources.join(', ')) + em.header() + identity + parts.join('\n\n') + '\n';
     files.set(`${module}.ts`, code);
-    timelineModules.push([id, module]);
-    report.push({ source: sources.join('\n'), target: `${module}.ts`, role: id === 0 ? 'main timeline' : `sprite ${id}`, diagnostics: [...diags, ...em.diagnostics] });
+    timelineModules.push(binding);
+    const role = id === 0 ? 'main timeline' : `sprite ${id}${displayName ? ` · ${JSON.stringify(displayName)}` : ''}`;
+    report.push({ source: sources.join('\n'), target: `${module}.ts`, role, diagnostics: [...diags, ...em.diagnostics] });
   }
 
   const buttonModules: [number, string][] = [];
@@ -294,7 +454,7 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
 
   // ------------------------------------------------------------ index
   const idx: string[] = [`import type { AS2Program } from ${JSON.stringify(runtime)};`];
-  for (const [id, m] of timelineModules) idx.push(`import * as ${id === 0 ? 'root' : `sprite_${id}`} from './${m}';`);
+  for (const { alias, module } of timelineModules) idx.push(`import * as ${alias} from './${module}';`);
   for (const [id, m] of buttonModules) idx.push(`import { handlers as button_${id} } from './${m}';`);
   const classList = [...classes.values()].sort((a, b) => natural(a.name, b.name));
   classList.forEach((c, i) => idx.push(`import { ${c.name.split('.').pop()} as class_${i} } from './${c.module}';`));
@@ -302,7 +462,7 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
   initActionModules.forEach(({ module }, i) => idx.push(`import { init as initAction_${i} } from './${module}';`));
   idx.push('');
   idx.push('export const program: AS2Program = {');
-  idx.push(`  timelines: {${timelineModules.map(([id]) => `\n    ${id}: ${id === 0 ? 'root' : `sprite_${id}`},`).join('')}\n  },`);
+  idx.push(`  timelines: {${timelineModules.map(({ id, alias, displayName }) => `\n    ${id}: ${alias},${displayName ? ` // ${JSON.stringify(displayName)}` : ''}`).join('')}\n  },`);
   idx.push(`  buttons: {${buttonModules.map(([id]) => `\n    ${id}: button_${id},`).join('')}\n  },`);
   idx.push(`  classes: {${classList.map((c, i) => `\n    ${JSON.stringify(c.name)}: class_${i},`).join('')}\n  },`);
   idx.push(`  initByName: {${initModules.map(([n], i) => `\n    ${JSON.stringify(n)}: init_${i},`).join('')}\n  },`);
@@ -360,7 +520,8 @@ function inlineIncludes(body: Stmt[], from: string, files: Map<string, ProjectFi
     const file = files.get(target) ?? [...files.values()].find((f) => f.path.replace(/\\/g, '/').endsWith('/' + s.path.replace(/^\.\//, '')));
     const key = file?.path.replace(/\\/g, '/');
     if (!file || !key || stack.has(key)) { out.push(s); continue; }
-    out.push(...inlineIncludes(parseProgram(file.content), key, files, new Set([...stack, key])));
+    const includedBody = parseProgram(file.content);
+    out.push(...inlineIncludes(includedBody, key, files, new Set([...stack, key])));
   }
   return out;
 }

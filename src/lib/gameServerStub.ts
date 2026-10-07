@@ -94,6 +94,7 @@
  *       `86` `sendObject(routing, targetID, object)`
  */
 import type { GameSocket } from '../engine/as2/player';
+import type { NetworkEvent, NetworkObserver } from '../engine/flash/player';
 import {
   GSI_SERVER_LIST,
   gsiInventoryResponse,
@@ -433,6 +434,7 @@ export class SushiServer implements SushiServerInterface {
   private readonly initialFishState: Partial<FishPluginState>;
   protected decoders = new WeakMap<GameSocket, SushiDecoder>();
   protected socketLogs = new WeakMap<GameSocket, (level: 'info' | 'warn' | 'error', message: string) => void>();
+  protected socketNetwork = new WeakMap<GameSocket, NetworkObserver>();
   protected readonly plugins = new Map<string, SushiPluginInterface>();
   protected readonly mobs = new Map<string, { id: string; roomId: number; data: string[] }>();
   /** Every message the client sent, for the Execute log / tests. */
@@ -440,6 +442,7 @@ export class SushiServer implements SushiServerInterface {
   /** Every message sent back to the client, for the Execute log / tests. */
   readonly sent: string[] = [];
   private nextRoomId: number;
+  private nextSocketRequestId = 1;
 
   constructor(opts: GameServerOptions = {}) {
     this.host = opts.host ?? '127.0.0.1';
@@ -470,6 +473,8 @@ export class SushiServer implements SushiServerInterface {
     this.fishPlugin.reset(this.initialFishState);
     this.decoders = new WeakMap<GameSocket, SushiDecoder>();
     this.socketLogs = new WeakMap<GameSocket, (level: 'info' | 'warn' | 'error', message: string) => void>();
+    this.socketNetwork = new WeakMap<GameSocket, NetworkObserver>();
+    this.nextSocketRequestId = 1;
     this.mobs.clear();
     this.received.length = 0;
     this.sent.length = 0;
@@ -500,14 +505,24 @@ export class SushiServer implements SushiServerInterface {
     (this.socketLogs.get(socket) ?? this.log)(level, message);
   }
 
+  protected recordSocketNetwork(socket: GameSocket, event: NetworkEvent): void {
+    this.socketNetwork.get(socket)?.(event);
+  }
+
   connect(
     host: string,
     port: number,
     socket: GameSocket,
     log?: (level: 'info' | 'warn' | 'error', message: string) => void,
+    onNetwork?: NetworkObserver,
   ): void {
     this.decoders.set(socket, new SushiDecoder());
     if (log) this.socketLogs.set(socket, log);
+    if (onNetwork) this.socketNetwork.set(socket, onNetwork);
+    const url = `${host}:${port}`;
+    const requestId = `socket-${this.nextSocketRequestId++}`;
+    this.recordSocketNetwork(socket, { kind: 'request', transport: 'xmlsocket', direction: 'outgoing', requestId, method: 'CONNECT', url, status: 'sent' });
+    this.recordSocketNetwork(socket, { kind: 'response', transport: 'xmlsocket', direction: 'incoming', requestId, method: 'CONNECT', url, status: 'mocked', message: 'Local mock server accepted the XMLSocket connection.' });
     this.logSocket(
       socket,
       'info',
@@ -520,6 +535,12 @@ export class SushiServer implements SushiServerInterface {
     this.decoders.set(socket, decoder);
     for (const msg of decoder.push(data)) {
       this.received.push(msg);
+      const requestId = `socket-${this.nextSocketRequestId++}`;
+      const method = Number.isNaN(msg.tag) ? 'handshake' : `message ${msg.tag}`;
+      this.recordSocketNetwork(socket, {
+        kind: 'request', transport: 'xmlsocket', direction: 'outgoing', requestId,
+        method, url: `${socket.host}:${socket.port}`, status: 'sent', payload: msg.raw,
+      });
       if (Number.isNaN(msg.tag) && !parseHandshake(msg.raw)) {
         this.logSocket(socket, 'warn', `test server ← unknown record ${JSON.stringify(msg.raw.slice(0, 120))}`);
         continue;
@@ -528,7 +549,7 @@ export class SushiServer implements SushiServerInterface {
         this.logSocket(socket, 'info', `test server ← [${msg.tag}] ${msg.fields.join(' | ').slice(0, 160)}`);
       }
       const reply = this.respond(socket, msg);
-      if (reply) this.deliver(socket, reply);
+      if (reply) this.deliver(socket, reply, requestId);
     }
   }
 
@@ -536,6 +557,7 @@ export class SushiServer implements SushiServerInterface {
     this.decoders.delete(socket);
     this.logSocket(socket, 'info', 'local test game server: client closed the connection');
     this.socketLogs.delete(socket);
+    this.socketNetwork.delete(socket);
   }
 
   /** Reply to a client message (`SushiAPI.$p` protocol). */
@@ -924,8 +946,16 @@ export class SushiServer implements SushiServerInterface {
   }
 
   /** Push a message to the client (through the socket's `onData`). */
-  deliver(socket: GameSocket, message: string): void {
+  deliver(socket: GameSocket, message: string, requestId?: string): void {
     this.sent.push(message);
+    const decoded = new SushiDecoder().push(message);
+    for (const response of decoded) {
+      this.recordSocketNetwork(socket, {
+        kind: 'response', transport: 'xmlsocket', direction: 'incoming', requestId,
+        method: Number.isNaN(response.tag) ? 'handshake' : `message ${response.tag}`,
+        url: `${socket.host}:${socket.port}`, status: 'mocked', payload: response.raw,
+      });
+    }
     this.logSocket(socket, 'info', `test server → ${message.split(SUSHI_FIELD)[0]}`);
     socket.deliver(message);
   }
@@ -961,6 +991,7 @@ export class MockServer implements MockServerInterface {
   readonly servers: MockServerEntry[];
   readonly userData: GsiUserData;
   readonly sushiServer: SushiServer;
+  private requestSequence = 0;
 
   constructor(opts: MockServerOptions = {}) {
     this.servers = opts.servers ? opts.servers.map((s) => ({ ...s })) : GSI_SERVER_LIST.map((s) => ({ ...s }));
@@ -981,6 +1012,7 @@ export class MockServer implements MockServerInterface {
 
   reset(): void {
     this.sushiServer.reset();
+    this.requestSequence = 0;
   }
 
   handleGsiMethod(method: string, _params?: unknown): PhpValue {
@@ -1014,6 +1046,7 @@ export class MockServer implements MockServerInterface {
     method: string,
     body: string | null,
     log?: GsiStubLogger,
+    onNetwork?: NetworkObserver,
   ): Promise<string | null> {
     const base = typeof location !== 'undefined' && location.href ? location.href : 'http://localhost/';
     const target = (() => {
@@ -1023,27 +1056,46 @@ export class MockServer implements MockServerInterface {
         return url;
       }
     })();
+    const verb = String(method || 'GET').toUpperCase();
+    const requestId = `http-${++this.requestSequence}`;
+    onNetwork?.({
+      kind: 'request', transport: 'http', direction: 'outgoing', requestId,
+      method: verb, url: target, status: 'sent', payload: body ?? undefined,
+    });
+    const respond = (payload: string | null, status: string, message?: string) => {
+      onNetwork?.({
+        kind: 'response', transport: 'http', direction: 'incoming', requestId,
+        method: verb, url: target, status, payload: payload ?? undefined, message,
+      });
+      return payload;
+    };
     if (!isGsiUrl(target)) {
-      log?.('warn', `network request not available offline: ${method} ${target}`, body ?? undefined);
-      return null;
+      const message = `network request not available offline: ${verb} ${target}`;
+      log?.('warn', message, body ?? undefined);
+      return respond(null, 'blocked offline', message);
     }
-    if (/gateway\.php/i.test(target) || /(^|&)m=[a-z0-9%]/i.test(body ?? '')) {
-      const calls = parseGatewayRequest(body);
-      const label =
-        calls.map(([id, params]) => `${id}(${phpSerialize(params).slice(0, 40)})`).join(', ') || 'no calls';
-      log?.('info', `GSI gateway ${method} ${target} → ${label}`, body ?? undefined);
-      const rows: PhpValue[] = calls.map(([id, params]) => [0, true, this.handleGsiMethod(id, params)]);
-      return encodeURIComponent(phpSerialize(rows));
+    try {
+      if (/gateway\.php/i.test(target) || /(^|&)m=[a-z0-9%]/i.test(body ?? '')) {
+        const calls = parseGatewayRequest(body);
+        const label = calls.map(([id, params]) => `${id}(${phpSerialize(params).slice(0, 40)})`).join(', ') || 'no calls';
+        log?.('info', `GSI gateway ${verb} ${target} → ${label}`, body ?? undefined);
+        const rows: PhpValue[] = calls.map(([id, params]) => [0, true, this.handleGsiMethod(id, params)]);
+        return respond(encodeURIComponent(phpSerialize(rows)), 'mocked', `${calls.length} GSI method(s) answered by MockServer.`);
+      }
+      const probe = `${target} ${body ?? ''}`;
+      const inventory = /inventor|item|bait|rod|loadout|bucket|gear|equipped|(^|[^a-z])inv([^a-z]|$)/i.test(probe);
+      log?.(
+        'info',
+        `GSI stub ${verb} ${target}${inventory ? ' → inventory reply (25× bait, all rods)' : ' → ok reply'}`,
+        body ?? undefined,
+      );
+      return respond(inventory ? gsiInventoryResponse() : 'error=0&success=1&status=ok', 'mocked', 'Answered locally by MockServer.');
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      const message = `Mock HTTP handler failed for ${verb} ${target}: ${err.message}`;
+      log?.('error', message, err.stack);
+      return respond(err.stack ?? err.message, 'error', message);
     }
-    const probe = `${target} ${body ?? ''}`;
-    const inventory = /inventor|item|bait|rod|loadout|bucket|gear|equipped|(^|[^a-z])inv([^a-z]|$)/i.test(probe);
-    log?.(
-      'info',
-      `GSI stub ${method} ${target}${inventory ? ' → inventory reply (25× bait, all rods)' : ' → ok reply'}`,
-      body ?? undefined,
-    );
-    if (inventory) return gsiInventoryResponse();
-    return 'error=0&success=1&status=ok';
   }
 
   connect(
@@ -1051,8 +1103,9 @@ export class MockServer implements MockServerInterface {
     port: number,
     socket: GameSocket,
     log?: (level: 'info' | 'warn' | 'error', message: string) => void,
+    onNetwork?: NetworkObserver,
   ): void {
-    this.sushiServer.connect(host, port, socket, log);
+    this.sushiServer.connect(host, port, socket, log, onNetwork);
   }
 
   send(socket: GameSocket, data: string): void {

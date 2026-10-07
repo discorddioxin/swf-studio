@@ -20,6 +20,7 @@
  */
 
 import type { GameServerBackend, GameSocket } from '../engine/as2/player';
+import type { NetworkObserver } from '../engine/flash/player';
 import type { LogLevel } from '../engine/flash/player';
 
 export type NetworkLogger = (level: LogLevel, message: string, detail?: string) => void;
@@ -160,7 +161,7 @@ export interface SushiServerInterface extends GameServerBackend {
   registerPlugin(plugin: SushiPluginInterface): void;
   /** Restore the configured session, room list, fish inventory and counters. */
   reset(): void;
-  deliver(socket: GameSocket, message: string): void;
+  deliver(socket: GameSocket, message: string, requestId?: string): void;
 }
 
 /**
@@ -176,7 +177,9 @@ export interface MockServerInterface extends GameServerBackend {
     url: string,
     method: string,
     body: string | null,
-    log?: (level: 'info' | 'warn', message: string, detail?: string) => void,
+    log?: (level: 'info' | 'warn' | 'error', message: string, detail?: string) => void,
+    /** Optional structured observer for the Execute Req/Res console. */
+    onNetwork?: NetworkObserver,
   ): Promise<string | null>;
   /** Invoke a single GSI gateway method (`50`, `109`, `107`, `1001`, `3009`, etc.). */
   handleGsiMethod(method: string, params?: unknown): unknown;

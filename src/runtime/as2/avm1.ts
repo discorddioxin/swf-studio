@@ -10,8 +10,8 @@
 // clips are JS objects with `_x`/`_parent`/… and MovieClip methods, and
 // `_global` holds the AS2 built-ins.
 //
-// Scripts reach the interpreter through `$rt.actions(this, "<base64>")`, the
-// one statement the SWF parser synthesises for a decoded action stream.
+// Scripts reach the interpreter through `$rt.avm1Actions(this, "<base64>")`,
+// the statement the SWF parser synthesises for a decoded ActionRecord stream.
 //
 // Semantics follow the AVM1 spec as implemented by Ruffle (swf/src/avm1,
 // core/src/avm1): scope chain = Local → With* → Target → Global, registers 0…n,
@@ -564,6 +564,8 @@ export const DEFAULT_SCRIPT_BUDGET = 1_000_000;
 const REPEAT_SCRIPT_BUDGET = 5_000;
 const timedOutCode = new WeakSet<Uint8Array>();
 let scriptBudget = DEFAULT_SCRIPT_BUDGET;
+/** Nested action blocks share one budget; each top-level callDef/runActions entry owns it. */
+let scriptExecutionDepth = 0;
 
 /** obj[name](…args); AS2 ignores calls of non-function values. */
 function callMethodValue(obj: any, name: string, args: any[]): any {
@@ -624,15 +626,7 @@ function decodeString(bytes: Uint8Array): string {
 
 /** Execute an AVM1 action stream with `this` = `from`. */
 export function runActions(from: any, code: Uint8Array): any {
-  const prevBudget = scriptBudget;
-  scriptBudget = env.budget && env.budget > 0 ? env.budget
-    : timedOutCode.has(code) ? REPEAT_SCRIPT_BUDGET
-    : DEFAULT_SCRIPT_BUDGET;
-  try {
-    return runActionsInner(from, code);
-  } finally {
-    scriptBudget = prevBudget;
-  }
+  return runActionsInner(from, code);
 }
 
 function runActionsInner(from: any, code: Uint8Array): any {
@@ -650,12 +644,24 @@ function runActionsInner(from: any, code: Uint8Array): any {
   return exec(frame, code, frame.scope).value;
 }
 
-/** Runs a decoded action stream (base64) on `from` — the `$rt.actions` entry point. */
+/** Runs a decoded action stream (base64) on `from`. */
 export function runActionsBase64(from: any, base64: string): any {
   return runActions(from, base64ToBytes(base64));
 }
 
 function exec(frame: Frame, code: Uint8Array, scope: Scope): Return {
+  // MovieClip.onEnterFrame and other host callbacks enter via callDef directly, not
+  // runActions. Own the budget at the outermost exec so a timeout is restored for
+  // those calls too, while nested functions/With/Try blocks keep sharing one budget.
+  const topLevel = scriptExecutionDepth === 0;
+  const prevBudget = scriptBudget;
+  if (topLevel) {
+    scriptBudget = env.budget && env.budget > 0 ? env.budget
+      : timedOutCode.has(code) ? REPEAT_SCRIPT_BUDGET
+      : DEFAULT_SCRIPT_BUDGET;
+  }
+  scriptExecutionDepth++;
+
   const prevCode = frame.code;
   const prevScope = frame.scope;
   const prevFrame = activeFrame;
@@ -668,6 +674,8 @@ function exec(frame: Frame, code: Uint8Array, scope: Scope): Return {
     frame.code = prevCode;
     frame.scope = prevScope;
     activeFrame = prevFrame;
+    scriptExecutionDepth--;
+    if (topLevel) scriptBudget = prevBudget;
   }
 }
 

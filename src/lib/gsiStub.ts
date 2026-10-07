@@ -173,7 +173,7 @@ export function gsiInventoryResponse(): string {
 const INVENTORY_RE = /inventor|item|bait|rod|loadout|bucket|gear|equipped|(^|[^a-z])inv([^a-z]|$)/i;
 
 export interface GsiStubLogger {
-  (level: 'info' | 'warn', message: string, detail?: string): void;
+  (level: 'info' | 'warn' | 'error', message: string, detail?: string): void;
 }
 
 /**

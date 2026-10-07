@@ -4,19 +4,36 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AssetCache, SwfPackage } from '../lib/assets';
-import type { AssetBundle, SwfDocument } from '../types';
-import { cn } from '../utils/cn';
+import type { AssetBundle, Project, SwfDocument } from '../types';
 import { Button } from './ui';
+import { ExecutionConsole } from './ExecutionConsole';
+import { RunningTimelinesSidebar } from './RunningTimelinesSidebar';
+import { useExecutionDiagnostics } from './useExecutionDiagnostics';
 import type { LogEntry } from '../engine/flash/player';
-import { AS2Player, type Movie } from '../engine/as2/player';
+import { AS2Player, type Movie, type RunningTimelineSnapshot } from '../engine/as2/player';
 import { createExternalResolver, swfNameOf, type ExternalSwf } from '../engine/as2/externals';
-import { buildAS2Program, type AS2Build } from '../engine/as2/program';
+import { readAS2Text, useAS2Build } from '../engine/as2/useAS2Build';
+import { buildWorkbenchTimelineMetadata } from '../engine/as2/workbenchMetadata';
 import { _global as as2Global } from '../runtime/as2';
 import { AS2AudioBackend, embeddedFontFamily, registerFonts, soundFilesOf } from '../engine/as2/audio';
 import { createMockServer, type MockServer } from '../lib/gameServerStub';
 
 const MAX_LOG = 500;
 const BOOT_KEY = 'swf-studio.as2.boot';
+
+function sameRunningTimelines(a: readonly RunningTimelineSnapshot[], b: readonly RunningTimelineSnapshot[]): boolean {
+  return a.length === b.length && a.every((timeline, index) => {
+    const next = b[index];
+    return timeline.id === next.id
+      && timeline.frame === next.frame
+      && timeline.totalFrames === next.totalFrames
+      && timeline.frameLabel === next.frameLabel
+      && timeline.name === next.name
+      && timeline.path === next.path
+      && timeline.movieName === next.movieName
+      && timeline.mainMovie === next.mainMovie;
+  });
+}
 
 /** Boot scripts run on _root after frame 1 (plain JavaScript; `_root` and `player` are in scope). */
 const BOOT_PRESETS: { id: string; label: string; code: string; hint: string }[] = [
@@ -32,12 +49,10 @@ const BOOT_PRESETS: { id: string; label: string; code: string; hint: string }[] 
 export const isAs2Bundle = (doc: SwfDocument, assets: AssetBundle | null) =>
   !!assets?.files.some((f) => /\.as$/i.test(f.path)) && (Number(doc.header.version ?? 0) <= 8 || !doc.symbolClasses?.size);
 
-type BuildState = { status: 'loading' } | { status: 'ready'; build: AS2Build; sourceCount: number } | { status: 'failed'; error: string };
-
 /** An external SWF export with its key (used for its fonts). */
 interface ExternalEntry { pkg: SwfPackage; name: string; key: string }
 
-export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; externals?: SwfPackage[] }) {
+export function As2Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<AS2Player | null>(null);
@@ -45,13 +60,14 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
   const audioRef = useRef<AS2AudioBackend | null>(null);
   const extAudioRef = useRef<AS2AudioBackend[]>([]);
   const playingRef = useRef(true);
-  const [build, setBuild] = useState<BuildState>({ status: 'loading' });
+  const timelineMetadata = useMemo(() => buildWorkbenchTimelineMetadata(doc, project), [doc, project]);
+  const build = useAS2Build(assets, timelineMetadata);
   const [session, setSession] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(false);
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [errorsOnly, setErrorsOnly] = useState(false);
+  const [runtimeTimelines, setRuntimeTimelines] = useState<RunningTimelineSnapshot[]>([]);
   const [panel, setPanel] = useState<'console' | 'program' | null>('console');
   const [hud, setHud] = useState({ frame: 1, total: 1, label: null as string | null, time: 0 });
   const [tree, setTree] = useState<string[]>([]);
@@ -68,23 +84,18 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
   }), [externals]);
   const [viewFile, setViewFile] = useState<string | null>(null);
   const pendingLogs = useRef<LogEntry[]>([]);
+  const runtimeTimelinesRef = useRef<RunningTimelineSnapshot[]>([]);
+  const executionFaultRef = useRef(false);
+  const appendGlobalProblem = useCallback((entry: LogEntry) => {
+    setLogs((previous) => [...previous, entry].slice(-MAX_LOG));
+  }, []);
+  useExecutionDiagnostics(appendGlobalProblem);
 
   useEffect(() => { try { localStorage.setItem(BOOT_KEY, boot); } catch { /* storage unavailable */ } }, [boot]);
 
-  // ---- transpile + compile the .as export (once per bundle)
+  // Embedded fonts are independent of the source project build.
   useEffect(() => {
     let cancelled = false;
-    setBuild({ status: 'loading' });
-    const files = (assets?.files ?? []).filter((f) => /\.as$/i.test(f.path));
-    Promise.all(files.map(async (f) => ({
-      path: f.path, text: await readText(f.file), tagOrder: f.tagOrder, targetSpriteId: f.targetSpriteId,
-    })))
-      .then((sources) => {
-        if (cancelled) return;
-        // class bodies register on _global while linking; the player re-registers them after its reset
-        setBuild({ status: 'ready', build: buildAS2Program(sources), sourceCount: sources.length });
-      })
-      .catch((e) => { if (!cancelled) setBuild({ status: 'failed', error: e instanceof Error ? e.message : String(e) }); });
     const fontsController = new AbortController();
     registerFonts(assets?.files ?? [], undefined, fontsController.signal).then((ids) => { if (!cancelled) setFontIds(ids); });
     return () => { cancelled = true; fontsController.abort(); };
@@ -127,8 +138,11 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
   // ---- a player per (document, build, restart)
   useEffect(() => {
     if (build.status !== 'ready') return;
+    executionFaultRef.current = false;
     pendingLogs.current = [];
+    runtimeTimelinesRef.current = [];
     setLogs([]);
+    setRuntimeTimelines([]);
     const audio = new AS2AudioBackend(cache, soundFilesOf(assets?.files ?? []));
     audio.muted = muted;
     audioRef.current = audio;
@@ -139,7 +153,7 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
     const swfs: ExternalSwf[] = extEntries.map((e, i) => ({
       name: e.name, key: e.key, doc: e.pkg.doc, assets: e.pkg.cache, audio: extAudio[i],
       sources: () => Promise.all(e.pkg.bundle.files.filter((f) => /\.as$/i.test(f.path)).map(async (f) => ({
-        path: f.path, text: await readText(f.file), tagOrder: f.tagOrder, targetSpriteId: f.targetSpriteId,
+        path: f.path, text: await readAS2Text(f.file), tagOrder: f.tagOrder, targetSpriteId: f.targetSpriteId,
       }))),
     }));
     let playerForLog: AS2Player | null = null;
@@ -147,9 +161,9 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
       onBuild: (swf, b, ms) => {
         setLoadedExternals((l) => [...l, { name: swf.name, ms, errors: b.errors.length }]);
         playerForLog?.log('info', `loaded external SWF ${swf.name}: ${b.files.size} modules transpiled in ${ms} ms`);
-        for (const e of b.errors) playerForLog?.log('error', `as2ts (${swf.name}): ${e.file}: ${e.message}`);
+        for (const e of b.errors) playerForLog?.log('error', `as2ts (${swf.name}): ${e.file}: ${e.message}`, undefined, { source: 'forge', kind: 'problem', context: e.file });
       },
-      onError: (swf, e) => playerForLog?.log('error', `external SWF ${swf.name}: ${e.message}`),
+      onError: (swf, e) => playerForLog?.log('error', `external SWF ${swf.name}: ${e.message}`, e.stack, { source: 'forge', kind: 'problem', context: `external SWF ${swf.name}` }),
     });
     const bootCode = boot.trim();
     if (!gameServerRef.current) {
@@ -172,8 +186,12 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
       },
       // Offline MockServer: answers GSI/inventory HTTP requests and Sushi XMLSocket
       // session/room/plugin messages locally with zero real network connections.
-      fetchText: (url, method, body) =>
-        mockServer.fetchText(url, method, body, (level, message, detail) => player.log(level, message, detail ?? '')),
+      fetchText: (url, method, body, onNetwork) =>
+        mockServer.fetchText(
+          url, method, body,
+          (level, message, detail) => player.log(level, message, detail, { source: 'network' }),
+          onNetwork,
+        ),
       gameServer: mockServer,
       onHelp: () => setInstructionsOpen(true),
       afterStart: bootCode ? (root, p) => {
@@ -181,7 +199,6 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
         new Function('_root', 'player', '_global', bootCode)(root, p, as2Global);
       } : undefined,
     });
-    for (const e of build.build.errors) player.log('error', `as2ts: ${e.file}: ${e.message}`);
     playerForLog = player;
     if (swfs.length) player.log('info', `external SWFs available: ${swfs.map((s) => s.name).join(', ')}`);
     playerRef.current = player;
@@ -233,30 +250,48 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
       const canvas = canvasRef.current;
       const dt = now - last;
       last = now;
-      if (player) {
-        if (playingRef.current) player.advanceBy(dt);
-        const ctx = canvas?.getContext('2d');
-        if (ctx && canvas) {
-          const dpr = window.devicePixelRatio || 1;
-          const v = viewRef.current;
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          ctx.fillStyle = '#09090b';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          player.renderTo(ctx, v.scale * dpr, v.x * dpr, v.y * dpr);
-          const h = player.hovered;
-          canvas.style.cursor = player.cursorHidden ? 'none' : h?.kind === 'text' ? 'text' : h && h.obj?.useHandCursor !== false ? 'pointer' : 'default';
-        }
-        if (now - lastHud > 200) {
-          lastHud = now;
-          const root = player.root;
-          setHud({ frame: root.frame + 1, total: root.totalFrames, label: root.timeline?.frames[root.frame]?.label ?? null, time: player.time() });
-          if (panelRef.current === 'program') setTree(player.tree());
-          setMissing((m) => (m.length === player.missingExternals.size ? m : [...player.missingExternals]));
-          if (pendingLogs.current.length) {
-            const batch = pendingLogs.current;
-            pendingLogs.current = [];
-            setLogs((prev) => [...prev, ...batch].slice(-MAX_LOG));
+      if (player && !executionFaultRef.current) {
+        try {
+          if (playingRef.current) player.advanceBy(dt);
+          const ctx = canvas?.getContext('2d');
+          if (ctx && canvas) {
+            const dpr = window.devicePixelRatio || 1;
+            const v = viewRef.current;
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.fillStyle = '#09090b';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            player.renderTo(ctx, v.scale * dpr, v.x * dpr, v.y * dpr);
+            const h = player.hovered;
+            canvas.style.cursor = player.cursorHidden ? 'none' : h?.kind === 'text' ? 'text' : h && h.obj?.useHandCursor !== false ? 'pointer' : 'default';
           }
+          if (now - lastHud > 100) {
+            lastHud = now;
+            const root = player.root;
+            setHud({ frame: root.frame + 1, total: root.totalFrames, label: root.timeline?.frames[root.frame]?.label ?? null, time: player.time() });
+            const nextTimelines = player.runningTimelines();
+            if (!sameRunningTimelines(runtimeTimelinesRef.current, nextTimelines)) {
+              runtimeTimelinesRef.current = nextTimelines;
+              setRuntimeTimelines(nextTimelines);
+            }
+            if (panelRef.current === 'program') setTree(player.tree());
+            setMissing((m) => (m.length === player.missingExternals.size ? m : [...player.missingExternals]));
+            if (pendingLogs.current.length) {
+              const batch = pendingLogs.current;
+              pendingLogs.current = [];
+              setLogs((prev) => [...prev, ...batch].slice(-MAX_LOG));
+            }
+          }
+        } catch (error) {
+          executionFaultRef.current = true;
+          playingRef.current = false;
+          setPlaying(false);
+          const err = error instanceof Error ? error : new Error(String(error));
+          player.log('error', `Execute animation/render loop: ${err.message}`, err.stack, {
+            source: 'engine', kind: 'problem', context: 'Execute animation/render loop',
+          });
+          const batch = pendingLogs.current;
+          pendingLogs.current = [];
+          if (batch.length) setLogs((prev) => [...prev, ...batch].slice(-MAX_LOG));
         }
       }
       raf = requestAnimationFrame(loop);
@@ -291,10 +326,26 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
     canvasRef.current?.focus();
   };
 
-  const errorCount = logs.filter((l) => l.level === 'error').length;
-  const shownLogs = errorsOnly ? logs.filter((l) => l.level === 'error') : logs;
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const b = build.status === 'ready' ? build.build : null;
+  const forgeProblems: LogEntry[] = build.status === 'failed' ? [{
+    level: 'error', kind: 'problem', source: 'forge', context: 'AS2 build', message: build.error, time: 0,
+  }] : build.status === 'ready' ? [
+    ...build.build.errors.map((issue) => ({
+      level: 'error' as const, kind: 'problem' as const, source: 'forge' as const,
+      context: issue.file, message: `${issue.file}: ${issue.message}`, time: 0,
+    })),
+    ...build.build.warnings.map((issue) => ({
+      level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const,
+      context: issue.file, message: `${issue.file}: ${issue.message}`, time: 0,
+    })),
+    ...missing.map((path) => ({
+      level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const,
+      context: 'external SWF', message: `Missing bundled external SWF: ${path}`, time: 0,
+    })),
+  ] : [];
+  const consoleEntries = [...forgeProblems, ...logs];
+  const errorCount = consoleEntries.filter((entry) => entry.level === 'error').length;
   const preset = BOOT_PRESETS.find((p) => p.code === boot.trim()) ?? null;
 
   return (
@@ -304,7 +355,7 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
           <div className="text-sm font-semibold text-zinc-100">Execute</div>
           <div className="truncate text-[10px] text-zinc-500">
             {build.status === 'loading' ? 'Transpiling ActionScript…' : build.status === 'failed' ? 'Could not read the scripts'
-              : `AS2 engine · ${build.sourceCount} script(s) · frame ${hud.frame}/${hud.total}${hud.label ? ` “${hud.label}”` : ''} · ${(hud.time / 1000).toFixed(1)}s`}
+              : `AS2 engine · ${build.sources.length} script(s) · frame ${hud.frame}/${hud.total}${hud.label ? ` “${hud.label}”` : ''} · ${(hud.time / 1000).toFixed(1)}s`}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1">
@@ -340,7 +391,8 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
         </div>
       )}
 
-      <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div ref={wrapRef} className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         <canvas
           ref={canvasRef}
           tabIndex={0}
@@ -391,26 +443,13 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
           </div>
         )}
       </div>
+      <RunningTimelinesSidebar doc={doc} timelines={runtimeTimelines} timelineNames={timelineMetadata} playing={playing} />
+      </div>
 
-      {panel === 'console' && (
-        <div className="h-44 shrink-0 border-t border-zinc-800">
-          <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Console · trace() and errors ({logs.length})</span>
-            <div className="flex gap-3">
-              <button className={cn('text-[10px] hover:text-zinc-300', errorsOnly ? 'text-rose-300' : 'text-zinc-600')} onClick={() => setErrorsOnly((v) => !v)}>errors only</button>
-              <button className="text-[10px] text-zinc-600 hover:text-zinc-300" onClick={() => setLogs([])}>clear</button>
-            </div>
-          </div>
-          <div className="h-[calc(100%-1.75rem)] overflow-y-auto px-3 py-1.5 font-mono text-[10px] leading-relaxed">
-            {shownLogs.length === 0 && <span className="text-zinc-600">No output yet. trace() calls and runtime errors from the game appear here.</span>}
-            {shownLogs.map((l, i) => (
-              <div key={i} title={l.detail} className={cn('whitespace-pre-wrap', l.level === 'error' ? 'text-rose-300' : l.level === 'warn' ? 'text-amber-300' : l.level === 'trace' ? 'text-zinc-200' : 'text-sky-300')}>
-                <span className="text-zinc-600">{(l.time / 1000).toFixed(2)}s </span>{l.message}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {panel === 'console' && <ExecutionConsole entries={consoleEntries} onClear={() => {
+        setLogs([]);
+        pendingLogs.current = [];
+      }} />}
 
       {panel === 'program' && (
         <div className="h-72 shrink-0 overflow-y-auto border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-300">
@@ -420,7 +459,7 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
             <div className="grid gap-4 lg:grid-cols-3">
               <div>
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Program</div>
-                <div>{build.status === 'ready' ? build.sourceCount : 0} .as file(s) → {b.files.size} TypeScript module(s)</div>
+                <div>{build.status === 'ready' ? build.sources.length : 0} .as file(s) → {b.files.size} TypeScript module(s)</div>
                 <div>{Object.keys(b.program?.classes ?? {}).length} class(es), {Object.keys(b.program?.timelines ?? {}).length} timeline(s), {Object.keys(b.program?.buttons ?? {}).length} button(s)</div>
                 <div className={b.errors.length ? 'text-rose-300' : 'text-emerald-300'}>{b.errors.length} error(s), {b.warnings.length} warning(s)</div>
                 {b.errors.slice(0, 20).map((e, i) => <div key={i} className="mt-1 font-mono text-[10px] text-rose-300">{e.file}: {e.message}</div>)}
@@ -476,14 +515,4 @@ export function As2Execute({ doc, cache, assets, externals = [] }: { doc: SwfDoc
       )}
     </div>
   );
-}
-
-function readText(file: File): Promise<string> {
-  if (typeof file.text === 'function') return file.text();
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result ?? ''));
-    r.onerror = () => reject(r.error);
-    r.readAsText(file);
-  });
 }

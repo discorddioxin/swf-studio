@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import type { GameSocket } from '../engine/as2/player';
+import type { NetworkEvent } from '../engine/flash/player';
 import {
   FishPlugin,
   MockServer,
@@ -58,6 +59,36 @@ describe('SushiServer & MockServer', () => {
     expect(server.sushiServer.fishState.baitA).toBe(95);
     expect(server.sushiServer.sent).toEqual([]);
     expect(server.sushiServer.received).toEqual([]);
+  });
+
+  it('emits structured HTTP and XMLSocket requests and mock responses', async () => {
+    const server = new MockServer();
+    const events: NetworkEvent[] = [];
+    const httpResponse = await server.fetchText(
+      'http://www.gaiaonline.com/chat/gsi/inventory.php', 'GET', null, undefined, (event) => events.push(event),
+    );
+    expect(httpResponse).toContain('bait_gradeF=25');
+    expect(events.slice(0, 2)).toMatchObject([
+      { kind: 'request', transport: 'http', direction: 'outgoing', method: 'GET', status: 'sent' },
+      { kind: 'response', transport: 'http', direction: 'incoming', status: 'mocked' },
+    ]);
+    const blocked: NetworkEvent[] = [];
+    expect(await server.fetchText('https://example.invalid/api', 'GET', null, undefined, (event) => blocked.push(event))).toBeNull();
+    expect(blocked).toMatchObject([
+      { kind: 'request', status: 'sent' },
+      { kind: 'response', status: 'blocked offline' },
+    ]);
+
+    const { socket } = createTestSocket();
+    server.connect('mock.example', 8080, socket, undefined, (event) => events.push(event));
+    server.send(socket, encodeMessage(2, 15));
+    const socketEvents = events.filter((event) => event.transport === 'xmlsocket');
+    expect(socketEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'request', method: 'CONNECT', status: 'sent' }),
+      expect.objectContaining({ kind: 'response', method: 'CONNECT', status: 'mocked' }),
+      expect.objectContaining({ kind: 'request', method: 'message 2', direction: 'outgoing', payload: expect.stringContaining('2') }),
+      expect.objectContaining({ kind: 'response', method: 'message 1', direction: 'incoming', status: 'mocked' }),
+    ]));
   });
 
   it('decodes fragmented Sushi wire frames and handshakes', () => {

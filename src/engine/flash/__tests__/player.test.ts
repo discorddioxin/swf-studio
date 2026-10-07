@@ -181,6 +181,16 @@ describe('FlashPlayer running a transpiled AS3 game', () => {
     expect(logs[logs.length - 1].message).toMatch(/TypeError: Cannot read properties of null {2}\(in enterFrame listener\)/);
   });
 
+  it('captures rejected promises from async app listeners with callback context', async () => {
+    const { player, root, logs } = boot();
+    current = player;
+    root.addEventListener(Event.ENTER_FRAME, async () => { throw new Error('async listener failed'); });
+    player.step();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(logs.some((entry) => entry.source === 'app' && entry.kind === 'problem'
+      && entry.context === 'enterFrame listener' && entry.message.includes('async listener failed'))).toBe(true);
+  });
+
   it('renders the display list through a canvas context', () => {
     const { player, root } = boot();
     current = player;

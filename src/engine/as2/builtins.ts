@@ -217,8 +217,18 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   }
 
   function fetchText(url: string, method: string, body: string | null): Promise<string | null> {
-    if (p.opts.fetchText) return p.opts.fetchText(url, method, body).catch(() => null);
-    p.log('warn', `network request not available offline: ${method} ${url}`);
+    if (p.opts.fetchText) return p.opts.fetchText(url, method, body, (event) => p.recordNetwork(event)).catch((error: unknown) => {
+      const err = error instanceof Error ? error : new Error(String(error));
+      const message = `HTTP mock request failed: ${method} ${url}: ${err.message}`;
+      p.log('error', message, err.stack, { source: 'engine', kind: 'problem', context: 'HTTP mock transport' });
+      p.recordNetwork({ kind: 'response', transport: 'http', direction: 'incoming', method, url, status: 'error', payload: err.stack, message });
+      return null;
+    });
+    const requestId = p.nextNetworkRequestId('http');
+    p.recordNetwork({ kind: 'request', transport: 'http', direction: 'outgoing', requestId, method, url, status: 'sent', payload: body ?? undefined });
+    const message = `network request not available offline: ${method} ${url}`;
+    p.log('warn', message, undefined, { source: 'network' });
+    p.recordNetwork({ kind: 'response', transport: 'http', direction: 'incoming', requestId, method, url, status: 'blocked offline', payload: message, message });
     return Promise.resolve(null);
   }
 
@@ -777,7 +787,11 @@ export function installBuiltins(p: AS2Player): BuiltinState {
         if (socket.closed || p.isDisposedFor(p.root)) return;
         p.log('info', `XMLSocket.connect(${host}:${port}) — local test game server`);
         p.guard('XMLSocket.onConnect', () => {
-          backend.connect(String(host), Number(port), socket, (level, message) => p.log(level, message));
+          backend.connect(
+            String(host), Number(port), socket,
+            (level, message) => p.log(level, message, undefined, { source: 'network' }),
+            (event) => p.recordNetwork(event),
+          );
           if (socket.closed || p.isDisposedFor(p.root)) { backend.close(socket); return; }
           socket.open = true;
           if (typeof this.onConnect === 'function') this.onConnect(true);

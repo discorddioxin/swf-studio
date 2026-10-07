@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { CodeInspectorView } from './components/CodeInspectorView';
+import { CodeWorkspace } from './components/CodeWorkspace';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ExecuteTab } from './components/ExecuteTab';
 import { Inspector } from './components/Inspector';
@@ -7,6 +7,7 @@ import { Loader } from './components/Loader';
 import { defaultFilters, Sidebar, type Filters } from './components/Sidebar';
 import { Stage } from './components/Stage';
 import { TimelineView } from './components/TimelineView';
+import { SpriteTreeView } from './components/SpriteTreeView';
 import { GameEngine } from './components/GameEngine';
 import { Button } from './components/ui';
 import type { AssetCache, SwfPackage } from './lib/assets';
@@ -26,7 +27,7 @@ type Workspace = 'workbench' | 'engine' | 'code' | 'execute';
 const WORKSPACE_LABEL: Record<Workspace, string> = {
   workbench: 'Workbench',
   engine: 'Game Engine',
-  code: 'Code Inspector',
+  code: 'Code Editor',
   execute: 'Execute',
 };
 
@@ -88,8 +89,21 @@ export default function App() {
   const [startFrame, setStartFrame] = useState(1);
   const [workspace, setWorkspace] = useState<Workspace>('workbench');
   const [showLibrary, setShowLibrary] = useState(true);
+  const [leftDockView, setLeftDockView] = useState<'library' | 'sprite-tree'>('library');
   const [showInspector, setShowInspector] = useState(false);
   const [showTimeline, setShowTimeline] = useState(true);
+  const [timelineDockHeight, setTimelineDockHeight] = useState(240);
+  const [resizingTimeline, setResizingTimeline] = useState(false);
+  const timelineResizeRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
+
+  useEffect(() => {
+    const clampTimelineHeight = () => {
+      const max = Math.max(156, Math.min(window.innerHeight * 0.78, window.innerHeight - 175));
+      setTimelineDockHeight((height) => Math.max(156, Math.min(max, height)));
+    };
+    window.addEventListener('resize', clampTimelineHeight);
+    return () => window.removeEventListener('resize', clampTimelineHeight);
+  }, []);
 
   const api = useProject(doc?.header.fileName ?? '');
 
@@ -385,7 +399,7 @@ export default function App() {
           <button
             onClick={() => setWorkspace('code')}
             className={cn('rounded px-2 py-1 text-[11px] font-medium', workspace === 'code' ? 'bg-amber-600/80 text-white' : 'text-zinc-500 hover:text-zinc-300')}
-          >Code</button>
+          >Code Editor</button>
           <button
             onClick={() => setWorkspace('execute')}
             className={cn('rounded px-2 py-1 text-[11px] font-medium', workspace === 'execute' ? 'bg-sky-600/80 text-white' : 'text-zinc-500 hover:text-zinc-300')}
@@ -442,7 +456,7 @@ export default function App() {
 
       <ErrorBoundary label={WORKSPACE_LABEL[workspace]} resetKeys={[doc, workspace]} className="flex min-h-0 flex-1 items-center justify-center p-4">
       {workspace === 'execute' ? (
-        <ExecuteTab doc={doc} cache={cache} assets={assets} externals={externalPackages} />
+        <ExecuteTab doc={doc} cache={cache} assets={assets} project={api.project} externals={externalPackages} />
       ) : workspace === 'engine' ? (
         <GameEngine
           doc={doc}
@@ -453,12 +467,7 @@ export default function App() {
         />
       ) : workspace === 'code' ? (
         <div className="min-h-0 flex-1">
-          <CodeInspectorView
-            doc={doc}
-            assets={assets}
-            project={api.project}
-            onSelectCharacter={(id) => { setSelectedId(id); setWorkspace('workbench'); }}
-          />
+          <CodeWorkspace assets={assets} doc={doc} project={api.project} projectName={doc.header.fileName} onRun={() => setWorkspace('execute')} />
         </div>
       ) : (
       <div className="flex min-h-0 flex-1">
@@ -472,30 +481,58 @@ export default function App() {
           </div>
         </div>
         {showLibrary && <div className="forge-dock flex w-72 shrink-0 flex-col border-r border-zinc-800/80">
-          <DockHeader label="Library" hint={`${doc.characters.size} assets`} onClose={() => setShowLibrary(false)} />
-          <div className="min-h-0 flex-1"><Sidebar
-          doc={doc}
-          project={api.project}
-          cache={cache}
-          filters={filters}
-          setFilters={setFilters}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onOpenTimeline={openTimeline}
-          activeTimeline={timelineId}
-          allTags={api.allTags}
-          onRenameLabel={(id, name) => api.setLabel(id, { name })}
-          actors={api.project.actors ?? []}
-          selectedActorId={selectedActorId}
-          onSelectActor={(id) => { setSelectedActorId(id); setShowInspector(true); }}
-          onCreateActor={() => {
-            const actor = api.addActor({ name: `Actor ${(api.project.actors ?? []).length + 1}`, clipIds: [], tags: [] });
-            setSelectedActorId(actor.id);
-          }}
-          loadedSwfs={loadedDocs.map((loadedDoc, index) => ({ name: loadedDoc.header.fileName, index }))}
-          activeSwfIndex={activeSwfIndex}
-          onSelectSwf={selectSwf}
-          /></div>
+          <DockHeader
+            label={leftDockView === 'library' ? 'Library' : 'Sprite Tree'}
+            hint={leftDockView === 'library' ? `${doc.characters.size} assets` : 'multi-frame sprites'}
+            onClose={() => setShowLibrary(false)}
+          />
+          <div className="flex shrink-0 items-center gap-1 border-b border-zinc-800/80 px-2 py-1.5">
+            <button
+              type="button"
+              aria-pressed={leftDockView === 'library'}
+              onClick={() => setLeftDockView('library')}
+              className={cn('flex-1 rounded-md px-2 py-1.5 text-[10px] font-medium transition-colors', leftDockView === 'library' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300')}
+            >Library</button>
+            <button
+              type="button"
+              aria-pressed={leftDockView === 'sprite-tree'}
+              onClick={() => setLeftDockView('sprite-tree')}
+              className={cn('flex-1 rounded-md px-2 py-1.5 text-[10px] font-medium transition-colors', leftDockView === 'sprite-tree' ? 'bg-violet-500/15 text-violet-200' : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300')}
+            >Sprite Tree</button>
+          </div>
+          <div className="min-h-0 flex-1">
+            {leftDockView === 'library' ? <Sidebar
+              doc={doc}
+              project={api.project}
+              cache={cache}
+              filters={filters}
+              setFilters={setFilters}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onOpenTimeline={openTimeline}
+              activeTimeline={timelineId}
+              allTags={api.allTags}
+              onRenameLabel={(id, name) => api.setLabel(id, { name })}
+              actors={api.project.actors ?? []}
+              selectedActorId={selectedActorId}
+              onSelectActor={(id) => { setSelectedActorId(id); setShowInspector(true); }}
+              onCreateActor={() => {
+                const actor = api.addActor({ name: `Actor ${(api.project.actors ?? []).length + 1}`, clipIds: [], tags: [] });
+                setSelectedActorId(actor.id);
+              }}
+              loadedSwfs={loadedDocs.map((loadedDoc, index) => ({ name: loadedDoc.header.fileName, index }))}
+              activeSwfIndex={activeSwfIndex}
+              onSelectSwf={selectSwf}
+            /> : <SpriteTreeView
+              doc={doc}
+              project={api.project}
+              selectedId={selectedId}
+              activeTimeline={timelineId}
+              onSelect={setSelectedId}
+              onOpenTimeline={openTimeline}
+              onSetLabel={(id, patch) => api.setLabel(id, patch)}
+            />}
+          </div>
         </div>}
 
         <div className="forge-stage flex min-w-0 flex-1 flex-col">
@@ -517,26 +554,67 @@ export default function App() {
               }
             }}
           />
-          {showTimeline && (
-          <div className="forge-dock forge-bottom-dock shrink-0 border-t border-zinc-800/80">
-            <DockHeader label="Timeline" hint={`${timeline.name} · ${timeline.frameCount} frames`} onClose={() => setShowTimeline(false)} />
-            <TimelineView
-              doc={doc}
-              timeline={timeline}
-              frame={frame}
-              setFrame={setFrame}
-              playing={playing}
-              setPlaying={setPlaying}
-              api={api}
-              loopRange={loopRange}
-              setLoopRange={setLoopRange}
-              fps={fps}
-              setFps={setFps}
-              startFrame={startFrame}
-              setStartFrame={setStartFrame}
-            />
-          </div>
-          )}
+          {showTimeline && <>
+            <div
+              role="separator"
+              aria-label="Resize Timeline panel"
+              aria-orientation="horizontal"
+              aria-valuemin={156}
+              aria-valuemax={Math.max(156, Math.min(window.innerHeight * 0.78, window.innerHeight - 175))}
+              aria-valuenow={Math.round(timelineDockHeight)}
+              tabIndex={0}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                timelineResizeRef.current = { pointerId: event.pointerId, startY: event.clientY, startHeight: timelineDockHeight };
+                setResizingTimeline(true);
+              }}
+              onPointerMove={(event) => {
+                const start = timelineResizeRef.current;
+                if (!start || start.pointerId !== event.pointerId) return;
+                const max = Math.max(156, Math.min(window.innerHeight * 0.78, window.innerHeight - 175));
+                setTimelineDockHeight(Math.max(156, Math.min(max, start.startHeight + start.startY - event.clientY)));
+              }}
+              onPointerUp={(event) => {
+                if (timelineResizeRef.current?.pointerId !== event.pointerId) return;
+                timelineResizeRef.current = null;
+                setResizingTimeline(false);
+              }}
+              onPointerCancel={() => { timelineResizeRef.current = null; setResizingTimeline(false); }}
+              onLostPointerCapture={() => { timelineResizeRef.current = null; setResizingTimeline(false); }}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                event.preventDefault();
+                const delta = (event.shiftKey ? 48 : 16) * (event.key === 'ArrowUp' ? 1 : -1);
+                const max = Math.max(156, Math.min(window.innerHeight * 0.78, window.innerHeight - 175));
+                setTimelineDockHeight((height) => Math.max(156, Math.min(max, height + delta)));
+              }}
+              className={cn('group flex h-2 shrink-0 cursor-row-resize touch-none items-center justify-center border-y border-zinc-800/70 bg-zinc-950 outline-none transition-colors hover:bg-violet-500/10 focus-visible:bg-violet-500/10', resizingTimeline && 'bg-violet-500/15')}
+            >
+              <span className="pointer-events-none h-0.5 w-10 rounded-full bg-zinc-700 transition-colors group-hover:bg-violet-400 group-focus-visible:bg-violet-400" />
+            </div>
+            <div
+              className="forge-dock forge-bottom-dock flex min-h-0 shrink-0 flex-col border-t border-zinc-800/80"
+              style={{ height: timelineDockHeight, transition: resizingTimeline ? 'none' : undefined }}
+            >
+              <DockHeader label="Timeline" hint={`${timeline.name} · ${timeline.frameCount} frames`} onClose={() => setShowTimeline(false)} />
+              <TimelineView
+                doc={doc}
+                timeline={timeline}
+                frame={frame}
+                setFrame={setFrame}
+                playing={playing}
+                setPlaying={setPlaying}
+                api={api}
+                loopRange={loopRange}
+                setLoopRange={setLoopRange}
+                fps={fps}
+                setFps={setFps}
+                startFrame={startFrame}
+                setStartFrame={setStartFrame}
+              />
+            </div>
+          </>}
         </div>
 
         {showInspector && <div className="forge-dock flex w-80 shrink-0 flex-col border-l border-zinc-800/80">
@@ -559,6 +637,7 @@ export default function App() {
           flattenedSprites={flattenedSprites}
           flatteningId={flatteningId}
           onFlattenSprite={(id) => void flattenSprite(id)}
+          onOpenCode={() => setWorkspace('code')}
           /></div>
         </div>}
       </div>

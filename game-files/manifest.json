@@ -39,6 +39,12 @@
         "fish-full/external/gsecs2.9/fonts/330_Comic Sans MS.ttf",
         "fish-full/external/gsecs2.9/fonts/5_ITC Avant Garde Pro Bk.ttf",
         "fish-full/external/gsecs2.9/fonts/7_Arial.ttf"
+      ],
+      "scriptOverrides": [
+        {
+          "path": "fish-full/external/gsecs2.9/scripts/frame_61/DoAction.as",
+          "target": "scripts/frame_61/DoAction.as"
+        }
       ]
     },
     {

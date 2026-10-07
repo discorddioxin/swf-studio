@@ -22,7 +22,7 @@
 import * as RT from '../../runtime/as2';
 import type { AS2Handler, AS2Program } from '../../runtime/as2';
 import type { ColorTransform, DisplayItem, Frame, Matrix, PlaceOp, Rect, SwfCharacter, SwfDocument, Timeline } from '../../types';
-import type { AssetSource, LogEntry, LogLevel } from '../flash/player';
+import type { AssetSource, LogEntry, LogLevel, LogMetadata, NetworkEvent, NetworkObserver } from '../flash/player';
 import type { AudioBackend, AudioHandle } from '../flash/media';
 import {
   apply, compose, concat, concatCT, decompose, identity, inRect, invert, isColorIdentity, transformRect, unionRect,
@@ -52,6 +52,20 @@ export interface Movie {
 }
 
 export type NodeKind = 'clip' | 'button' | 'text' | 'graphic';
+
+/** Read-only playhead state for a clip timeline that is currently advancing. */
+export interface RunningTimelineSnapshot {
+  id: number;
+  characterId: number;
+  name: string;
+  path: string;
+  /** 1-based current frame, matching the Execute HUD and Workbench. */
+  frame: number;
+  totalFrames: number;
+  frameLabel?: string;
+  mainMovie: boolean;
+  movieName?: string;
+}
 
 export interface TextState {
   paras: Paragraph[];
@@ -166,7 +180,7 @@ export interface AS2PlayerOptions {
   /** What to do when an external SWF can't be resolved: pretend it loaded empty, or report an error to the game. */
   missingExternal?: 'empty' | 'error';
   /** Network access for LoadVars / XML. Return null for "failed". */
-  fetchText?: (url: string, method: string, body: string | null) => Promise<string | null>;
+  fetchText?: (url: string, method: string, body: string | null, onNetwork?: NetworkObserver) => Promise<string | null>;
   /** Called after each tick (for UIs). */
   onTick?: (player: AS2Player) => void;
   /** FlashVars / query parameters, set on _root before the first frame. */
@@ -193,7 +207,7 @@ export interface GameSocket {
 
 /** Offline game server (the Gaia "Sushi" protocol). */
 export interface GameServerBackend {
-  connect(host: string, port: number, socket: GameSocket, log: (level: LogLevel, message: string) => void): void;
+  connect(host: string, port: number, socket: GameSocket, log: (level: LogLevel, message: string) => void, onNetwork?: NetworkObserver): void;
   send(socket: GameSocket, data: string): void;
   close(socket: GameSocket): void;
 }
@@ -239,6 +253,7 @@ export class AS2Player {
   private hitCanvas: HTMLCanvasElement | null = null;
   private listeners: (() => void)[] = [];
   errors = 0;
+  private networkRequestSequence = 0;
   cursorHidden = false;
   /** external SWFs the game asked for that could not be resolved */
   readonly missingExternals = new Set<string>();
@@ -271,21 +286,51 @@ export class AS2Player {
   }
 
   // ------------------------------------------------------------ logging
-  log(level: LogLevel, message: string, detail?: string) {
-    const entry: LogEntry = { level, message, detail, time: this.time() };
+  log(level: LogLevel, message: string, detail?: string, metadata: LogMetadata = {}) {
+    const entry: LogEntry = {
+      level,
+      message,
+      detail,
+      time: this.time(),
+      ...metadata,
+      source: metadata.source ?? (level === 'trace' ? 'app' : 'engine'),
+      kind: metadata.kind ?? (level === 'error' || level === 'warn' ? 'problem' : 'log'),
+    };
     this.logs.push(entry);
     if (this.logs.length > 2000) this.logs.splice(0, this.logs.length - 2000);
     if (level === 'error') this.errors++;
-    this.opts.onLog?.(entry);
+    try { this.opts.onLog?.(entry); }
+    catch (error) { console.error('[AS2 engine] log handler failed', error); }
   }
   time() { return (typeof performance !== 'undefined' ? performance.now() : Date.now()) - this.startTime; }
+  nextNetworkRequestId(prefix = 'request') { return `${prefix}-${++this.networkRequestSequence}`; }
 
-  /** Run game code; errors are logged instead of stopping the player (like Flash). */
-  guard(label: string, fn: () => void) {
-    try { fn(); } catch (e) {
-      const err = e as Error;
-      this.log('error', `${label}: ${err?.message ?? String(e)}`, err?.stack?.split('\n').slice(0, 6).join('\n'));
+  recordNetwork(event: NetworkEvent) {
+    const isFailure = event.status === 'error' || event.status === 'blocked offline';
+    const fallback = `${event.direction === 'outgoing' ? '→' : '←'} ${event.method ?? event.transport} ${event.url ?? ''}`.trim();
+    this.log(isFailure ? 'warn' : 'info', event.message ?? fallback, event.payload, {
+      source: 'network', kind: event.kind, transport: event.transport, direction: event.direction,
+      requestId: event.requestId, method: event.method, url: event.url, status: event.status, payload: event.payload,
+    });
+  }
+
+  /** Run game code; synchronous throws and async rejections are attributed to the callback that failed. */
+  guard(label: string, fn: () => unknown) {
+    try {
+      const result = fn();
+      if (result && typeof (result as { then?: unknown }).then === 'function') {
+        void Promise.resolve(result).catch((error: unknown) => this.reportProblem(error, label));
+      }
+      return result;
+    } catch (error) {
+      this.reportProblem(error, label);
+      return undefined;
     }
+  }
+
+  private reportProblem(error: unknown, label: string) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    this.log('error', `${label}: ${err.message}`, err.stack, { source: 'app', kind: 'problem', context: label });
   }
 
   /** Object.registerClass library of a movie (null = the main movie) */
@@ -674,7 +719,9 @@ export class AS2Player {
           this.guard(`constructObject of ${this.describe(node)}`, () => inst.constructObject());
         }
       } catch (e) {
-        this.log('error', `constructor of ${this.describe(node)}: ${(e as Error).message}`, (e as Error).stack?.split('\n').slice(0, 6).join('\n'));
+        const error = e instanceof Error ? e : new Error(String(e));
+        const context = `constructor of ${this.describe(node)}`;
+        this.log('error', `${context}: ${error.message}`, error.stack, { source: 'app', kind: 'problem', context });
         if (!built) { RT.MovieClip.__construct = null; build(instance ?? Object.create(RT.MovieClip.prototype)); }
       }
       RT.MovieClip.__construct = null;
@@ -1519,6 +1566,33 @@ export class AS2Player {
   }
 
   // ------------------------------------------------------------ inspection
+  /** Snapshot of each live, multi-frame MovieClip whose own playback state is active. */
+  runningTimelines(): RunningTimelineSnapshot[] {
+    const timelines: RunningTimelineSnapshot[] = [];
+    const visit = (node: DisplayNode) => {
+      if (node.removed) return;
+      if (node.kind === 'clip' && node.timeline && node.totalFrames > 1 && node.playing) {
+        const character = node.character;
+        const frameLabel = node.timeline.frames[node.frame]?.label?.trim();
+        timelines.push({
+          id: node.id,
+          characterId: node.characterId,
+          name: node === this.root ? node.timeline.name || 'Main Timeline'
+            : character?.exportName || node.timeline.name || `Sprite ${node.characterId}`,
+          path: this.describe(node),
+          frame: node.frame + 1,
+          totalFrames: node.totalFrames,
+          frameLabel: frameLabel || undefined,
+          mainMovie: node.movie === this.movie,
+          movieName: node.movie === this.movie ? undefined : node.movie.doc.header.fileName || node.movie.url,
+        });
+      }
+      for (const child of node.children) visit(child);
+    };
+    visit(this.root);
+    return timelines;
+  }
+
   /** Snapshot of the display list (for the UI / tests). */
   tree(node: DisplayNode = this.root, depth = 0, out: string[] = []): string[] {
     const ch = node.character;

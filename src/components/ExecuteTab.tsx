@@ -6,9 +6,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AssetCache, SwfPackage } from '../lib/assets';
-import type { AssetBundle, SwfDocument } from '../types';
-import { cn } from '../utils/cn';
+import type { AssetBundle, Project, SwfDocument } from '../types';
 import { Button } from './ui';
+import { ExecutionConsole } from './ExecutionConsole';
+import { useExecutionDiagnostics } from './useExecutionDiagnostics';
 import { compileSources, expectedClasses, isCodeFile, linkProgram, mergeSources, type CompiledSources, type LinkedProgram } from '../engine/flash/loader';
 import { FlashPlayer, HtmlAudioBackend, type LogEntry } from '../engine/flash/player';
 import type { AudioBackend } from '../engine/flash/media';
@@ -17,20 +18,25 @@ import { As2Execute, isAs2Bundle } from './As2Execute';
 
 type CodeState =
   | { status: 'loading' }
+  | { status: 'failed'; error: string }
   | {
     status: 'ready'; compiled: CompiledSources; classes: LinkedProgram['classes'];
     displayClasses: string[];
+    /** Module evaluation and import-resolution failures from the linker. */
+    linkErrors: LinkedProgram['errors'];
     /** dependency SWFs whose code was folded in because the main movie alone could not link */
     dependencies: string[];
   };
 
 const MAX_LOG = 500;
 
-export function ExecuteTab({ externals, ...props }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; externals?: SwfPackage[] }) {
+export function ExecuteTab({ externals, project, ...props }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[] }) {
   // ActionScript 1/2 exports (SWF ≤ 8, .as scripts) run on the AS2 player, which
   // loads a dependency SWF when the game asks for it by URL; AS3 code runs on
   // the flash.* engine, where the dependencies contribute their classes.
-  return isAs2Bundle(props.doc, props.assets) ? <As2Execute {...props} externals={externals} /> : <As3Execute {...props} externals={externals} />;
+  return isAs2Bundle(props.doc, props.assets)
+    ? <As2Execute {...props} project={project} externals={externals} />
+    : <As3Execute {...props} externals={externals} />;
 }
 
 function As3Execute({ doc, cache, assets, externals = [] }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; externals?: SwfPackage[] }) {
@@ -45,12 +51,16 @@ function As3Execute({ doc, cache, assets, externals = [] }: { doc: SwfDocument; 
   const [muted, setMuted] = useState(false);
   const [docClass, setDocClass] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [errorsOnly, setErrorsOnly] = useState(false);
   const [panel, setPanel] = useState<'console' | 'program' | null>('console');
   const [hud, setHud] = useState({ frame: 1, total: 1, label: '' as string | null, time: 0 });
   const [linkage, setLinkage] = useState<FlashPlayer['linkage']>([]);
   const [size, setSize] = useState({ w: 800, h: 500 });
   const pendingLogs = useRef<LogEntry[]>([]);
+  const executionFaultRef = useRef(false);
+  const appendGlobalProblem = useCallback((entry: LogEntry) => {
+    setLogs((previous) => [...previous, entry].slice(-MAX_LOG));
+  }, []);
+  useExecutionDiagnostics(appendGlobalProblem);
 
   /** Dependency SWFs (everything loaded besides the main one) and their code files. */
   const dependencyFiles = useMemo(() => externals
@@ -102,10 +112,10 @@ function As3Execute({ doc, cache, assets, externals = [] }: { doc: SwfDocument; 
         const displayClasses = probe.classes
           .filter((c) => { const d = probe.getDefinition(c.qualifiedName); return typeof d === 'function' && d.prototype instanceof DisplayObject; })
           .map((c) => c.qualifiedName);
-        setCode({ status: 'ready', compiled, classes: probe.classes, displayClasses, dependencies });
+        setCode({ status: 'ready', compiled, classes: probe.classes, displayClasses, dependencies, linkErrors: probe.errors });
       })
       .catch((e) => {
-        if (!cancelled) setLogs([{ level: 'error', message: `Could not read the code files: ${e instanceof Error ? e.message : String(e)}`, time: 0 }]);
+        if (!cancelled) setCode({ status: 'failed', error: `Could not read the code files: ${e instanceof Error ? e.message : String(e)}` });
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,6 +126,7 @@ function As3Execute({ doc, cache, assets, externals = [] }: { doc: SwfDocument; 
   // ---- create a player per (document, code, restart)
   useEffect(() => {
     if (code.status !== 'ready') return;
+    executionFaultRef.current = false;
     pendingLogs.current = [];
     setLogs([]);
     const audio = new HtmlAudioBackend(cache);
@@ -176,28 +187,38 @@ function As3Execute({ doc, cache, assets, externals = [] }: { doc: SwfDocument; 
       const canvas = canvasRef.current;
       const dt = now - last;
       last = now;
-      if (player) {
-        if (playingRef.current) player.tick(dt);
-        const ctx = canvas?.getContext('2d');
-        if (ctx && canvas) {
-          const dpr = window.devicePixelRatio || 1;
-          const v = viewRef.current;
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          ctx.fillStyle = '#09090b';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          player.render(ctx, v.scale * dpr, v.x * dpr, v.y * dpr);
-          canvas.style.cursor = player.cursor;
-        }
-        if (now - lastHud > 150) {
-          lastHud = now;
-          const root = player.root;
-          const clip = root instanceof MovieClip ? root : null;
-          setHud({ frame: clip?.currentFrame ?? 1, total: clip?.totalFrames ?? 1, label: clip?.currentLabel ?? null, time: player.time });
-          if (pendingLogs.current.length) {
-            const batch = pendingLogs.current;
-            pendingLogs.current = [];
-            setLogs((prev) => [...prev, ...batch].slice(-MAX_LOG));
+      if (player && !executionFaultRef.current) {
+        try {
+          if (playingRef.current) player.tick(dt);
+          const ctx = canvas?.getContext('2d');
+          if (ctx && canvas) {
+            const dpr = window.devicePixelRatio || 1;
+            const v = viewRef.current;
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.fillStyle = '#09090b';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            player.render(ctx, v.scale * dpr, v.x * dpr, v.y * dpr);
+            canvas.style.cursor = player.cursor;
           }
+          if (now - lastHud > 150) {
+            lastHud = now;
+            const root = player.root;
+            const clip = root instanceof MovieClip ? root : null;
+            setHud({ frame: clip?.currentFrame ?? 1, total: clip?.totalFrames ?? 1, label: clip?.currentLabel ?? null, time: player.time });
+            if (pendingLogs.current.length) {
+              const batch = pendingLogs.current;
+              pendingLogs.current = [];
+              setLogs((prev) => [...prev, ...batch].slice(-MAX_LOG));
+            }
+          }
+        } catch (error) {
+          executionFaultRef.current = true;
+          playingRef.current = false;
+          setPlaying(false);
+          player.reportError(error, 'Execute animation/render loop', 'engine');
+          const batch = pendingLogs.current;
+          pendingLogs.current = [];
+          if (batch.length) setLogs((prev) => [...prev, ...batch].slice(-MAX_LOG));
         }
       }
       raf = requestAnimationFrame(loop);
@@ -224,12 +245,24 @@ function As3Execute({ doc, cache, assets, externals = [] }: { doc: SwfDocument; 
   const restart = () => { setSession((s) => s + 1); canvasRef.current?.focus(); };
   const toggleMute = () => { mutedRef.current = !mutedRef.current; setMuted(mutedRef.current); };
 
-  const errorCount = logs.filter((l) => l.level === 'error').length;
-  const shownLogs = errorsOnly ? logs.filter((l) => l.level === 'error') : logs;
   const hasCode = code.status === 'ready' && code.compiled.modules.length > 0;
   const docLink = linkage.find((l) => l.id === 0);
   const unlinked = linkage.filter((l) => !l.linked);
   const compileErrors = code.status === 'ready' ? code.compiled.modules.filter((m) => m.error) : [];
+  const forgeProblems: LogEntry[] = code.status === 'ready' ? [
+    ...code.linkErrors.map((issue) => ({
+      level: 'error' as const, kind: 'problem' as const, source: 'forge' as const,
+      context: issue.path, message: `${issue.path}: ${issue.message}`, time: 0,
+    })),
+    ...unlinked.filter((item) => item.id !== 0).map((item) => ({
+      level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const,
+      context: `SymbolClass ${item.id}`, message: `Class ${item.className} is declared by the SWF but is missing from the loaded code.`, time: 0,
+    })),
+  ] : code.status === 'failed' ? [{
+    level: 'error', kind: 'problem', source: 'forge', context: 'reading code files', message: code.error, time: 0,
+  }] : [];
+  const consoleEntries = [...forgeProblems, ...logs];
+  const errorCount = consoleEntries.filter((entry) => entry.level === 'error').length;
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
   return (
@@ -238,9 +271,9 @@ function As3Execute({ doc, cache, assets, externals = [] }: { doc: SwfDocument; 
         <div className="min-w-0">
           <div className="text-sm font-semibold text-zinc-100">Execute</div>
           <div className="truncate text-[10px] text-zinc-500">
-            {code.status === 'loading' ? 'Compiling game code…' : hasCode
-              ? `AS3 engine · ${docLink?.linked ? docLink.className : 'timeline root'} · frame ${hud.frame}/${hud.total}${hud.label ? ` “${hud.label}”` : ''} · ${(hud.time / 1000).toFixed(1)}s`
-              : `Timeline only · frame ${hud.frame}/${hud.total}${hud.label ? ` “${hud.label}”` : ''}`}
+            {code.status === 'loading' ? 'Compiling game code…' : code.status === 'failed' ? 'Could not read game code'
+              : hasCode ? `AS3 engine · ${docLink?.linked ? docLink.className : 'timeline root'} · frame ${hud.frame}/${hud.total}${hud.label ? ` “${hud.label}”` : ''} · ${(hud.time / 1000).toFixed(1)}s`
+                : `Timeline only · frame ${hud.frame}/${hud.total}${hud.label ? ` “${hud.label}”` : ''}`}
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -283,29 +316,13 @@ function As3Execute({ doc, cache, assets, externals = [] }: { doc: SwfDocument; 
         />
       </div>
 
-      {panel === 'console' && (
-        <div className="h-44 shrink-0 border-t border-zinc-800">
-          <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Console · trace() and errors ({logs.length})</span>
-            <div className="flex gap-3">
-              <button className={cn('text-[10px] hover:text-zinc-300', errorsOnly ? 'text-rose-300' : 'text-zinc-600')} onClick={() => setErrorsOnly((v) => !v)}>errors only</button>
-              <button className="text-[10px] text-zinc-600 hover:text-zinc-300" onClick={() => setLogs([])}>clear</button>
-            </div>
-          </div>
-          <div className="h-[calc(100%-1.75rem)] overflow-y-auto px-3 py-1.5 font-mono text-[10px] leading-relaxed">
-            {shownLogs.length === 0 && <span className="text-zinc-600">No output yet. trace() calls and runtime errors from the game appear here.</span>}
-            {shownLogs.map((l, i) => (
-              <div key={i} title={l.detail} className={cn('whitespace-pre-wrap', l.level === 'error' ? 'text-rose-300' : l.level === 'warn' ? 'text-amber-300' : l.level === 'trace' ? 'text-zinc-200' : 'text-sky-300')}>
-                <span className="text-zinc-600">{(l.time / 1000).toFixed(2)}s </span>{l.message}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {panel === 'console' && <ExecutionConsole entries={consoleEntries} onClear={() => setLogs([])} />}
 
       {panel === 'program' && (
         <div className="h-56 shrink-0 overflow-y-auto border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-300">
-          {code.status === 'loading' ? <div className="text-zinc-500">Compiling…</div> : (
+          {code.status === 'loading' && <div className="text-zinc-500">Compiling…</div>}
+          {code.status === 'failed' && <div className="text-rose-300">{code.error}</div>}
+          {code.status === 'ready' && (
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Code</div>

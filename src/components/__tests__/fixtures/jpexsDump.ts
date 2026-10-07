@@ -27,8 +27,8 @@ const M = (a: number, b: number, c: number, d: number, tx: number, ty: number) =
   `<matrix type="MATRIX" hasRotate="true" hasScale="true" rotateSkew0="${Math.round(b * 65536)}" rotateSkew1="${Math.round(c * 65536)}" scaleX="${Math.round(a * 65536)}" scaleY="${Math.round(d * 65536)}" translateX="${Math.round(tx)}" translateY="${Math.round(ty)}"/>`;
 
 // Real decompiled ActionScript for sprite 10, frame 13 (0-based index 12), so
-// the Code Inspector has real methods, members, and code→asset relationships to
-// index. Lives at the exact path JPEXS emits for a frame-scoped script.
+// the project IDE and AS2 transpiler exercise a realistic source file. It lives
+// at the exact path JPEXS emits for a frame-scoped script.
 const FIXTURE_ACTION_SCRIPT = `// Decompiled from SWF p-code (frame 13) — class HeroBall
 var heroBall = this;
 this.velocity = 0;

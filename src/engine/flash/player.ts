@@ -42,7 +42,43 @@ export interface ProgramLike {
 }
 
 export type LogLevel = 'trace' | 'error' | 'warn' | 'info';
-export interface LogEntry { level: LogLevel; message: string; detail?: string; time: number }
+export type LogSource = 'app' | 'engine' | 'forge' | 'network';
+export type LogKind = 'log' | 'problem' | 'request' | 'response';
+export type NetworkTransport = 'http' | 'xmlsocket' | 'url-loader' | 'external-swf' | 'navigation';
+
+/** Structured request/response metadata shared by the engine and offline mocks. */
+export interface NetworkEvent {
+  kind: 'request' | 'response';
+  transport: NetworkTransport;
+  direction: 'outgoing' | 'incoming';
+  requestId?: string;
+  method?: string;
+  url?: string;
+  status?: string | number;
+  payload?: string;
+  message?: string;
+}
+export type NetworkObserver = (event: NetworkEvent) => void;
+
+export type LogMetadata = Partial<Omit<LogEntry, 'level' | 'message' | 'time'>>;
+export interface LogEntry {
+  level: LogLevel;
+  message: string;
+  detail?: string;
+  time: number;
+  /** Origin used by the Problems view; normal logs remain useful without it. */
+  source?: LogSource;
+  kind?: LogKind;
+  context?: string;
+  /** Present for Req/Res records. */
+  transport?: NetworkTransport;
+  direction?: 'outgoing' | 'incoming';
+  requestId?: string;
+  method?: string;
+  url?: string;
+  status?: string | number;
+  payload?: string;
+}
 
 export interface PlayerOptions {
   doc: SwfDocument;
@@ -89,6 +125,7 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
   private drag: { target: Sprite; dx: number; dy: number; bounds: Rectangle | null } | null = null;
   private frameSounds = new Map<number, AudioHandle>();
   private errorCount = 0;
+  private networkRequestSequence = 0;
 
   constructor(opts: PlayerOptions) {
     this.doc = opts.doc;
@@ -168,11 +205,11 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
       if (docName) {
         const def = this.program?.getDefinition(docName);
         if (typeof def === 'function' && def.prototype instanceof DisplayObject) Root = def as new () => DisplayObject;
-        else if (typeof def === 'function') this.log('error', `Document class ${docName} does not extend a flash.display class; using a plain MovieClip root.`);
-        else this.log('warn', `Document class ${docName} was not found in the loaded code; running the timeline without it.`);
+        else if (typeof def === 'function') this.log('error', `Document class ${docName} does not extend a flash.display class; using a plain MovieClip root.`, undefined, { source: 'forge', kind: 'problem', context: `document class ${docName}` });
+        else this.log('warn', `Document class ${docName} was not found in the loaded code; running the timeline without it.`, undefined, { source: 'forge', kind: 'problem', context: `document class ${docName}` });
       }
       this.root = constructPlaced(Root, { symbol: 'root', parent: this.stage, depth: 16384, name: 'root1' });
-      if (!this.root) this.log('error', 'The document class constructor failed; nothing to run.');
+      if (!this.root) this.log('error', 'The document class constructor failed; nothing to run.', undefined, { source: 'app', kind: 'problem', context: `document class ${docName ?? '(timeline root)'}` });
       this.flushScripts();
     });
   }
@@ -276,9 +313,20 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     return samples ? (samples / rate) * 1000 : 0;
   }
 
-  failLoad(target: EventDispatcher, url: string) {
-    this.log('warn', `Network load of "${url}" is not available in the offline player.`);
-    this.schedule(0, () => target.dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, `Error #2032: Stream Error. URL: ${url}`)), false);
+  failLoad(target: EventDispatcher, url: string, method = 'GET', payload?: string) {
+    const requestId = `url-${++this.networkRequestSequence}`;
+    const message = `URLLoader ${method} ${url}`;
+    this.log('info', message, undefined, {
+      source: 'network', kind: 'request', transport: 'url-loader', direction: 'outgoing', requestId, method, url, payload,
+    });
+    this.schedule(0, () => {
+      const error = `Error #2032: Stream Error. URL: ${url}`;
+      this.log('warn', error, undefined, {
+        source: 'network', kind: 'response', transport: 'url-loader', direction: 'incoming', requestId, method, url,
+        status: 'blocked offline', payload: error,
+      });
+      target.dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, error));
+    }, false);
   }
 
   // ----------------------------------------------------------- timers --
@@ -301,20 +349,42 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
   }
   listenerRemoved(target: EventDispatcher, type: string) { this.frameListeners.get(type)?.delete(target); }
 
-  trace(message: string) { this.log('trace', message); }
+  trace(message: string) { this.log('trace', message, undefined, { source: 'app' }); }
 
-  reportError(error: unknown, where: string) {
+  recordNetwork(event: NetworkEvent) {
+    const isFailure = event.status === 'error' || event.status === 'blocked offline';
+    const fallback = `${event.direction === 'outgoing' ? '→' : '←'} ${event.method ?? event.transport} ${event.url ?? ''}`.trim();
+    this.log(isFailure ? 'warn' : 'info', event.message ?? fallback, event.payload, {
+      source: 'network', kind: event.kind, transport: event.transport, direction: event.direction,
+      requestId: event.requestId, method: event.method, url: event.url, status: event.status, payload: event.payload,
+    });
+  }
+
+  reportError(error: unknown, where: string, source: LogSource = 'app') {
     if (error instanceof ScriptAbort) throw error;
     this.errorCount++;
     const e = error instanceof Error ? error : new Error(String(error));
-    if (this.errorCount <= 200) this.log('error', `${e.name}: ${e.message}  (in ${where})`, e.stack);
-    else if (this.errorCount === 201) this.log('error', 'Too many errors; further errors are not logged.');
+    if (this.errorCount <= 200) {
+      this.log('error', `${e.name}: ${e.message}  (in ${where})`, e.stack, { source, kind: 'problem', context: where });
+    } else if (this.errorCount === 201) {
+      this.log('error', 'Too many errors; further errors are not logged.', undefined, { source, kind: 'problem', context: where });
+    }
   }
 
-  private log(level: LogLevel, message: string, detail?: string) {
-    this.onLog({ level, message, detail, time: this.time });
+  private log(level: LogLevel, message: string, detail?: string, metadata: LogMetadata = {}) {
+    const entry: LogEntry = {
+      level,
+      message,
+      detail,
+      time: this.time,
+      source: metadata.source ?? (level === 'trace' ? 'app' : 'engine'),
+      kind: metadata.kind ?? (level === 'error' || level === 'warn' ? 'problem' : 'log'),
+      ...metadata,
+    };
+    try { this.onLog(entry); }
+    catch (error) { console.error('[flash engine] log handler failed', error); }
   }
-  private guard<T>(fn: () => T, where: string) { return runtime.guard(fn, where); }
+  private guard<T>(fn: () => T, where: string, source: LogSource = 'app') { return runtime.guard(fn, where, source); }
 
   /** Make this the active player while game code runs. */
   private activate<T>(fn: () => T): T {
@@ -538,7 +608,7 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
       ctx.translate(-r.x, -r.y);
     }
     ctx.globalAlpha = alpha;
-    this.guard(() => obj._drawSelf(ctx, this), `drawing ${obj.name}`);
+    this.guard(() => obj._drawSelf(ctx, this), `drawing ${obj.name}`, 'engine');
     if (obj instanceof DisplayObjectContainer) this.drawChildren(ctx, obj, alpha, base);
     else if (obj instanceof SimpleButton) { const s = obj._current(); if (s) this.drawObject(ctx, s, alpha, base); }
     ctx.restore();

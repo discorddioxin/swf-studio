@@ -1,7 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 interface Props {
-  /** Shown in the fallback, e.g. "Code Inspector". */
+  /** Shown in the fallback, e.g. "Code Editor". */
   label: string;
   children: ReactNode;
   /** When any value changes (new document, other tab…), the boundary resets. */
@@ -19,7 +19,7 @@ const changed = (a: readonly unknown[] = [], b: readonly unknown[] = []) =>
 
 /**
  * Contains render errors to one workspace/panel. Without it a single failing
- * component (for example a parser edge case in the Code Inspector) unmounts
+ * component (for example a parser edge case in the Code Editor) unmounts
  * the whole application and leaves a blank page.
  */
 export class ErrorBoundary extends Component<Props, State> {

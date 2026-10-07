@@ -319,23 +319,26 @@ export function decodeActionBytes(raw: string): DecodedActionBytes {
     0x0e: 'Equals', 0x0f: 'Less', 0x10: 'And', 0x11: 'Or', 0x12: 'Not',
     0x17: 'Pop', 0x1c: 'GetVariable', 0x1d: 'SetVariable', 0x20: 'SetTarget',
     0x21: 'StringEquals', 0x22: 'StringLength', 0x23: 'StringExtract',
-    0x24: 'StringAdd', 0x26: 'Trace', 0x2d: 'Throw', 0x3d: 'CallFunction',
-    0x3e: 'CallMethod', 0x42: 'InitArray', 0x43: 'InitObject', 0x44: 'TypeOf',
-    0x46: 'Add2', 0x47: 'Less2', 0x48: 'Equals2', 0x4a: 'ToNumber',
-    0x4b: 'ToString', 0x4c: 'PushDuplicate', 0x4d: 'StackSwap',
-    0x4e: 'GetMember', 0x4f: 'SetMember', 0x50: 'Increment', 0x51: 'Decrement',
-    0x52: 'CallMethod', 0x53: 'NewObject', 0x54: 'InstanceOf', 0x55: 'Enumerate',
-    0x60: 'BitAnd', 0x61: 'BitOr', 0x62: 'BitXor', 0x63: 'ShiftLeft',
-    0x64: 'ShiftRight', 0x65: 'ShiftRightUnsigned', 0x81: 'GotoFrame',
-    0x83: 'GetURL', 0x87: 'StoreRegister', 0x88: 'ConstantPool',
-    0x8a: 'WaitForFrame', 0x8b: 'SetTarget', 0x8c: 'GoToLabel',
-    0x96: 'Push', 0x99: 'BranchIfTrue', 0x9d: 'GotoFrame2', 0x9e: 'Try',
-    0x8d: 'WaitForFrame2', 0x94: 'With', 0x9b: 'DefineFunction', 0x9f: 'GotoFrame2',
+    0x24: 'StringAdd', 0x26: 'Trace', 0x2a: 'Throw', 0x3c: 'DefineLocal',
+    0x3d: 'CallFunction', 0x3e: 'Return', 0x3f: 'Modulo', 0x40: 'NewObject',
+    0x41: 'DefineLocal2', 0x42: 'InitArray', 0x43: 'InitObject', 0x44: 'TypeOf',
+    0x45: 'TargetPath', 0x46: 'Enumerate', 0x47: 'Add2', 0x48: 'Less2',
+    0x49: 'Equals2', 0x4a: 'ToNumber', 0x4b: 'ToString', 0x4c: 'PushDuplicate',
+    0x4d: 'StackSwap', 0x4e: 'GetMember', 0x4f: 'SetMember', 0x50: 'Increment',
+    0x51: 'Decrement', 0x52: 'CallMethod', 0x53: 'NewMethod', 0x54: 'InstanceOf',
+    0x55: 'Enumerate2', 0x60: 'BitAnd', 0x61: 'BitOr', 0x62: 'BitXor',
+    0x63: 'ShiftLeft', 0x64: 'ShiftRight', 0x65: 'ShiftRightUnsigned',
+    0x66: 'StrictEquals', 0x67: 'Greater', 0x68: 'StringGreater', 0x69: 'Extends',
+    0x81: 'GotoFrame', 0x83: 'GetURL', 0x87: 'StoreRegister', 0x88: 'ConstantPool',
+    0x8a: 'WaitForFrame', 0x8b: 'SetTarget', 0x8c: 'GoToLabel', 0x8d: 'WaitForFrame2',
+    0x8e: 'DefineFunction2', 0x8f: 'Try', 0x94: 'With', 0x96: 'Push',
+    0x99: 'Jump', 0x9a: 'GetURL2', 0x9b: 'DefineFunction', 0x9d: 'If',
+    0x9e: 'Call', 0x9f: 'GotoFrame2',
   };
   const binary: Record<number, string> = {
-    0x0a: '+', 0x0b: '-', 0x0c: '*', 0x0d: '/', 0x0f: '<', 0x46: '+',
-    0x47: '<', 0x48: '==', 0x60: '&', 0x61: '|', 0x62: '^', 0x63: '<<',
-    0x64: '>>', 0x65: '>>>',
+    0x0a: '+', 0x0b: '-', 0x0c: '*', 0x0d: '/', 0x0f: '<', 0x3f: '%',
+    0x47: '+', 0x48: '<', 0x49: '==', 0x66: '===', 0x67: '>', 0x68: '>',
+    0x60: '&', 0x61: '|', 0x62: '^', 0x63: '<<', 0x64: '>>', 0x65: '>>>',
   };
 
   let offset = 0;
@@ -376,7 +379,10 @@ export function decodeActionBytes(raw: string): DecodedActionBytes {
     } else if (opcode === 0x4f) {
       const value = popExpr(stack); const member = popExpr(stack, '"member"'); const object = popExpr(stack, 'this');
       source.push(`${object}[${member}] = ${value};`); addListing();
-    } else if (opcode === 0x52 || opcode === 0x3e) {
+    } else if (opcode === 0x3e) {
+      const value = popExpr(stack);
+      source.push(value === 'undefined' ? 'return;' : `return ${value};`); addListing();
+    } else if (opcode === 0x52) {
       const method = popExpr(stack, '"method"'); const object = popExpr(stack, 'this');
       stack.push(`${object}[${method}]()`); addListing();
     } else if (opcode === 0x3d) {
@@ -389,8 +395,10 @@ export function decodeActionBytes(raw: string): DecodedActionBytes {
       const urlEnd = payload.indexOf(0); const url = String.fromCharCode(...payload.slice(0, urlEnd < 0 ? payload.length : urlEnd));
       source.push(`getURL(${JSON.stringify(url)});`); addListing(JSON.stringify(url));
     } else if (opcode === 0x99 && payload.length >= 2) {
+      source.push(`// jump to byte ${start + 5 + leS16(payload, 0)};`); addListing(`offset=${leS16(payload, 0)}`);
+    } else if (opcode === 0x9d && payload.length >= 2) {
       source.push(`// if (${popExpr(stack, 'condition')}) goto byte ${start + 5 + leS16(payload, 0)};`); addListing(`offset=${leS16(payload, 0)}`);
-    } else if (opcode === 0x9d) {
+    } else if (opcode === 0x9f) {
       source.push('// gotoFrame2();'); addListing();
     } else if (opcode === 0x4c) {
       const value = popExpr(stack); stack.push(value, value); addListing();

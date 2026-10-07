@@ -24,9 +24,17 @@ async function load(name: string) {
   const buf = readFileSync(`${DIR}/${name}.swf`);
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   const { doc, files } = await parseSwfBinary(ab, `${name}.swf`);
+  const chooserOverride = name === 'gsecs2.9'
+    ? readFileSync('game-files/fish-full/external/gsecs2.9/scripts/frame_61/DoAction.as', 'utf8')
+    : null;
   const sources: SourceInput[] = files
     .filter((f) => /\.as$/i.test(f.path))
-    .map((f) => ({ path: f.path, text: new TextDecoder().decode(f.bytes) }));
+    .map((f) => ({
+      path: f.path,
+      text: name === 'gsecs2.9' && f.path === 'scripts/frame_61/DoAction.as' && chooserOverride != null
+        ? chooserOverride
+        : new TextDecoder().decode(f.bytes),
+    }));
   return { doc, files, sources };
 }
 
@@ -44,7 +52,21 @@ it('runs the full 4-step multiplayer flow with MockServer and bundled OmnitureAc
   const ext = await Promise.all(NAMES.slice(1).map(async (n) => ({ n, ...(await load(n)) })));
   const build = buildAS2Program(main.sources);
 
+  const sharedFrameModule = build.files.get('timelines/sprite_155.ts');
+  const singleFrameModule = build.files.get('timelines/sprite_165.ts');
+  expect(sharedFrameModule).toBeTruthy();
+  expect(sharedFrameModule!.match(/BwA=/g)).toHaveLength(1);
+  const sharedCallbacks = [1, 5, 10, 15].map((frame) => {
+    const entry = sharedFrameModule!.split('\n').find((line) => line.trimStart().startsWith(`${frame}:`));
+    return entry?.slice(entry.indexOf(':') + 1).trim().replace(/,$/, '');
+  });
+  expect(sharedCallbacks[0]?.startsWith('$sharedFrameAction')).toBe(true);
+  expect(new Set(sharedCallbacks).size).toBe(1);
+  expect(singleFrameModule).toBeTruthy();
+  expect(singleFrameModule!.match(/BwA=/g)).toHaveLength(1);
+
   const builtSwfs: string[] = [];
+  const externalBuildErrors: string[] = [];
   const externals: ExternalSwf[] = ext.map((e) => ({
     name: e.n,
     doc: e.doc,
@@ -52,7 +74,10 @@ it('runs the full 4-step multiplayer flow with MockServer and bundled OmnitureAc
     sources: () => e.sources,
   }));
   const resolver = createExternalResolver(externals, {
-    onBuild: (swf) => builtSwfs.push(swf.name),
+    onBuild: (swf, externalBuild) => {
+      builtSwfs.push(swf.name);
+      if (swf.name === 'gsecs2.9') externalBuildErrors.push(...externalBuild.errors.map((issue) => issue.message));
+    },
   });
 
   const mockServer = createMockServer();
@@ -82,13 +107,29 @@ it('runs the full 4-step multiplayer flow with MockServer and bundled OmnitureAc
   // 1. Verify OmnitureActionSource.swf loaded from bundled SWFs with 0 missing externals
   expect(builtSwfs).toContain('OmnitureActionSource');
   expect(player.missingExternals.size).toBe(0);
+  expect(externalBuildErrors).toEqual([]);
   expect(root.gsecs?._currentframe).toBe(75);
   const serverList = root.gsecs?.mc_ServerChooser?.serverListing_lt;
+  const joinButton = root.gsecs?.mc_ServerChooser?.join_btn;
   expect(serverList?.getLength?.()).toBe(2);
 
-  // 2. Select server and click Join -> lands on Room Chooser (frame 45)
-  serverList.selectedIndex = 0;
-  root.gsecs.mc_ServerChooser.join_btn.onRelease();
+  // Join is disabled and its handler is guarded until a real server row is selected.
+  const serverIPBeforeJoin = root.GSECS_SelectedServerIP;
+  expect(joinButton?.enabled).toBe(false);
+  expect(joinButton?._alpha).toBe(45);
+  joinButton.onRelease();
+  await stepTicks(10);
+  expect(root.gsecs?._currentframe).toBe(75);
+  expect(root.GSECS_SelectedServerIP).toBe(serverIPBeforeJoin);
+  expect(joinButton.enabled).toBe(false);
+  expect(mockServer.sushiServer.received).toHaveLength(0);
+
+  // 2. Select a server row and click Join -> lands on Room Chooser (frame 45)
+  serverList.selectRow(0);
+  expect(serverList.getSelectedIndex()).toBe(0);
+  expect(joinButton.enabled).toBe(true);
+  expect(joinButton._alpha).toBe(100);
+  joinButton.onRelease();
   await stepTicks(60);
 
   expect(root.gsecs?._currentframe).toBe(45);
