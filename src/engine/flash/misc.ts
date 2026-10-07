@@ -58,10 +58,22 @@ export class URLVariables {
   toString() { return new URLSearchParams(Object.entries(this).map(([k, v]) => [k, String(v)])).toString(); }
 }
 export const URLRequestMethod = { GET: 'GET', POST: 'POST' } as const;
-export function navigateToURL(request: URLRequest, window = '_blank') {
-  if (typeof globalThis.open === 'function' && /^https?:/i.test(request.url)) globalThis.open(request.url, window, 'noopener');
+function reportBlockedNavigation(request: URLRequest) {
+  const player = runtime.player as unknown as { recordNetwork?: (event: import('./player').NetworkEvent) => void; time?: number } | null;
+  const requestId = `nav-${Math.floor(player?.time ?? Date.now())}-${Math.random().toString(36).slice(2, 7)}`;
+  player?.recordNetwork?.({
+    kind: 'request', transport: 'navigation', direction: 'outgoing', requestId,
+    method: request.method || 'GET', url: request.url, payload: request.data == null ? undefined : String(request.data),
+    status: 'blocked offline', message: `Navigation blocked in offline player: ${request.method || 'GET'} ${request.url}`,
+  });
+  player?.recordNetwork?.({
+    kind: 'response', transport: 'navigation', direction: 'incoming', requestId,
+    method: request.method || 'GET', url: request.url, status: 'blocked offline',
+    payload: 'External navigation/network access is disabled in the offline player.',
+  });
 }
-export function sendToURL(_request: URLRequest) {}
+export function navigateToURL(request: URLRequest, _window = '_blank') { reportBlockedNavigation(request); }
+export function sendToURL(request: URLRequest) { reportBlockedNavigation(request); }
 
 /** Local shared objects persist in localStorage, namespaced per SWF. */
 export class SharedObject extends EventDispatcher {
@@ -95,7 +107,9 @@ export class URLLoader extends EventDispatcher {
   data: unknown = null; dataFormat = 'text'; bytesLoaded = 0; bytesTotal = 0;
   constructor(_request: URLRequest | null = null) { super(); }
   load(request: URLRequest) {
-    (runtime.player as unknown as { failLoad?: (t: EventDispatcher, url: string) => void } | null)?.failLoad?.(this, request.url);
+    const payload = request.data == null ? undefined : String(request.data);
+    (runtime.player as unknown as { failLoad?: (t: EventDispatcher, url: string, method?: string, payload?: string) => void } | null)
+      ?.failLoad?.(this, request.url, request.method, payload);
   }
   close() {}
 }

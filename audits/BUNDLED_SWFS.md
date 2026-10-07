@@ -68,17 +68,40 @@ externals.
 ### Regenerating the .swf files
 
 The bundled `.swf` files are produced from the committed FFDec XML exports by
-the hand-written writer:
+the hand-written writer, while preserving raw binary SWFs (`bassken_game4.21`
+and `OmnitureActionSource`):
 
 ```sh
 node tools/xml2swf/generate-bundled.mjs
 ```
 
-which rewrites `game-files/fish-full/swfs/*.swf` and `game-files/manifest.json`.
+which rewrites `game-files/fish-full/swfs/*.swf` and `game-files/manifest.json`
+(including `OmnitureActionSource.swf` so `gsecs2.9.swf`'s analytics loader resolves
+locally from bundled SWFs without contacting `gaiaonline.com` or reporting
+missing external SWFs).
+
+## Offline Network Mocking (`MockServer` & `SushiServer`)
+
+`src/lib/mockNetwork.ts`, `src/lib/gameServerStub.ts`, and `src/lib/gsiStub.ts`
+define the network mocking interfaces (`MockServerInterface`,
+`SushiServerInterface`, `SushiPluginInterface`, `MockSession`, `MockRoom`,
+`MockMember`, `FishPluginState`, `MockServerEntry`, `GsiUserData`) and their
+in-process implementations (`MockServer`, `SushiServer`, `FishPlugin`):
+
+- **`MockServer`**: unifies HTTP (`GSI` gateway `50`/`109`/`107`/`3009`/`1001`
+  and `LoadVars` inventory endpoints) and `XMLSocket` (`SushiServer`) with zero
+  real network connections.
+- **`SushiServer`**: implements the Rawfish `com.rawfishsoftware.sushi.*` wire
+  protocol (`S55` handshake, client hello `2` → `1` + `2`, `loadSessionList` `29` →
+  `44`, `joinSession` `45` → `35` rooms + `33` members + `32` status + `6` member
+  updates, `changeRoom` `20` → `32` + `8`, `createRoom` `22` → `30` + `32`,
+  `lockRoom` `39`, `chatMessage` `10`, `callPlugin` `19`, etc.).
+- **`FishPlugin`**: implements `"G_FISH_PLUGIN"` (`501` `loadGetData`, `500`
+  `loadFishData` with valid MD5 hashes, `510` `savingGame`).
 
 ## Binary SWF parser
 
-`src/lib/swf/binary.ts` (`parseSwfBinary`) parses raw FWS/CWS bytes into the
+`decompiler/swf/binary.ts` (`parseSwfBinary`) parses raw FWS/CWS bytes into the
 same `SwfDocument` + asset-file shape that `parseSwfXml` produces from an FFDec
 XML export: timelines, frames, place/remove ops, action events (decoded to
 source), characters, symbol classes, bitmap/lossless images (decoded to PNG),

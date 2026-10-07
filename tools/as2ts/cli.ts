@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import JSZip from 'jszip';
-import { transpileProject, transpileScript, type ProjectFile } from '../../src/transpiler/as2';
+import { transpileProject, transpileScript, type ProjectFile } from '../../transpiler/as2';
 
 const HELP = `as2ts – ActionScript 1/2 to TypeScript
 

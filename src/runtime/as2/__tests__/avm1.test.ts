@@ -300,6 +300,34 @@ describe('AVM1 interpreter', () => {
     expect(clip.ok).toBe(true);
   });
 
+  it('executes a Base64 ActionStop record followed by the stream terminator', () => {
+    const clip = { stopped: false, stop() { this.stopped = true; } };
+    runActionsBase64(clip, 'BwA='); // 0x07 Stop, then the 0x00 ActionEnd terminator
+    expect(clip.stopped).toBe(true);
+  });
+
+  it('resets the script budget after a top-level AVM1 function times out', () => {
+    setAvm1Env({
+      budget: 32,
+      global: { Object, Array, String, Number, Boolean, Math, Function, Date },
+    });
+    const clip: any = {};
+    const spin = new Asm();
+    // Push false; Pop; Jump back to byte 0. Build this raw so the test assembler's
+    // outer action stream does not have to resolve labels inside a function body.
+    spin.bytes.push(0x96, 0x02, 0x00, 0x05, 0x00, 0x17, 0x99, 0x02, 0x00, 0xf5, 0xff);
+    const healthy = new Asm(); healthy.push(int(42)).simple(OP.return);
+    runActions(clip, assemble((a) => {
+      a.defineFunction2('spin', [], spin, { registerCount: 1 });
+      a.defineFunction2('healthy', [], healthy, { registerCount: 1 });
+    }));
+
+    clip.spin();
+    expect(takeAvm1Warnings().some((w) => /script ran too long/.test(w.message))).toBe(true);
+    expect(clip.healthy()).toBe(42);
+    expect(takeAvm1Warnings()).toEqual([]);
+  });
+
   it('reports unknown opcodes instead of throwing', () => {
     runActions({}, new Uint8Array([0x01, 0x00]));
     expect(takeAvm1Warnings().some((w) => /unhandled/.test(w.message))).toBe(true);

@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseSwfXml } from '../parser';
-import { parseSwfBinary } from './binary';
+import { decodeDoInitAction, parseSwfBinary } from './binary';
+import { isLikelyActionStream } from './bitio';
 import { xmlToSwf } from '../../../tools/xml2swf/xml2swf.mjs';
 
 const EXTERNAL = resolve(__dirname, '../../../game-files/fish-full/external');
@@ -101,12 +102,10 @@ function compareDocs(xmlDoc: any, binDoc: any, name: string) {
       events: f.events.map((e: any) => norm(e)),
       display: f.display.map((d: any) => normDisplay(d)),
     }));
-    // externalActionCandidates are FFDec script-path hints — root-level
-    // DoInitActions carry sprite scope as exporter metadata that cannot be
-    // recovered from binary payloads, so they are compared loosely. The binary
-    // parser also pins each action event to the script file it synthesized for
-    // it (externalActions, "…/DoAction_2.as" for a frame's second DoAction),
-    // which an XML export has no reason to name, so that is compared loosely too.
+    // externalActionCandidates / externalActions are exporter script-path
+    // hints and may legitimately differ. DoInitAction target IDs and serialized
+    // tag order are compared strictly because both are now preserved by the
+    // XML and binary parsers.
     const stripCand = (frames: any[]) => frames.map((f) => ({
       ...f,
       events: f.events.map((e: any) =>
@@ -152,6 +151,16 @@ function fileIds(files: { path: string; name: string }[], category: string): num
     .sort((x, y) => x - y);
 }
 
+describe('DoInitAction payload decoding', () => {
+  it('does not treat a SpriteID followed by End as a complete action stream', () => {
+    const payload = new Uint8Array([29, 0, 0x04, 0]); // SpriteID 29; NextFrame; End
+    expect(isLikelyActionStream(payload)).toBe(false);
+    const decoded = decodeDoInitAction(payload);
+    expect(decoded.spriteId).toBe(29);
+    expect([...decoded.actions]).toEqual([0x04, 0]);
+  });
+});
+
 describe.each(EXPORTS)('swf round-trip: %s', (name) => {
   const xmlPath = resolve(EXTERNAL, name, `${name}.xml`);
   const xmlText = readFileSync(xmlPath, 'utf8');
@@ -167,6 +176,13 @@ describe.each(EXPORTS)('swf round-trip: %s', (name) => {
       `${name}.xml`,
     );
     compareDocs(xmlDoc, binDoc, name);
+    if (name === 'bassken_overview') {
+      const initTags = [...binDoc.timelines.values()].flatMap((tl) => tl.frames.flatMap((frame) => frame.events))
+        .filter((event) => event.tagType === 'DoInitActionTag');
+      expect(initTags.map((event) => event.targetSpriteId)).toEqual([29, 28]);
+      expect(initTags[0].tagOrder).toBeLessThan(initTags[1].tagOrder!);
+      expect(files.filter((f) => f.targetSpriteId != null).map((f) => f.targetSpriteId)).toEqual([29, 28]);
+    }
 
     // asset file parity by category + id (ext may differ: jpeg3 → png in FFDec)
     for (const category of ['shapes', 'images', 'texts']) {

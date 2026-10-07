@@ -45,8 +45,27 @@ for (const name of EXPORTS) {
         .sort()
         .map((f) => `fish-full/external/${name}/fonts/${f}`)
     : [];
-  manifest.swfs.push(fonts.length ? { name, path: rel, fonts } : { name, path: rel });
+  // GSECS's server chooser fix is kept as readable AS2 and substituted for
+  // the matching synthetic bytecode source when the bundled movie is loaded.
+  const scriptOverrides = name === 'gsecs2.9'
+    ? [{ path: `fish-full/external/${name}/scripts/frame_61/DoAction.as`, target: 'scripts/frame_61/DoAction.as' }]
+    : [];
+  manifest.swfs.push({
+    name,
+    path: rel,
+    ...(fonts.length ? { fonts } : {}),
+    ...(scriptOverrides.length ? { scriptOverrides } : {}),
+  });
   console.log(`${rel} — ${bytes.length} bytes${fonts.length ? `, ${fonts.length} ttf` : ''}`);
+}
+// Pre-built binary SWFs that have no XML export in external/ but ship in swfs/
+const EXTRA_BINARIES = [
+  { name: 'OmnitureActionSource', path: 'fish-full/swfs/OmnitureActionSource.swf' },
+];
+for (const extra of EXTRA_BINARIES) {
+  if (existsSync(resolve(root, 'game-files', extra.path))) {
+    manifest.swfs.push(extra);
+  }
 }
 writeFileSync(resolve(root, 'game-files/manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log(`game-files/manifest.json — ${manifest.swfs.length} swfs`);

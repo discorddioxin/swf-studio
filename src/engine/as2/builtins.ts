@@ -122,7 +122,8 @@ export function installBuiltins(p: AS2Player): BuiltinState {
       }
       p.runQueue();
     };
-    const u = String(url);
+    const u = String(url).trim();
+    if (!u) return;
     if (/\.(jpe?g|png|gif)(\?|$)/i.test(u)) {
       p.log('warn', `loadMovie("${u}"): external images are not supported offline`);
     }
@@ -138,6 +139,15 @@ export function installBuiltins(p: AS2Player): BuiltinState {
           fire('onLoadComplete', 200);
           p.enqueue(target, `onLoadInit ${u}`, () => fire('onLoadInit'));
           p.runQueue();
+          return;
+        }
+        // Optional Gaia dynamic member avatar strips (`a2.cdn.gaiaonline.com/gaia/members/*.swf`)
+        // and moderator report-abuse overlays (`avatar_reporting*.swf`) are not bundled SWFs;
+        // keep the built-in avatar silhouette clip intact without reporting a missing external SWF.
+        if (
+          /gaiaonline\.com\/gaia\/members\//i.test(u) ||
+          /(^|[\\/])avatar(_reporting(_low)?)?\.swf(\?|$)/i.test(u)
+        ) {
           return;
         }
         if ((p.opts.missingExternal ?? 'empty') === 'error') {
@@ -207,8 +217,18 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   }
 
   function fetchText(url: string, method: string, body: string | null): Promise<string | null> {
-    if (p.opts.fetchText) return p.opts.fetchText(url, method, body).catch(() => null);
-    p.log('warn', `network request not available offline: ${method} ${url}`);
+    if (p.opts.fetchText) return p.opts.fetchText(url, method, body, (event) => p.recordNetwork(event)).catch((error: unknown) => {
+      const err = error instanceof Error ? error : new Error(String(error));
+      const message = `HTTP mock request failed: ${method} ${url}: ${err.message}`;
+      p.log('error', message, err.stack, { source: 'engine', kind: 'problem', context: 'HTTP mock transport' });
+      p.recordNetwork({ kind: 'response', transport: 'http', direction: 'incoming', method, url, status: 'error', payload: err.stack, message });
+      return null;
+    });
+    const requestId = p.nextNetworkRequestId('http');
+    p.recordNetwork({ kind: 'request', transport: 'http', direction: 'outgoing', requestId, method, url, status: 'sent', payload: body ?? undefined });
+    const message = `network request not available offline: ${method} ${url}`;
+    p.log('warn', message, undefined, { source: 'network' });
+    p.recordNetwork({ kind: 'response', transport: 'http', direction: 'incoming', requestId, method, url, status: 'blocked offline', payload: message, message });
     return Promise.resolve(null);
   }
 
@@ -723,34 +743,56 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   });
   def(RT.XMLSocket.prototype, {
     connect(this: any, host: any, port: any) {
+      this.__socket?.dispose?.(); // replace an earlier connection without firing callbacks
       const backend = p.opts.gameServer ?? null;
-      const socket: any = {
-        host: String(host), port: Number(port), open: false,
+      let socket: any;
+      const finish = (error = false, notifyGame = true) => {
+        if (!socket || socket.closed) return;
+        socket.closed = true;
+        socket.open = false;
+        try { backend?.close(socket); } catch (e) { p.log('warn', `XMLSocket.close: ${(e as Error)?.message ?? String(e)}`); }
+        p.untrackSocket(socket);
+        if (this.__socket === socket) this.__socket = null;
+        if (notifyGame && !p.isDisposedFor(p.root)) {
+          p.guard('XMLSocket.onClose', () => { if (typeof this.onClose === 'function') this.onClose(error); });
+          p.runQueue();
+        }
+      };
+      socket = {
+        host: String(host), port: Number(port), open: false, closed: false,
         deliver: (data: string) => {
           // Deliver on a later turn: the game is usually still inside the AVM1
           // action that called `send` when the test server replies.
           setTimeout(() => {
-            if (typeof this.onData !== 'function') return;
+            if (socket.closed || p.isDisposedFor(p.root) || typeof this.onData !== 'function') return;
             p.guard('XMLSocket.onData', () => this.onData(String(data)));
             p.runQueue();
           }, 0);
         },
-        close: (error = false) => {
-          socket.open = false;
-          p.guard('XMLSocket.onClose', () => { if (typeof this.onClose === 'function') this.onClose(error); });
-          p.runQueue();
-        },
+        close: (error = false) => finish(error, true),
+        dispose: () => finish(false, false),
       };
       this.__socket = socket;
+      p.trackSocket(socket);
       if (!backend) {
         p.log('warn', `XMLSocket.connect(${host}, ${port}): socket servers are not available offline`);
-        setTimeout(() => { if (typeof this.onConnect === 'function') { p.guard('XMLSocket.onConnect', () => this.onConnect(false)); p.runQueue(); } }, 0);
+        setTimeout(() => {
+          if (socket.closed || p.isDisposedFor(p.root)) return;
+          p.guard('XMLSocket.onConnect', () => { if (typeof this.onConnect === 'function') this.onConnect(false); });
+          p.runQueue();
+        }, 0);
         return true;
       }
       setTimeout(() => {
+        if (socket.closed || p.isDisposedFor(p.root)) return;
         p.log('info', `XMLSocket.connect(${host}:${port}) — local test game server`);
         p.guard('XMLSocket.onConnect', () => {
-          backend.connect(String(host), Number(port), socket, (level, message) => p.log(level, message));
+          backend.connect(
+            String(host), Number(port), socket,
+            (level, message) => p.log(level, message, undefined, { source: 'network' }),
+            (event) => p.recordNetwork(event),
+          );
+          if (socket.closed || p.isDisposedFor(p.root)) { backend.close(socket); return; }
           socket.open = true;
           if (typeof this.onConnect === 'function') this.onConnect(true);
         });
@@ -761,13 +803,13 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     send(this: any, data: any) {
       const socket = this.__socket;
       const text = data === undefined || data === null ? '' : String(data);
-      if (!socket || !p.opts.gameServer) return;
+      if (!socket || socket.closed || !p.opts.gameServer) return;
       p.guard('XMLSocket.send', () => p.opts.gameServer!.send(socket, text));
     },
     close(this: any) {
       const socket = this.__socket;
       if (!socket) return;
-      p.guard('XMLSocket.close', () => p.opts.gameServer?.close(socket));
+      p.guard('XMLSocket.close', () => socket.close(false));
     },
   });
   def(RT.XML.prototype, {

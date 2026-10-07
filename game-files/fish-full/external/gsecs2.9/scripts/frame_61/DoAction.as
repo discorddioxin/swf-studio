@@ -82,10 +82,35 @@ else
 {
    listServers();
 }
+var serverList = mc_ServerChooser.serverListing_lt;
+var updateServerJoinButton = function()
+{
+   var selectedServer = serverList.getSelectedItem();
+   var canJoin = selectedServer != undefined && selectedServer.data != undefined && selectedServer.data != "";
+   mc_ServerChooser.join_btn.enabled = canJoin;
+   mc_ServerChooser.join_btn._alpha = canJoin ? 100 : 45;
+};
+var originalSelectRow = serverList.selectRow;
+if(serverList.__swfStudioJoinGuard != true)
+{
+   serverList.__swfStudioJoinGuard = true;
+   serverList.selectRow = function(rowIndex, transition, allowChangeEvent)
+   {
+      var result = originalSelectRow.apply(this, arguments);
+      updateServerJoinButton();
+      return result;
+   };
+}
+updateServerJoinButton();
 mc_ServerChooser.join_btn.onRelease = function()
 {
-   _root.GSECS_SelectedServerIP = mc_ServerChooser.serverListing_lt.getSelectedItem().data;
-   _root.GSECS_SelectedServerName = mc_ServerChooser.serverListing_lt.getSelectedItem().label;
+   var selectedServer = mc_ServerChooser.serverListing_lt.getSelectedItem();
+   if(selectedServer == undefined || selectedServer.data == undefined || selectedServer.data == "")
+   {
+      return undefined;
+   }
+   _root.GSECS_SelectedServerIP = selectedServer.data;
+   _root.GSECS_SelectedServerName = selectedServer.label;
    showLoadingBar();
    connectToSushi(_root.GSECS_SelectedServerIP);
 };

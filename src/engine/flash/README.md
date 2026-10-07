@@ -74,8 +74,11 @@ document class. When the SWF doesn't name one, pick it in the Execute tab's
   `SoundChannel` (linked sounds and timeline sounds from the exported files),
   `SharedObject` (in localStorage), `getDefinitionByName`,
   `getQualifiedClassName`, `Keyboard`, `fl.transitions.Tween` and easing.
-* **Isolation.** An exception in game code is logged to the Execute console
-  with the handler it came from, and the game keeps running. **Restart**
+* **Isolation and diagnostics.** Synchronous game exceptions and rejected
+  promises are reported with their callback context and stack, without stopping
+  the player. Execute separates Logs, mocked/network Req/Res traffic, and
+  App/engine/Forge Problems. Failures in the animation/render loop are captured
+  as engine Problems rather than silently killing the frame loop. **Restart**
   re-evaluates every module, so static fields start fresh.
 
 ## Known limits
@@ -86,8 +89,9 @@ document class. When the SWF doesn't name one, pick it in the Execute tab's
   bounding box.
 * Text renders with device fonts (no embedded glyph outlines, no HTML styling).
 * Gradient and bitmap fills in `Graphics` are approximated with a flat colour.
-* Network loading (`Loader`, `URLLoader`) fails with `IOErrorEvent` offline.
-  There is no E4X (`XML`), and `Dictionary` object keys need the Map-style
-  `get/set` API. Bracket access only works with string or number keys.
+* Network loading (`Loader`, `URLLoader`) fails with `IOErrorEvent` offline;
+  blocked requests and responses are visible in Execute → Req/Res. There is no
+  E4X (`XML`), and `Dictionary` object keys need the Map-style `get/set` API.
+  Bracket access only works with string or number keys.
 * Game code runs on the UI thread, so an infinite loop in a script freezes the
   tab, as it would hang Flash Player.

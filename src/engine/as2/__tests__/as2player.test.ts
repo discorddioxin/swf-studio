@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 // AS2 player semantics against a tiny SWF (TEST FIXTURE ONLY – never imported by the app).
 // Scripts use FFDec's export layout, so this also exercises as2ts project mapping.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseSwfXml } from '../../../lib/parser';
+import { currentHost } from '../../../runtime/as2';
 import { buildAS2Program } from '../program';
 import { AS2Player } from '../player';
+import type { LogEntry } from '../../flash/player';
 
 const M = (tx: number, ty: number) => `<matrix type="MATRIX" hasScale="false" hasRotate="false" translateX="${tx}" translateY="${ty}"/>`;
 const place = (depth: number, id: number, name: string | null, tx = 0, ty = 0) =>
@@ -89,12 +91,81 @@ function boot() {
 }
 
 describe('AS2 player', () => {
+  it('compiles Workbench names into readable modules while keeping runtime frame ids numeric', () => {
+    const metadata = new Map([[10, {
+      name: 'rod 3',
+      frameLabels: new Map([[1, 'idle'], [2, 'throw'], [3, 'release']]),
+    }]]);
+    const build = buildAS2Program(SOURCES, metadata);
+    expect(build.errors).toEqual([]);
+    expect(build.files.get('timelines/rod_3.ts')).toContain('const rod_3_idle = function');
+    expect(build.files.get('index.ts')).toContain('10: timeline_rod_3, // "rod 3"');
+    expect(build.program?.timelines[10]?.frames?.[1]).toBeTypeOf('function');
+
+    const doc = parseSwfXml(XML, { fileName: 'fixture.xml' });
+    const player = new AS2Player({ doc, program: build.program });
+    player.start();
+    expect(player.root.frame).toBe(0);
+    player.dispose();
+  });
+
+  it('runs DoInitAction scripts in SWF tag order rather than sprite-id or filename order', () => {
+    const build = buildAS2Program([
+      { path: 'scripts/frame_1/DoInitAction.as', text: 'order = [29];', tagOrder: 1090, targetSpriteId: 29 },
+      { path: 'scripts/frame_1/DoInitAction_2.as', text: 'order.push(28);', tagOrder: 1091, targetSpriteId: 28 },
+    ]);
+    expect(build.errors).toEqual([]);
+    const player = new AS2Player({ doc: parseSwfXml(XML, { fileName: 'fixture.xml' }), program: build.program });
+    player.start();
+    expect((player.root.obj as any).order).toEqual([29, 28]);
+    player.dispose();
+  });
+
   it('runs frame scripts after placement, honours stop() and never throws on undefined', () => {
     const { player, root, logs } = boot();
     expect(root.log[0]).toBe('frame1 hero=true body=true');
     for (let i = 0; i < 10; i++) player.tick();
     expect(player.root.frame).toBe(0); // stop() on frame 1: the timeline no longer loops through every state
     expect(logs.filter((l) => l.startsWith('error'))).toEqual([]);
+  });
+
+  it('executes avm1Actions bytecode without producing expensive per-call reports', () => {
+    const build = buildAS2Program([{ path: 'scripts/frame_1/DoAction.as', text: 'avm1Actions("BwA=");' }]);
+    expect(build.errors).toEqual([]);
+    // Source location is retained in the source/export views, not copied into every runtime call.
+    expect(build.files.get('timelines/root.ts')).toContain('$rt.avm1Actions($t, "BwA=")');
+    expect(build.files.get('timelines/root.ts')).not.toContain('scripts/frame_1/DoAction.as", 1');
+    const logs: LogEntry[] = [];
+    const player = new AS2Player({ doc: parseSwfXml(XML, { fileName: 'fixture.xml' }), program: build.program, onLog: (entry) => logs.push(entry) });
+    player.start();
+
+    expect(player.root.playing).toBe(false); // 07 00 still executes ActionStop + ActionEnd
+    expect(logs.some((entry) => entry.message === 'avm1Actions call')).toBe(false);
+    player.dispose();
+  });
+
+  it('lists only live multi-frame clip timelines and tracks their executing frame', () => {
+    const { player, root } = boot();
+    expect(player.runningTimelines()).toEqual([]); // root and hero are stopped by their frame-1 scripts
+
+    root.hero.gotoAndPlay('run');
+    expect(player.runningTimelines()).toEqual([
+      expect.objectContaining({
+        characterId: 10,
+        name: 'Hero',
+        path: expect.stringContaining('_level0.hero'),
+        frame: 2,
+        totalFrames: 3,
+        frameLabel: 'run',
+        mainMovie: true,
+      }),
+    ]);
+
+    player.tick();
+    expect(player.runningTimelines()[0].frame).toBe(3);
+    root.hero.stop();
+    expect(player.runningTimelines()).toEqual([]);
+    player.dispose();
   });
 
   it('builds linked classes before their constructor body and runs clip events in order', () => {
@@ -159,6 +230,28 @@ describe('AS2 player', () => {
     expect(root.startButton).toBeUndefined();
   });
 
+  it('routes online help to the offline guide and blocks external navigation', () => {
+    const onHelp = vi.fn();
+    const logs: string[] = [];
+    const player = new AS2Player({
+      doc: parseSwfXml(XML, { fileName: 'fixture.xml' }),
+      program: null,
+      onHelp,
+      onLog: (entry) => logs.push(`${entry.level}: ${entry.message}`),
+    });
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    currentHost()?.getURL('http://example.invalid/info/help.php?view=category&id=23', '_blank');
+    expect(onHelp).toHaveBeenCalledOnce();
+    currentHost()?.getURL('https://example.invalid/external', '_blank');
+    expect(open).not.toHaveBeenCalled();
+    expect(logs).toContain('info: opened built-in offline fishing instructions');
+    expect(logs).toContain('warn: blocked external navigation in offline mode: https://example.invalid/external');
+
+    open.mockRestore();
+    player.dispose();
+  });
+
   it('runs setInterval on game time', () => {
     const { player, root } = boot();
     let n = 0;
@@ -168,5 +261,23 @@ describe('AS2 player', () => {
     expect(n).toBe(2);
     expect(player.gameTime).toBe(120);
     void root;
+  });
+
+  it('reports async game-script rejections with their execution context', async () => {
+    const entries: LogEntry[] = [];
+    const player = new AS2Player({
+      doc: parseSwfXml(XML, { fileName: 'fixture.xml' }),
+      program: null,
+      onLog: (entry) => entries.push(entry),
+    });
+    player.guard('async frame callback', () => Promise.reject(new Error('AS2 async failure')));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const last = entries[entries.length - 1];
+    expect(last).toMatchObject({
+      level: 'error', source: 'app', kind: 'problem', context: 'async frame callback',
+    });
+    expect(last.message).toContain('AS2 async failure');
+    expect(last.detail).toContain('Error: AS2 async failure');
+    player.dispose();
   });
 });

@@ -1,4 +1,4 @@
-// AS2 player: runs the TypeScript produced by as2ts (src/transpiler/as2)
+// AS2 player: runs the TypeScript produced by as2ts (transpiler/as2)
 // against a parsed SWF document.
 //
 // This is a Flash-7-style (AVM1) player. Its behaviour is modelled on how the
@@ -22,7 +22,7 @@
 import * as RT from '../../runtime/as2';
 import type { AS2Handler, AS2Program } from '../../runtime/as2';
 import type { ColorTransform, DisplayItem, Frame, Matrix, PlaceOp, Rect, SwfCharacter, SwfDocument, Timeline } from '../../types';
-import type { AssetSource, LogEntry, LogLevel } from '../flash/player';
+import type { AssetSource, LogEntry, LogLevel, LogMetadata, NetworkEvent, NetworkObserver } from '../flash/player';
 import type { AudioBackend, AudioHandle } from '../flash/media';
 import {
   apply, compose, concat, concatCT, decompose, identity, inRect, invert, isColorIdentity, transformRect, unionRect,
@@ -52,6 +52,20 @@ export interface Movie {
 }
 
 export type NodeKind = 'clip' | 'button' | 'text' | 'graphic';
+
+/** Read-only playhead state for a clip timeline that is currently advancing. */
+export interface RunningTimelineSnapshot {
+  id: number;
+  characterId: number;
+  name: string;
+  path: string;
+  /** 1-based current frame, matching the Execute HUD and Workbench. */
+  frame: number;
+  totalFrames: number;
+  frameLabel?: string;
+  mainMovie: boolean;
+  movieName?: string;
+}
 
 export interface TextState {
   paras: Paragraph[];
@@ -166,13 +180,15 @@ export interface AS2PlayerOptions {
   /** What to do when an external SWF can't be resolved: pretend it loaded empty, or report an error to the game. */
   missingExternal?: 'empty' | 'error';
   /** Network access for LoadVars / XML. Return null for "failed". */
-  fetchText?: (url: string, method: string, body: string | null) => Promise<string | null>;
+  fetchText?: (url: string, method: string, body: string | null, onNetwork?: NetworkObserver) => Promise<string | null>;
   /** Called after each tick (for UIs). */
   onTick?: (player: AS2Player) => void;
   /** FlashVars / query parameters, set on _root before the first frame. */
   flashVars?: Record<string, string>;
   /** Scripts to run on _root right after the first frame (e.g. automation / guest login). */
   afterStart?: (root: any, player: AS2Player) => void;
+  /** Show built-in offline help when a SWF requests its online help page. */
+  onHelp?: () => void;
   /** In-process stand-in for the game's XMLSocket server. See `gameServerStub.ts`. */
   gameServer?: GameServerBackend | null;
 }
@@ -183,13 +199,15 @@ export interface GameSocket {
   port: number;
   /** Push a message to the game: calls `onData` on the next tick. */
   deliver(data: string): void;
-  /** Close the connection: calls `onClose` (and clears `onData`); `error` = abnormal. */
+  /** Close the connection: calls `onClose`; `error` = abnormal. */
   close(error?: boolean): void;
+  /** Quietly release the backend during player disposal without running game callbacks. */
+  dispose?(): void;
 }
 
 /** Offline game server (the Gaia "Sushi" protocol). */
 export interface GameServerBackend {
-  connect(host: string, port: number, socket: GameSocket, log: (level: LogLevel, message: string) => void): void;
+  connect(host: string, port: number, socket: GameSocket, log: (level: LogLevel, message: string) => void, onNetwork?: NetworkObserver): void;
   send(socket: GameSocket, data: string): void;
   close(socket: GameSocket): void;
 }
@@ -229,11 +247,13 @@ export class AS2Player {
   private ctx: CanvasRenderingContext2D | null = null;
   private measureCtx: CanvasRenderingContext2D | null | undefined;
   private channels = new Set<{ id: number | null; movie: Movie; handle: AudioHandle }>();
+  private gameSockets = new Set<GameSocket>();
   private started = false;
   private disposed = false;
   private hitCanvas: HTMLCanvasElement | null = null;
   private listeners: (() => void)[] = [];
   errors = 0;
+  private networkRequestSequence = 0;
   cursorHidden = false;
   /** external SWFs the game asked for that could not be resolved */
   readonly missingExternals = new Set<string>();
@@ -266,21 +286,51 @@ export class AS2Player {
   }
 
   // ------------------------------------------------------------ logging
-  log(level: LogLevel, message: string, detail?: string) {
-    const entry: LogEntry = { level, message, detail, time: this.time() };
+  log(level: LogLevel, message: string, detail?: string, metadata: LogMetadata = {}) {
+    const entry: LogEntry = {
+      level,
+      message,
+      detail,
+      time: this.time(),
+      ...metadata,
+      source: metadata.source ?? (level === 'trace' ? 'app' : 'engine'),
+      kind: metadata.kind ?? (level === 'error' || level === 'warn' ? 'problem' : 'log'),
+    };
     this.logs.push(entry);
     if (this.logs.length > 2000) this.logs.splice(0, this.logs.length - 2000);
     if (level === 'error') this.errors++;
-    this.opts.onLog?.(entry);
+    try { this.opts.onLog?.(entry); }
+    catch (error) { console.error('[AS2 engine] log handler failed', error); }
   }
   time() { return (typeof performance !== 'undefined' ? performance.now() : Date.now()) - this.startTime; }
+  nextNetworkRequestId(prefix = 'request') { return `${prefix}-${++this.networkRequestSequence}`; }
 
-  /** Run game code; errors are logged instead of stopping the player (like Flash). */
-  guard(label: string, fn: () => void) {
-    try { fn(); } catch (e) {
-      const err = e as Error;
-      this.log('error', `${label}: ${err?.message ?? String(e)}`, err?.stack?.split('\n').slice(0, 6).join('\n'));
+  recordNetwork(event: NetworkEvent) {
+    const isFailure = event.status === 'error' || event.status === 'blocked offline';
+    const fallback = `${event.direction === 'outgoing' ? '→' : '←'} ${event.method ?? event.transport} ${event.url ?? ''}`.trim();
+    this.log(isFailure ? 'warn' : 'info', event.message ?? fallback, event.payload, {
+      source: 'network', kind: event.kind, transport: event.transport, direction: event.direction,
+      requestId: event.requestId, method: event.method, url: event.url, status: event.status, payload: event.payload,
+    });
+  }
+
+  /** Run game code; synchronous throws and async rejections are attributed to the callback that failed. */
+  guard(label: string, fn: () => unknown) {
+    try {
+      const result = fn();
+      if (result && typeof (result as { then?: unknown }).then === 'function') {
+        void Promise.resolve(result).catch((error: unknown) => this.reportProblem(error, label));
+      }
+      return result;
+    } catch (error) {
+      this.reportProblem(error, label);
+      return undefined;
     }
+  }
+
+  private reportProblem(error: unknown, label: string) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    this.log('error', `${label}: ${err.message}`, err.stack, { source: 'app', kind: 'problem', context: label });
   }
 
   /** Object.registerClass library of a movie (null = the main movie) */
@@ -293,11 +343,23 @@ export class AS2Player {
     this.started = true;
     const prog = this.movie.program;
     if (prog) {
-      for (const [name, fn] of Object.entries(prog.initByName ?? {})) this.guard(`init action "${name}"`, () => fn.call(this.root.obj));
-      for (const [id, mod] of Object.entries(prog.timelines)) {
-        if (mod.init && Number(id) !== 0) this.guard(`init action of sprite ${id}`, () => mod.init!.call(this.root.obj));
+      if (prog.initActions?.length) {
+        for (const action of [...prog.initActions].sort((a, b) => a.order - b.order)) {
+          const label = action.targetSpriteId != null
+            ? `init action of sprite ${action.targetSpriteId}`
+            : action.linkageName
+              ? `init action "${action.linkageName}"`
+              : 'init action';
+          this.guard(label, () => action.run.call(this.root.obj));
+        }
+      } else {
+        // Compatibility for older transpiled programs without per-tag metadata.
+        for (const [name, fn] of Object.entries(prog.initByName ?? {})) this.guard(`init action "${name}"`, () => fn.call(this.root.obj));
+        for (const [id, mod] of Object.entries(prog.timelines)) {
+          if (mod.init && Number(id) !== 0) this.guard(`init action of sprite ${id}`, () => mod.init!.call(this.root.obj));
+        }
+        prog.timelines[0]?.init && this.guard('init action of the main timeline', () => prog.timelines[0].init!.call(this.root.obj));
       }
-      prog.timelines[0]?.init && this.guard('init action of the main timeline', () => prog.timelines[0].init!.call(this.root.obj));
     }
     for (const [k, v] of Object.entries(this.opts.flashVars ?? {})) this.root.obj[k] = v;
     this.enterFirstFrame(this.root);
@@ -337,6 +399,8 @@ export class AS2Player {
 
   get isRunning() { return this.running; }
   isDisposedFor(_node: DisplayNode) { return this.disposed; }
+  trackSocket(socket: GameSocket) { if (!this.disposed) this.gameSockets.add(socket); }
+  untrackSocket(socket: GameSocket) { this.gameSockets.delete(socket); }
 
   /** Advance by real time: timers + as many ticks as are due. */
   step(now: number) {
@@ -354,13 +418,25 @@ export class AS2Player {
   }
 
   dispose() {
+    if (this.disposed) return;
     this.pause();
     this.disposed = true;
+    for (const socket of [...this.gameSockets]) {
+      try {
+        if (socket.dispose) socket.dispose();
+        else this.opts.gameServer?.close(socket);
+      } catch (error) {
+        this.log('warn', `XMLSocket.dispose: ${(error as Error)?.message ?? String(error)}`);
+      }
+    }
+    this.gameSockets.clear();
     this.stopAllSounds();
     this.timers.clear();
+    this.queue.length = 0;
     for (const off of this.listeners) off();
     this.listeners = [];
     if (RT.currentHost() && (RT.currentHost() as any).__player === this) RT.installHost(null);
+    if ((globalThis as any).__as2player === this) delete (globalThis as any).__as2player;
   }
 
   // ------------------------------------------------------------ the frame loop
@@ -518,13 +594,15 @@ export class AS2Player {
     for (const c of [...node.children]) {
       if (!c.fromTimeline || c.depth >= 0) continue;
       const d = want.get(c.depth);
-      if (!d || d.characterId !== c.characterId || d.startFrame !== c.startFrame) this.removeNode(c);
+      const sameChar = d != null && (d.characterId === c.characterId || c.url !== null);
+      if (!d || !sameChar || d.startFrame !== c.startFrame) this.removeNode(c);
     }
     node.frame = target;
     for (const d of snapshot) {
       const depth = d.depth - DEPTH_OFFSET;
       const c = node.childAtDepth(depth);
-      if (c && c.fromTimeline && c.characterId === d.characterId && c.startFrame === d.startFrame) {
+      const sameChar = c != null && (c.characterId === d.characterId || c.url !== null);
+      if (c && c.fromTimeline && sameChar && c.startFrame === d.startFrame) {
         if (!c.scriptMoved) { c.matrix = { ...d.matrix }; c.comps = null; if (d.colorTransform) c.ct = d.colorTransform; }
         c.ratio = d.ratio;
         continue;
@@ -582,14 +660,17 @@ export class AS2Player {
       built = true;
       this.bind(obj, node);
       if (o.initObject) for (const [k, v] of Object.entries(o.initObject)) obj[k] = v;
-      if (kind === 'clip') this.enterFirstFrame(node);
+      if (kind === 'clip') {
+        this.enterFirstFrame(node);
+        this.runHandlers(node, 'initialize');
+        this.runHandlers(node, 'construct');
+      }
       if (kind === 'button') this.buildButtonState(node);
     };
     if (kind === 'clip') {
       const cls = (o.cls ?? (ch?.exportName ? RT.$rt.linkedClass(ch.exportName, this.linkageScope(movie)) : undefined)) as (new () => any) | undefined;
       const Ctor = typeof cls === 'function' ? cls : RT.MovieClip;
       RT.MovieClip.__construct = build;
-      this.runHandlers(node, 'construct');
       let instance: any = null;
       // Flash creates the clip first (so `_name`, depth and the display list are
       // available) and then runs the class constructor with that clip as `this`.
@@ -638,11 +719,12 @@ export class AS2Player {
           this.guard(`constructObject of ${this.describe(node)}`, () => inst.constructObject());
         }
       } catch (e) {
-        this.log('error', `constructor of ${this.describe(node)}: ${(e as Error).message}`, (e as Error).stack?.split('\n').slice(0, 6).join('\n'));
+        const error = e instanceof Error ? e : new Error(String(e));
+        const context = `constructor of ${this.describe(node)}`;
+        this.log('error', `${context}: ${error.message}`, error.stack, { source: 'app', kind: 'problem', context });
         if (!built) { RT.MovieClip.__construct = null; build(instance ?? Object.create(RT.MovieClip.prototype)); }
       }
       RT.MovieClip.__construct = null;
-      this.queueClipEvent(node, 'initialize');
       this.enqueue(node, `${this.describe(node)} load`, () => this.dispatchClipEvent(node, 'load'));
     } else if (kind === 'button') {
       RT.Button.__construct = build;
@@ -738,7 +820,13 @@ export class AS2Player {
   /** Clips with on(...) mouse handlers or onPress/onRelease… behave like buttons. */
   isMouseTarget(node: DisplayNode): boolean {
     if (node.removed || !node.obj) return false;
-    if (node.kind === 'button') return node.obj.enabled !== false;
+    if (node.kind === 'button') {
+      if (node.obj.enabled === false) return false;
+      const handlers = [...node.handlers, ...(node.movie.program?.buttons[node.characterId] ?? [])];
+      return handlers.some((h) => h.kind === 'on' && h.events.some((e) => !e.startsWith('keyPress')))
+        || ['onPress', 'onRelease', 'onReleaseOutside', 'onRollOver', 'onRollOut', 'onDragOver', 'onDragOut']
+          .some((k) => typeof node.obj[k] === 'function');
+    }
     if (node.kind === 'text') return !!node.text && (node.text.input || node.text.selectable) && false;
     if (node.kind !== 'clip' || node.obj.enabled === false) return false;
     if (node.handlers.some((h) => h.kind === 'on' && h.events.some((e) => !e.startsWith('keyPress')))) return true;
@@ -895,7 +983,7 @@ export class AS2Player {
     }
     if (!shape) return inRect(this.localBounds(node), p.x, p.y);
     if (node.drawing?.length && inRect(this.drawingBounds(node.drawing), p.x, p.y)) return true;
-    return node.children.some((c) => !c.clipDepth && this.hitTestPoint(c, x, y, true, forButton));
+    return node.children.some((c) => !c.clipDepth && this.hitTestPoint(c, x, y, c.kind === 'button' ? false : true, forButton));
   }
 
   private buttonShapeHit(node: DisplayNode, x: number, y: number): boolean {
@@ -1108,8 +1196,18 @@ export class AS2Player {
       clearInterval: (id) => p.clearTimer(id),
       getURL: (url, win) => {
         if (/^javascript:/i.test(url)) { p.log('info', `getURL(${url}) ignored`); return; }
+        // The bundled game's Instructions action points to an online help page.
+        // Keep it usable offline without opening external tabs or making requests.
+        if (/\/info\/help\.php(?:\?|$)/i.test(url)) {
+          p.log('info', 'opened built-in offline fishing instructions');
+          p.opts.onHelp?.();
+          return;
+        }
+        if (/^(?:https?:)?\/\//i.test(url)) {
+          p.log('warn', `blocked external navigation in offline mode: ${url}`);
+          return;
+        }
         p.log('info', `getURL("${url}"${win ? `, "${win}"` : ''})`);
-        if (win && typeof window !== 'undefined' && /^https?:/i.test(url)) window.open(url, '_blank', 'noopener');
       },
       fscommand: (c, a) => p.log('info', `fscommand("${c}", "${a ?? ''}")`),
       stopAllSounds: () => p.stopAllSounds(),
@@ -1451,7 +1549,7 @@ export class AS2Player {
     let open = false;
     const finish = () => {
       if (!open) return;
-      if (fill?.color) { ctx.globalAlpha = base * fill.alpha; ctx.fillStyle = fill.color; ctx.fill(); }
+      if (fill?.color) { ctx.globalAlpha = base * fill.alpha; ctx.fillStyle = fill.color; ctx.fill('evenodd'); }
       if (line?.color) { ctx.globalAlpha = base * line.alpha; ctx.strokeStyle = line.color; ctx.lineWidth = Math.max(TWIPS, line.width); ctx.stroke(); }
       ctx.globalAlpha = base;
       open = false;
@@ -1468,6 +1566,33 @@ export class AS2Player {
   }
 
   // ------------------------------------------------------------ inspection
+  /** Snapshot of each live, multi-frame MovieClip whose own playback state is active. */
+  runningTimelines(): RunningTimelineSnapshot[] {
+    const timelines: RunningTimelineSnapshot[] = [];
+    const visit = (node: DisplayNode) => {
+      if (node.removed) return;
+      if (node.kind === 'clip' && node.timeline && node.totalFrames > 1 && node.playing) {
+        const character = node.character;
+        const frameLabel = node.timeline.frames[node.frame]?.label?.trim();
+        timelines.push({
+          id: node.id,
+          characterId: node.characterId,
+          name: node === this.root ? node.timeline.name || 'Main Timeline'
+            : character?.exportName || node.timeline.name || `Sprite ${node.characterId}`,
+          path: this.describe(node),
+          frame: node.frame + 1,
+          totalFrames: node.totalFrames,
+          frameLabel: frameLabel || undefined,
+          mainMovie: node.movie === this.movie,
+          movieName: node.movie === this.movie ? undefined : node.movie.doc.header.fileName || node.movie.url,
+        });
+      }
+      for (const child of node.children) visit(child);
+    };
+    visit(this.root);
+    return timelines;
+  }
+
   /** Snapshot of the display list (for the UI / tests). */
   tree(node: DisplayNode = this.root, depth = 0, out: string[] = []): string[] {
     const ch = node.character;

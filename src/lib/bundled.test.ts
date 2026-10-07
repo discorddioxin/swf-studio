@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fetchBundledManifest, fetchBundledSwf } from './bundled';
 import { ingestFiles } from './assets';
+import { readAS2Text } from '../engine/as2/useAS2Build';
 
 const ROOT = resolve(__dirname, '../../game-files');
 const realFetch = globalThis.fetch;
@@ -35,6 +36,11 @@ describe('bundled SWFs', () => {
       const { doc, files } = await fetchBundledSwf(entry);
       expect(doc.header.fileName, `${entry.name} fileName`).toBe(`${entry.name}.swf`);
       expect(doc.timelines.size, `${entry.name} timelines`).toBeGreaterThan(0);
+      if (entry.name === 'gsecs2.9') {
+        const chooserScript = files.find((file) => file.webkitRelativePath.endsWith('/scripts/frame_61/DoAction.as'));
+        expect(chooserScript, 'bundled GSECS server-chooser source override').toBeTruthy();
+        expect(await readAS2Text(chooserScript!)).toContain('serverList.__swfStudioJoinGuard');
+      }
       const bundle = ingestFiles(files);
       // asset categories survive the synthetic-File bridge
       const cats = new Set(bundle.files.map((f) => f.category));

@@ -1,5 +1,8 @@
 node_modules/
 dist/
+# Local Puppeteer/debug screenshots and generated audit dumps
+debug/tools/*.png
+debug/tools/e2e-output/
 as2ts-out/
 ffdec-out/
 .preview/

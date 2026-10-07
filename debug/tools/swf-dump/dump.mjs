@@ -57,10 +57,90 @@ const tagList = (d, base) => {
   return out;
 };
 
+const extractPlaceObject2ClipActions = (d, ctx) => {
+  const out = [];
+  if (d.length < 3) return out;
+  const f = d[0];
+  if (!(f & 0x80)) return out; // hasClipActions
+  // Rather than bit-parsing matrix/cxform, find the CLIPACTIONS header (reserved u16=0, allEventFlags u32)
+  // or scan from the end of the tag backwards/forwards. Even simpler: bit-skip matrix & cxform!
+  let bp = 24; // after flags (8) + depth (16)
+  if (f & 0x02) bp += 16; // characterId
+  const readUB = (n) => {
+    let v = 0;
+    for (let i = 0; i < n; i++) {
+      v = (v << 1) | ((d[bp >> 3] >> (7 - (bp & 7))) & 1);
+      bp++;
+    }
+    return v;
+  };
+  if (f & 0x04) { // matrix
+    if (readUB(1)) { const b = readUB(5); bp += b * 2; }
+    if (readUB(1)) { const b = readUB(5); bp += b * 2; }
+    const tb = readUB(5); bp += tb * 2;
+    if (bp & 7) bp = (bp + 7) & ~7;
+  }
+  if (f & 0x08) { // cxformWithAlpha
+    const hasAdd = readUB(1);
+    const hasMult = readUB(1);
+    const nbits = readUB(4);
+    if (hasMult) bp += nbits * 4;
+    if (hasAdd) bp += nbits * 4;
+    if (bp & 7) bp = (bp + 7) & ~7;
+  }
+  let p = bp >> 3;
+  if (f & 0x10) p += 2; // ratio
+  if (f & 0x40) p += 2; // clipDepth precedes name in SWF PlaceObject2
+  let name = '';
+  if (f & 0x20) {
+    let e = p;
+    while (e < d.length && d[e] !== 0) e++;
+    name = Buffer.from(d.subarray(p, e)).toString('latin1');
+    p = e + 1;
+  }
+  p += 6; // reserved u16 + allEventFlags u32 (SWF6+)
+  while (p + 8 <= d.length) {
+    const flags = (d[p] | (d[p + 1] << 8) | (d[p + 2] << 16) | (d[p + 3] << 24)) >>> 0;
+    p += 4;
+    if (flags === 0) break;
+    const size = (d[p] | (d[p + 1] << 8) | (d[p + 2] << 16) | (d[p + 3] << 24)) >>> 0;
+    p += 4;
+    const end = Math.min(d.length, p + size);
+    if (flags & 0x20000) p += 1; // keyPress keyCode
+    const code = d.subarray(p, end);
+    out.push({ t: 26, d: code, ctx: `${ctx}/po2${name ? `[${name}]` : ''}_flags0x${flags.toString(16)}` });
+    p = end;
+  }
+  return out;
+};
+
+const extractDefineButton2Actions = (d, ctx) => {
+  const out = [];
+  if (d.length < 5) return out;
+  const bid = d[0] | (d[1] << 8);
+  const actionOffset = d[3] | (d[4] << 8);
+  if (!actionOffset || 3 + actionOffset >= d.length) return out;
+  let p = 3 + actionOffset;
+  let idx = 0;
+  while (p + 4 <= d.length) {
+    const condSize = d[p] | (d[p + 1] << 8);
+    const condFlags = d[p + 2] | (d[p + 3] << 8);
+    const nextP = condSize === 0 ? d.length : Math.min(d.length, p + condSize);
+    const code = d.subarray(p + 4, nextP);
+    out.push({ t: 34, d: code, ctx: `${ctx}/btn${bid}_cond${idx}_flags0x${condFlags.toString(16)}` });
+    idx++;
+    if (condSize === 0) break;
+    p = nextP;
+  }
+  return out;
+};
+
 const all = [];
 const walk = (start, end, ctx) => {
   for (const tag of tagList(body.subarray(start, end), start)) {
     if (tag.t === 12 || tag.t === 59) all.push({ ...tag, ctx });
+    else if (tag.t === 26) all.push(...extractPlaceObject2ClipActions(tag.d, ctx));
+    else if (tag.t === 34) all.push(...extractDefineButton2Actions(tag.d, ctx));
     else if (tag.t === 39) walk(tag.off + 4, tag.off + tag.d.length, `${ctx}/sprite${tag.d[0] | (tag.d[1] << 8)}`);
   }
 };
@@ -70,8 +150,7 @@ const wanted = all.filter((t) => (filter === 'all' || String(t.d.length) === fil
   && (!wantType || t.t === wantType)
   && (!grep || Buffer.from(t.d).toString('latin1').includes(grep)));
 
-const dumpCode = (code, indent = '') => {
-  const pool = [];
+const dumpCode = (code, indent = '', pool = []) => {
   let pendingBody = null;
   let pc = 0;
   while (pc < code.length) {
@@ -100,7 +179,13 @@ const dumpCode = (code, indent = '') => {
         else if (kind === 3) out.push('undefined');
         else if (kind === 4) out.push(`reg${payload[q++]}`);
         else if (kind === 5) out.push(payload[q++] ? 'true' : 'false');
-        else if (kind === 6) { out.push(String(payload.readDoubleLE(q))); q += 8; }
+        else if (kind === 6) {
+          const swapped = Buffer.alloc(8);
+          payload.copy(swapped, 0, q + 4, q + 8);
+          payload.copy(swapped, 4, q, q + 4);
+          out.push(String(swapped.readDoubleLE(0)));
+          q += 8;
+        }
         else if (kind === 7) { out.push(`#${payload[q] | (payload[q + 1] << 8) | (payload[q + 2] << 16) | (payload[q + 3] << 24)}`); q += 4; }
         else if (kind === 8) { const i = payload[q++]; out.push(pool[i] !== undefined ? JSON.stringify(pool[i]) : 'pool?'); }
         else if (kind === 9) { const i = payload[q] | (payload[q + 1] << 8); out.push(pool[i] !== undefined ? JSON.stringify(pool[i]) : 'pool?'); q += 2; }
@@ -144,16 +229,14 @@ const dumpCode = (code, indent = '') => {
       extra = `argc=${argc}`;
     } else if (op === 0x87) extra = `reg${payload[0]}`;
     console.log(`${indent}${String(start).padStart(5)} ${(NAMES[op] ?? `op${op.toString(16)}`).padEnd(14)} ${extra}`);
-    if (pendingBody && pendingBody.length) { dumpCode(pendingBody, `${indent}    `); pendingBody = null; }
+    if (pendingBody && pendingBody.length) { dumpCode(pendingBody, `${indent}    `, pool); pendingBody = null; }
   }
 };
 
 for (const tag of wanted) {
-  // DoInitAction normally carries the target SpriteID first, but the SWFs in this project
-  // have it stripped (FFDec layout) — only skip it when the full payload is not itself a
-  // plausible action stream (same heuristic the runtime uses).
   let code = tag.d;
   if (tag.t === 59 && code.length > 4 && NAMES[code[0]] === undefined && NAMES[code[2]] !== undefined) code = code.subarray(2);
-  console.log(`===== ${tag.t === 12 ? 'DoAction' : 'DoInitAction'} ${tag.d.length}B ${tag.ctx}${tag.t === 59 ? ` spriteId=${tag.d[0] | (tag.d[1] << 8)}` : ''}`);
+  const label = tag.t === 12 ? 'DoAction' : tag.t === 59 ? 'DoInitAction' : 'ClipAction';
+  console.log(`===== ${label} ${tag.d.length}B ${tag.ctx}${tag.t === 59 ? ` spriteId=${tag.d[0] | (tag.d[1] << 8)}` : ''}`);
   dumpCode(code);
 }

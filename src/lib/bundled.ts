@@ -13,6 +13,8 @@ export interface BundledSwf {
   path: string;
   /** committed FFDec font exports (ttf cannot be synthesized from binary) */
   fonts?: string[];
+  /** Optional source files which replace the matching synthetic AVM1 script. */
+  scriptOverrides?: { path: string; target: string }[];
 }
 
 /** Fetch game-files/manifest.json from the public root. */
@@ -30,10 +32,17 @@ export async function fetchBundledManifest(): Promise<BundledSwf[]> {
     } else if (raw && typeof raw.path === 'string') {
       const base = raw.path.split('/').pop() ?? raw.path;
       const fonts = Array.isArray(raw.fonts) ? raw.fonts.filter((f: unknown): f is string => typeof f === 'string') : undefined;
+      const scriptOverrides = Array.isArray(raw.scriptOverrides)
+        ? raw.scriptOverrides.filter((override: unknown): override is { path: string; target: string } =>
+            !!override && typeof override === 'object'
+            && typeof (override as { path?: unknown }).path === 'string'
+            && typeof (override as { target?: unknown }).target === 'string')
+        : undefined;
       out.push({
         name: typeof raw.name === 'string' && raw.name ? raw.name : base.replace(/\.swf$/i, ''),
         path: raw.path,
         ...(fonts?.length ? { fonts } : {}),
+        ...(scriptOverrides?.length ? { scriptOverrides } : {}),
       });
     }
   }
@@ -60,6 +69,8 @@ export function swfFilesToFiles(files: SwfFile[], prefix: string): File[] {
       value: `${prefix}/${f.path}`,
       configurable: true,
     });
+    if (f.tagOrder != null) Object.defineProperty(file, '__swfTagOrder', { value: f.tagOrder, configurable: true });
+    if (f.targetSpriteId != null) Object.defineProperty(file, '__swfTargetSpriteId', { value: f.targetSpriteId, configurable: true });
     return file;
   });
 }
@@ -77,6 +88,27 @@ export async function fetchBundledSwf(
   const fileName = entry.path.split('/').pop() ?? `${entry.name}.swf`;
   const { doc, files } = await parseSwfBinary(buffer, fileName);
   const asFiles = swfFilesToFiles(files, entry.name);
+  for (const override of entry.scriptOverrides ?? []) {
+    try {
+      const source = await fetch(override.path);
+      if (!source.ok) throw new Error(`${override.path}: HTTP ${source.status}`);
+      const sourceText = await source.text();
+      const relativePath = `${entry.name}/${override.target.replace(/\\/g, '/').replace(/^\/+/, '')}`;
+      const index = asFiles.findIndex((file) => (file as File & { webkitRelativePath?: string }).webkitRelativePath === relativePath);
+      if (index < 0) {
+        console.warn(`bundled script override target not found: ${relativePath}`);
+        continue;
+      }
+      const replacement = new File([sourceText], override.target.split(/[\\/]/).pop() ?? 'DoAction.as', { type: 'text/plain' });
+      Object.defineProperty(replacement, 'webkitRelativePath', { value: relativePath, configurable: true });
+      const original = asFiles[index] as File & { __swfTagOrder?: number; __swfTargetSpriteId?: number };
+      if (original.__swfTagOrder != null) Object.defineProperty(replacement, '__swfTagOrder', { value: original.__swfTagOrder, configurable: true });
+      if (original.__swfTargetSpriteId != null) Object.defineProperty(replacement, '__swfTargetSpriteId', { value: original.__swfTargetSpriteId, configurable: true });
+      asFiles[index] = replacement;
+    } catch (e) {
+      console.warn(`bundled script override unavailable (${override.path}):`, e);
+    }
+  }
   // ttf fonts from the committed FFDec export
   for (const fontPath of entry.fonts ?? []) {
     try {

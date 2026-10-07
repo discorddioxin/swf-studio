@@ -20,8 +20,14 @@ browser" below), plus `npm i` inside this folder for `puppeteer-core`,
 | `browser.dev.mjs` | shared `launch()` (puppeteer-core, `pipe: true`). Every other script imports it; `$CHROME` / `$CHROME_LIBS` override the binary and libs. |
 | `probe-app.dev.mjs` | boots the app, picks the start mode, dumps player state + a screenshot. |
 | `probe-chooser.dev.mjs` | inspects the server-chooser `List` subtree (sizes, `getViewMetrics`, rows, prototype chains) — the "servers do not show up" investigation. |
+| `avm1-display.dev.mjs` | Puppeteer smoke-check of the Code Editor's AVM1 disassembly/raw-bytecode toggle using the bundled `OmnitureActionSource.swf`; blocks non-local requests and screenshots both views. |
+| `execute-console.dev.mjs [outDir]` | Checks Execute Logs/Req-Res/Problems tabs and asserts the removed Actions report tab stays absent while using bundled fish SWFs; blocks non-local requests. |
+| `execute-timelines.dev.mjs [outDir]` | Visually checks live frame/playhead updates, global pause, and silent AVM1 `ActionStop` execution with a bundled fish SWF; blocks non-local requests. |
 | `probe-shapes.dev.mjs` / `shapes-dev.mjs` | shape/fill dumps as rendered by our player. |
 | `flow.dev.mjs [outDir]` | walks server select → room select → in-game, screenshotting each step (`/tmp/flow`). |
+| `join-guard.dev.mjs [outDir]` | checks that Join is disabled before a server selection, then verifies server selection, room entry and back navigation; blocks non-local requests and screenshots each state. |
+| `sprite-tree.dev.mjs [outDir]` | visually exercises Sprite Tree inline rename, plus-button tag entry and project localStorage persistence; blocks non-local requests. |
+| `transpiler-names.dev.mjs [outDir]` | seeds the Workbench label for sprite 85, verifies its transpiled module/frame callback names, and captures the generated TypeScript; blocks non-local requests. |
 | `appshot.dev.mjs [outDir]` | screenshots the whole app shell (not just the canvas). |
 | `dbg.dev.mjs`, `errs.dev.mjs` | console/pageerror tails and runtime warnings from a boot. |
 | `verify-swfs.dev.mjs` | parses every bundled `.swf` and reports container-level problems. |
@@ -81,4 +87,5 @@ as part of `npm test`).
 | `__findStr.dev.test.ts` | searches all bundled SWFs for a string (e.g. a URL or a linkage id). |
 | `__peek.dev.test.ts` | prints the transpiled TypeScript of one FFDec `.as` file. |
 | `__dumpShapes.dev.test.ts`, `__shapeAudit.dev.test.ts` | shape/fill inventory across the bundled SWFs. |
+| `avm1-action-audit.dev.test.ts` | extracts and hashes every bundled fish SWF `avm1Actions` payload, retains per-SWF tag paths, and writes a static bytecode report under `debug/tools/e2e-output/avm1-action-audit/`. |
 | `__placeframe.dev.mjs` | standalone helper for the frame-placement dump. |

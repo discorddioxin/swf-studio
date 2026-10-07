@@ -38,6 +38,7 @@ export function TimelineView({
   const scroller = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState(0);
   const [vw, setVw] = useState(900);
+  const [stripHeight, setStripHeight] = useState(58);
 
   // States for drag-selection and right-click context menu
   const [dragStart, setDragStart] = useState<number | null>(null);
@@ -57,15 +58,22 @@ export function TimelineView({
   }, []);
 
   const count = timeline.frameCount;
+  const frameCellHeight = Math.max(34, stripHeight - 24);
+  const frameTop = Math.max(20, Math.round((stripHeight - frameCellHeight) / 2));
+  const frameBarHeight = Math.max(16, Math.min(96, Math.round(frameCellHeight * 0.56)));
   const clips = useMemo(() => api.project.clips.filter((c) => c.timelineId === timeline.id), [api.project.clips, timeline.id]);
   const markers = useMemo(() => api.project.markers.filter((m) => m.timelineId === timeline.id), [api.project.markers, timeline.id]);
 
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setVw(el.clientWidth));
+    const measure = () => {
+      setVw(el.clientWidth);
+      setStripHeight(Math.max(58, el.clientHeight));
+    };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setVw(el.clientWidth);
+    measure();
     return () => ro.disconnect();
   }, []);
 
@@ -103,7 +111,7 @@ export function TimelineView({
 
   return (
     <div
-      className="flex shrink-0 flex-col border-t border-zinc-800 bg-zinc-950"
+      className="flex min-h-0 flex-1 flex-col border-t border-zinc-800 bg-zinc-950"
       onMouseUp={() => setIsDragging(false)}
     >
       {/* transport */}
@@ -129,6 +137,16 @@ export function TimelineView({
         <Button variant={showAdvanced ? 'default' : 'ghost'} className="px-2 py-1 text-[10px]" onClick={() => setShowAdvanced((value) => !value)}>
           Options {showAdvanced ? '−' : '+'}
         </Button>
+        <label className="flex shrink-0 items-center gap-1.5 border-l border-zinc-800 pl-2 text-[10px] text-zinc-500" title="Change the width of each frame node">
+          <span>zoom</span>
+          <input
+            type="range" min={6} max={34} value={cw}
+            onChange={(e) => setCw(Number(e.target.value))}
+            className="w-20 accent-violet-500"
+            aria-label="Timeline frame zoom"
+          />
+          <span className="w-7 text-right tabular-nums text-zinc-400">{cw}px</span>
+        </label>
         {showAdvanced && <>
         <label className="flex items-center gap-1 text-xs text-zinc-500">
           fps
@@ -222,20 +240,12 @@ export function TimelineView({
           )}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-zinc-500">
-            {PRIORITY.map((k) => (
-              <span key={k} className="flex items-center gap-1">
-                <span className={cn('h-2 w-2 rounded-sm', EVENT_COLOR[k].dot)} />{EVENT_COLOR[k].label}
-              </span>
-            ))}
-          </div>
-          <input
-            type="range" min={6} max={34} value={cw}
-            onChange={(e) => setCw(Number(e.target.value))}
-            className="w-20 accent-violet-500"
-            title="Frame zoom"
-          />
+        <div className="ml-auto flex items-center gap-2 text-[10px] uppercase tracking-wide text-zinc-500">
+          {PRIORITY.map((k) => (
+            <span key={k} className="flex items-center gap-1">
+              <span className={cn('h-2 w-2 rounded-sm', EVENT_COLOR[k].dot)} />{EVENT_COLOR[k].label}
+            </span>
+          ))}
         </div>
         </>}
       </div>
@@ -243,10 +253,11 @@ export function TimelineView({
       {/* frame strip */}
       <div
         ref={scroller}
+        data-timeline-frame-strip="true"
         onScroll={(e) => setScroll(e.currentTarget.scrollLeft)}
-        className="relative overflow-x-auto overflow-y-hidden border-t border-zinc-900 bg-zinc-950 pb-1"
+        className="relative min-h-[58px] flex-1 overflow-x-auto overflow-y-hidden border-t border-zinc-900 bg-zinc-950 pb-1"
       >
-        <div className="relative" style={{ width: count * cw, height: 58 }}>
+        <div className="relative" style={{ width: count * cw, height: stripHeight }}>
           {/* clip bands (possibly wrapped) */}
           {clips.map((c, i) => {
             const sIdx = (c.start - startFrameOffset + count) % count;
@@ -282,7 +293,7 @@ export function TimelineView({
               return (
                 <div
                   className="pointer-events-none absolute border-x-2 border-violet-500/70 bg-violet-500/10"
-                  style={{ left: sIdx * cw, width: (eIdx - sIdx + 1) * cw, top: 18, height: 40 }}
+                  style={{ left: sIdx * cw, width: (eIdx - sIdx + 1) * cw, top: frameTop - 2, height: frameCellHeight + 4 }}
                 />
               );
             } else {
@@ -290,11 +301,11 @@ export function TimelineView({
                 <>
                   <div
                     className="pointer-events-none absolute border-l-2 border-violet-500/70 bg-violet-500/10"
-                    style={{ left: sIdx * cw, width: (count - sIdx) * cw, top: 18, height: 40 }}
+                    style={{ left: sIdx * cw, width: (count - sIdx) * cw, top: frameTop - 2, height: frameCellHeight + 4 }}
                   />
                   <div
                     className="pointer-events-none absolute border-r-2 border-violet-500/70 bg-violet-500/10"
-                    style={{ left: 0, width: (eIdx + 1) * cw, top: 18, height: 40 }}
+                    style={{ left: 0, width: (eIdx + 1) * cw, top: frameTop - 2, height: frameCellHeight + 4 }}
                   />
                 </>
               );
@@ -312,6 +323,7 @@ export function TimelineView({
             return (
               <div
                 key={i}
+                data-frame-index={i}
                 onMouseDown={(e) => {
                   if (e.button === 0) { // left click starts drag
                     setDragStart(i);
@@ -347,10 +359,13 @@ export function TimelineView({
                   "absolute cursor-pointer select-none rounded transition-all",
                   isHighlighted ? "bg-violet-500/10 ring-1 ring-violet-500/30" : ""
                 )}
-                style={{ left: idx * cw, top: 20, width: cw - 1, height: 34 }}
+                style={{ left: idx * cw, top: frameTop, width: cw - 1, height: frameCellHeight }}
                 title={frameTooltip(timeline, i)}
               >
-                <div className={cn('h-4 w-full rounded-sm transition-colors', bg, frame === i && 'ring-2 ring-white', isHighlighted && 'brightness-125')} />
+                <div
+                  className={cn('w-full rounded-sm transition-colors', bg, frame === i && 'ring-2 ring-white', isHighlighted && 'brightness-125')}
+                  style={{ height: frameBarHeight }}
+                />
                 <div className="mt-0.5 flex h-2 items-start justify-center gap-[1px]">
                   {PRIORITY.filter((k) => kinds.has(k) && k !== top).map((k) => (
                     <span key={k} className={cn('h-1 w-1 rounded-full', EVENT_COLOR[k].dot)} />
@@ -378,7 +393,7 @@ export function TimelineView({
             );
           })}
           {/* playhead */}
-          <div className="pointer-events-none absolute top-4 w-[2px] bg-white/80" style={{ left: playheadIdx * cw + (cw - 1) / 2, height: 42 }} />
+          <div className="pointer-events-none absolute w-[2px] bg-white/80" style={{ left: playheadIdx * cw + (cw - 1) / 2, top: frameTop - 4, height: frameCellHeight + 8 }} />
         </div>
       </div>
 

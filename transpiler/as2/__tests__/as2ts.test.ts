@@ -170,7 +170,96 @@ describe('project mapping', () => {
     expect(classify('scripts/%3Cdefault package%3E/themap.as')).toEqual({ kind: 'initByName', name: 'themap' });
     expect(classify('scripts/DefineSprite_10_fisher/frame_1/DoAction.as')).toEqual({ kind: 'frame', timeline: 10, frame: 1 });
     expect(classify('scripts/DefineSprite_9/DoInitAction.as')).toEqual({ kind: 'init', timeline: 9 });
+    expect(classify('scripts/frame_1/DoInitAction_2.as')).toEqual({ kind: 'init', timeline: 0 });
     expect(classify('scripts/__Packages/com/x/Foo.as')).toEqual({ kind: 'class' });
+  });
+
+  it('retains DoInitAction targets and SWF tag order in the runnable program', () => {
+    const r = transpileProject([
+      { path: 'scripts/frame_1/DoInitAction.as', content: 'trace("define map_engine");', tagOrder: 1090, targetSpriteId: 29 },
+      { path: 'scripts/frame_1/DoInitAction_2.as', content: 'Object.registerClass("themap", map_engine);', tagOrder: 1091, targetSpriteId: 28 },
+    ]);
+    const index = r.files.get('index.ts')!;
+    expect(index).toContain('{ order: 1090, targetSpriteId: 29, run: initAction_0 }');
+    expect(index).toContain('{ order: 1091, targetSpriteId: 28, run: initAction_1 }');
+    expect(index.indexOf('order: 1090')).toBeLessThan(index.indexOf('order: 1091'));
+    expect(r.files.has('init/action_1.ts')).toBe(true);
+    expect(r.files.has('init/action_2.ts')).toBe(true);
+  });
+
+  it('uses Workbench character names and frame labels for generated timeline code', () => {
+    const result = transpileProject([
+      { path: 'scripts/DefineSprite_85/frame_1/DoAction.as', content: 'trace("idle");' },
+      { path: 'scripts/DefineSprite_85/frame_2/DoAction.as', content: 'trace("throw");' },
+      { path: 'scripts/DefineSprite_85/frame_3/DoAction.as', content: 'trace("release");' },
+      { path: 'scripts/DefineSprite_86/frame_1/DoAction.as', content: 'trace("other rod");' },
+    ], {
+      timelineMetadata: new Map([
+        [85, { name: 'rod 3', frameLabels: new Map([[1, 'idle'], [2, 'throw'], [3, 'release']]) }],
+        [86, { name: 'rod 3' }],
+      ]),
+    });
+    const rod = result.files.get('timelines/rod_3.ts')!;
+    const duplicateRod = result.files.get('timelines/rod_3_86.ts')!;
+    const index = result.files.get('index.ts')!;
+
+    expect(rod).toContain('Workbench timeline name: "rod 3" (sprite 85)');
+    expect(rod).toContain('export const frameLabels');
+    expect(rod).toContain('const rod_3_idle = function');
+    expect(rod).toContain('const rod_3_throw = function');
+    expect(rod).toContain('const rod_3_release = function');
+    expect(rod).toContain('1: rod_3_idle,');
+    expect(rod).toContain('2: rod_3_throw,');
+    expect(rod).toContain('3: rod_3_release,');
+    expect(duplicateRod).toContain('const rod_3_frame_1 = function');
+    expect(index).toContain("import * as timeline_rod_3 from './timelines/rod_3';");
+    expect(index).toContain("import * as timeline_rod_3_86 from './timelines/rod_3_86';");
+    expect(index).toContain('85: timeline_rod_3, // "rod 3"');
+    expect(index).toContain('86: timeline_rod_3_86, // "rod 3"');
+  });
+
+  it('deduplicates identical AVM1 callbacks without embedding per-call report metadata', () => {
+    const action = 'avm1Actions("BwA=");';
+    const r = transpileProject([
+      ...[1, 5, 10, 15].map((frame) => ({
+        path: `scripts/DefineSprite_155/frame_${frame}/DoAction.as`, content: action,
+      })),
+      { path: 'scripts/DefineSprite_165/frame_1/DoAction.as', content: action },
+    ]);
+    const repeated = r.files.get('timelines/sprite_155.ts')!;
+    const single = r.files.get('timelines/sprite_165.ts')!;
+
+    const sharedCallback = repeated.match(/const (\$sharedFrameAction\d+) = function/)?.[1];
+    expect(sharedCallback).toBeTruthy();
+    expect(repeated.match(/BwA=/g)).toHaveLength(1);
+    expect(repeated).toContain('$rt.avm1Actions($t, "BwA=")');
+    expect(repeated).not.toContain('$rt.avm1Actions($t, "BwA=", "scripts/');
+    for (const frame of [1, 5, 10, 15]) expect(repeated).toContain(`  ${frame}: ${sharedCallback},`);
+    expect(single).toContain('$rt.avm1Actions($t, "BwA=")');
+
+    const named = transpileProject([
+      ...[1, 5, 10, 15].map((frame) => ({
+        path: `scripts/DefineSprite_155/frame_${frame}/DoAction.as`, content: action,
+      })),
+    ], {
+      timelineMetadata: new Map([[155, {
+        name: 'rod 3',
+        frameLabels: new Map([[1, 'idle'], [5, 'throw'], [10, 'release']]),
+      }]]),
+    }).files.get('timelines/rod_3.ts')!;
+    expect(named.match(/BwA=/g)).toHaveLength(1);
+    expect(named).toContain('const rod_3_idle_shared = function');
+    expect(named).toContain('1: rod_3_idle_shared,');
+    expect(named).toContain('5: rod_3_idle_shared,');
+    expect(named).toContain('10: rod_3_idle_shared,');
+    expect(named).toContain('15: rod_3_idle_shared,');
+
+    const traceAction = 'trace("shared");';
+    const ordinary = transpileProject([1, 5, 10, 15].map((frame) => ({
+      path: `scripts/DefineSprite_155/frame_${frame}/DoAction.as`, content: traceAction,
+    }))).files.get('timelines/sprite_155.ts')!;
+    expect(ordinary.match(/trace\("shared"\)/g)).toHaveLength(1);
+    expect(ordinary.match(/:\s*\$sharedFrameAction1,/g)).toHaveLength(4);
   });
 
   const project = [
@@ -184,6 +273,17 @@ describe('project mapping', () => {
     { path: 'scripts/__Packages/com/game/Lobby.as', content: 'import com.game.Fish;\nclass com.game.Lobby { private var host:MovieClip; var fish:Array; function Lobby(h:MovieClip) { host = h; fish = []; } function join():Void { var f:Fish = null; fish.push(f); Fish.prototype; } }' },
     { path: 'scripts/broken/frame_2/DoAction.as', content: 'var = ;' },
   ];
+
+  it('retains include source paths in the module banner without passing report metadata at runtime', () => {
+    const project = transpileProject([
+      { path: 'scripts/frame_1/DoAction.as', content: '#include "shared.as"' },
+      { path: 'scripts/frame_1/shared.as', content: 'avm1Actions("BwA=");' },
+    ]);
+    const root = project.files.get('timelines/root.ts')!;
+    expect(root.split('\n').slice(0, 2).join('\n')).toContain('scripts/frame_1/shared.as');
+    expect(root).toContain('$rt.avm1Actions($t, "BwA=")');
+    expect(root).not.toContain('scripts/frame_1/shared.as", 1');
+  });
 
   it('generates timelines, handlers, classes and an index', () => {
     const r = transpileProject(project);
@@ -206,7 +306,7 @@ describe('project mapping', () => {
 
   it('produces TypeScript that type-checks against the runtime', () => {
     const r = transpileProject(project, { runtime: '../runtime/as2' });
-    const repo = resolve(__dirname, '../../../..');
+    const repo = resolve(__dirname, '../../..');
     const dir = mkdtempSync(join(tmpdir(), 'as2ts-check-'));
     try {
       for (const [p, c] of r.files) {

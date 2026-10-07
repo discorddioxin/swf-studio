@@ -59,7 +59,12 @@ export function ingestFiles(fileList: File[]): AssetBundle {
     const category: AssetCategory = CATEGORY_BY_DIR[dir] ?? 'other';
     // buttons live in buttons/DefineButton2_23/<state>.png — id comes from the folder
     const idSource = category === 'buttons' && normalizedParts.length > 2 ? normalizedParts[1] : name;
-    files.push({ path, name, ext, category, file: f, guessedId: guessId(idSource) });
+    const swfMeta = f as File & { __swfTagOrder?: number; __swfTargetSpriteId?: number };
+    files.push({
+      path, name, ext, category, file: f, guessedId: guessId(idSource),
+      ...(swfMeta.__swfTagOrder != null ? { tagOrder: swfMeta.__swfTagOrder } : {}),
+      ...(swfMeta.__swfTargetSpriteId != null ? { targetSpriteId: swfMeta.__swfTargetSpriteId } : {}),
+    });
   }
 
   const byPath = new Map<string, AssetFile>();
@@ -281,8 +286,23 @@ export async function hydrateActionScriptSources(doc: SwfDocument, bundle: Asset
       for (const event of frame.events) {
         if (event.kind !== 'action') continue;
         const refs = [event.externalActions, ...(event.externalActionCandidates ?? [])].filter(Boolean) as string[];
-        const file = resolveActionScriptFile(bundle, timeline, frame.index, event.tagType, refs);
+        if (event.targetSpriteId != null) {
+          const exportName = doc.characters.get(event.targetSpriteId)?.exportName;
+          // Newer FFDec versions export a sprite's DoInitAction by linkage name
+          // rather than by character id (for example, `<default package>/themap.as`).
+          if (exportName && !/[/.]/.test(exportName)) {
+            const encoded = encodeURIComponent(exportName);
+            refs.unshift(`scripts/%3Cdefault package%3E/${encoded}.as`, `scripts/<default package>/${exportName}.as`);
+          }
+        }
+        const file = event.targetSpriteId != null
+          ? refs.map((reference) => resolveAssetFile(bundle, reference)).find((hit) => hit?.ext === 'as')
+          : resolveActionScriptFile(bundle, timeline, frame.index, event.tagType, refs);
         if (!file) continue;
+        if (/^DoInitAction/i.test(event.tagType)) {
+          if (event.tagOrder != null) file.tagOrder = event.tagOrder;
+          if (event.targetSpriteId != null) file.targetSpriteId = event.targetSpriteId;
+        }
         const key = normalizeAssetPath(file.path);
         let source = loaded.get(key);
         if (source == null) {
@@ -375,6 +395,7 @@ export class AssetCache {
 
   private patchSvgResources(text: string): string {
     return text.replace(/(href|xlink:href)\s*=\s*["']([^"']+)["']/g, (match, attr, ref) => {
+      if (ref.startsWith('data:')) return match;
       const parts = ref.split('/');
       const filename = parts[parts.length - 1];
       const filenameLower = filename.toLowerCase();

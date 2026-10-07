@@ -29,6 +29,7 @@ export function Inspector(props: {
   flattenedSprites: FlattenedSprite[];
   flatteningId: number | null;
   onFlattenSprite: (characterId: number) => void;
+  onOpenCode: () => void;
 }) {
   const [tab, setTab] = useState<'label' | 'frame' | 'clips' | 'actors' | 'code' | 'export'>('label');
   useEffect(() => {
@@ -62,17 +63,7 @@ export function Inspector(props: {
           {tab === 'frame' && <FramePanel {...props} />}
           {tab === 'clips' && <ClipsPanel {...props} />}
           {tab === 'actors' && <ActorPanel {...props} />}
-          {tab === 'code' && (
-            <CodePanel
-              {...props}
-              onSelectAsset={(assetId) => {
-                if (assetId != null) {
-                  props.onSelect(assetId);
-                  setTab('label');
-                }
-              }}
-            />
-          )}
+          {tab === 'code' && <CodePanel assets={props.assets} onOpenCode={props.onOpenCode} />}
           {tab === 'export' && <ExportPanel {...props} />}
         </ErrorBoundary>
       </div>
