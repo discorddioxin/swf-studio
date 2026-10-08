@@ -26,6 +26,7 @@ export interface TimelineNameMetadata {
 export type TimelineNameIndex = ReadonlyMap<number, TimelineNameMetadata> | Readonly<Record<number, TimelineNameMetadata>>;
 
 export interface ProjectOptions {
+  avm1?: 'decode' | 'interpret';
   /** module specifier the generated code imports its runtime from (default "@/runtime/as2") */
   runtime?: string;
   /** Optional names/labels from the Workbench SWF document and project annotations. */
@@ -208,7 +209,7 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
   }
   for (const { decl, source } of classDecls) {
     const module = classes.get(decl.name)!.module;
-    const em = new ModuleEmitter({ runtime, selfModule: module, classes });
+    const em = new ModuleEmitter({ runtime, selfModule: module, classes, avm1: options.avm1 });
     // `import` statements of the file apply to the class
     const imports = source.body!.filter((s) => s.k === 'import');
     const code = em.classModule({ ...decl, members: decl.members.map((m) => ({ ...m, body: [...imports, ...m.body] })) });
@@ -277,7 +278,7 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
     const binding = timelineBindings.get(id)!;
     const { module, displayName, metadata } = binding;
     const stem = nameSegment(displayName ?? (id === 0 ? 'main_timeline' : `sprite_${id}`), id === 0 ? 'main_timeline' : `sprite_${id}`);
-    const em = new ModuleEmitter({ runtime, selfModule: module, classes });
+    const em = new ModuleEmitter({ runtime, selfModule: module, classes, avm1: options.avm1 });
     const diags: Diagnostic[] = [];
     const sources: string[] = [];
     const parts: string[] = [];
@@ -393,7 +394,7 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
   const buttonModules: [number, string][] = [];
   for (const [id, list] of [...buttons].sort((a, b) => a[0] - b[0])) {
     const module = `buttons/button_${id}`;
-    const em = new ModuleEmitter({ runtime, selfModule: module, classes });
+    const em = new ModuleEmitter({ runtime, selfModule: module, classes, avm1: options.avm1 });
     em.useRuntime('AS2Handler', true);
     const diags: Diagnostic[] = [];
     const sources: string[] = [];
@@ -407,7 +408,7 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
   const initModules: [string, string][] = [];
   for (const [name, list] of [...initsByName].sort((a, b) => natural(a[0], b[0]))) {
     const module = `init/${name.replace(/[^\w$]/g, '_')}`;
-    const em = new ModuleEmitter({ runtime, selfModule: module, classes });
+    const em = new ModuleEmitter({ runtime, selfModule: module, classes, avm1: options.avm1 });
     const diags: Diagnostic[] = [];
     for (const p of list) if (p.error) diags.push({ level: 'error', message: `${p.file.path}: ${p.error}`, line: p.line });
     const body = list.flatMap((p) => p.body ?? []);
@@ -433,7 +434,7 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
   const initActionModules: { module: string; p: Parsed; order: number; targetSpriteId?: number; linkageName?: string }[] = [];
   initActionSources.forEach((p, index) => {
     const module = `init/action_${index + 1}`;
-    const em = new ModuleEmitter({ runtime, selfModule: module, classes });
+    const em = new ModuleEmitter({ runtime, selfModule: module, classes, avm1: options.avm1 });
     const diags: Diagnostic[] = [];
     const body = (p.body ?? []).filter((s) => s.k !== 'on' && s.k !== 'onClipEvent');
     let fn = em.timelineFunction(body);
@@ -477,6 +478,43 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
   idx.push('');
   idx.push('export default program;');
   files.set('index.ts', banner('as2ts project index') + idx.join('\n') + '\n');
+
+  // Actor entry points are a migration layer, not another timeline scheduler.
+  // Existing Execute/index.ts keep using the exact same frame/placement mapping.
+  for (const binding of timelineModules) {
+    const { id, module, displayName, metadata } = binding;
+    const slug = module.slice('timelines/'.length);
+    const className = slug.split('_').filter(Boolean).map((part) => part[0].toUpperCase() + part.slice(1)).join('') + 'Actor';
+    const frames = [...(timelines.get(id)?.frames.keys() ?? [])].sort((a, b) => a - b);
+    const used = new Set<string>();
+    const methods = frames.map((frame) => {
+      const label = frameLabelAt(metadata, frame);
+      const method = uniqueSegment(`action_${label ? nameSegment(label, `frame_${frame}`) : `frame_${frame}`}`, used, String(frame));
+      return `  ${method}(): void { this.runFrameAction(${frame}); }`;
+    });
+    report.push({ source: module + '.ts', target: `actors/${slug}.ts`, role: 'actor migration', diagnostics: [] });
+    files.set(`actors/${slug}.ts`, banner(`actor migration entry for ${module}`) + [
+      `import { TimelineActor, type AS2Clip } from ${JSON.stringify(runtime)};`,
+      `import * as behavior from '../${module}';`,
+      '',
+      '// Explicit behavior methods: do not dispatch alongside the legacy frame scheduler.',
+      '// Move decoded logic from the timeline module here as you migrate your game.',
+      `export class ${/^\d/.test(className) ? 'Sprite' : ''}${className} extends TimelineActor {`,
+      `  constructor(sprite: AS2Clip) {`,
+      `    super(${JSON.stringify(displayName ?? (id === 0 ? 'Root' : `Sprite ${id}`))}, sprite, behavior, ${JSON.stringify(Object.fromEntries(timelineFrameLabels(metadata)))});`,
+      '  }',
+      '',
+      ...methods,
+      '',
+      '  override update(deltaSeconds: number): void {',
+      '    // Add game behavior here using this.sprite, this.animation and this.graphics.',
+      '    // The host owns animation timing; deltaSeconds is for your game logic.',
+      '    super.update(deltaSeconds);',
+      '  }',
+      '}',
+      '',
+    ].join('\n'));
+  }
 
   const summary = renderSummary(report, input.length);
   files.set('as2ts-report.md', summary);

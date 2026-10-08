@@ -75,8 +75,8 @@ export function toHex(bytes: Uint8Array): string {
   return out;
 }
 
-/** The studio executes AVM1 bytecode instead of decompiling it (runtime/as2/avm1.ts):
- * every action stream becomes one call to the interpreter. */
+/** Preserve the exact AVM1 bytes in the source layer. The transpiler decodes
+ * supported blocks to TypeScript and retains this wrapper only for fallbacks. */
 export function avm1ActionSource(bytes: Uint8Array): string {
   return `avm1Actions(${JSON.stringify(bytesToBase64(bytes))});`;
 }

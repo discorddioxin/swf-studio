@@ -1,5 +1,8 @@
 // as2ts – ActionScript 1/2 -> TypeScript transpiler (no DOM dependencies).
 
+export { decodeAVM1Actions } from './avm1';
+export type { ActionDecodeResult, ActionDecodeOptions } from './avm1';
+
 export { tokenize, LexError } from './lexer';
 export { parseProgram, ParseError } from './parser';
 export { ModuleEmitter, relativeModule } from './emit';
@@ -16,9 +19,9 @@ import { parseProgram } from './parser';
  * - A file containing an AS2 class becomes a class module.
  * - Anything else becomes a module exporting `script`, a timeline function (`this` = the clip).
  */
-export function transpileScript(source: string, options: { runtime?: string; module?: string } = {}) {
+export function transpileScript(source: string, options: { runtime?: string; module?: string; avm1?: 'decode' | 'interpret' } = {}) {
   const body = parseProgram(source);
-  const em = new ModuleEmitter({ runtime: options.runtime ?? '@/runtime/as2', selfModule: options.module ?? 'script' });
+  const em = new ModuleEmitter({ runtime: options.runtime ?? '@/runtime/as2', selfModule: options.module ?? 'script', avm1: options.avm1 });
   const cls = body.find((s) => s.k === 'class');
   if (cls && cls.k === 'class') {
     const imports = body.filter((s) => s.k === 'import');

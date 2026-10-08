@@ -55,7 +55,7 @@ it('runs the full 4-step multiplayer flow with MockServer and bundled OmnitureAc
   const sharedFrameModule = build.files.get('timelines/sprite_155.ts');
   const singleFrameModule = build.files.get('timelines/sprite_165.ts');
   expect(sharedFrameModule).toBeTruthy();
-  expect(sharedFrameModule!.match(/BwA=/g)).toHaveLength(1);
+  expect(sharedFrameModule!.match(/\$t\.stop\(\)/g)).toHaveLength(1);
   const sharedCallbacks = [1, 5, 10, 15].map((frame) => {
     const entry = sharedFrameModule!.split('\n').find((line) => line.trimStart().startsWith(`${frame}:`));
     return entry?.slice(entry.indexOf(':') + 1).trim().replace(/,$/, '');
@@ -63,7 +63,7 @@ it('runs the full 4-step multiplayer flow with MockServer and bundled OmnitureAc
   expect(sharedCallbacks[0]?.startsWith('$sharedFrameAction')).toBe(true);
   expect(new Set(sharedCallbacks).size).toBe(1);
   expect(singleFrameModule).toBeTruthy();
-  expect(singleFrameModule!.match(/BwA=/g)).toHaveLength(1);
+  expect(singleFrameModule!.match(/\$t\.stop\(\)/g)).toHaveLength(1);
 
   const builtSwfs: string[] = [];
   const externalBuildErrors: string[] = [];

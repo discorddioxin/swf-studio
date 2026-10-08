@@ -8,7 +8,10 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { runActionsBase64, setAvm1Env, takeAvm1Warnings, type Avm1Warning } from './avm1';
+import { avm1Semantics, runActionsBase64, setAvm1Env, takeAvm1Warnings, type Avm1Warning } from './avm1';
+
+export { Actor, TimelineActor, flashActorPorts } from './actor';
+export type { ActorPorts, SpritePort, AnimationPort, GraphicsPort } from './actor';
 
 // ------------------------------------------------------------------- types
 
@@ -245,6 +248,7 @@ const sink: any = new Proxy(Object.create(null), { set: () => true, get: () => u
 
 export const $rt = {
   sink,
+  avm1: avm1Semantics,
 
   /** Executes the SWF's original AVM1 stream without constructing per-call action reports. */
   avm1Actions(from: AS2Clip, base64: string): void {

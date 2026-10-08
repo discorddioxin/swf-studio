@@ -231,11 +231,11 @@ describe('project mapping', () => {
 
     const sharedCallback = repeated.match(/const (\$sharedFrameAction\d+) = function/)?.[1];
     expect(sharedCallback).toBeTruthy();
-    expect(repeated.match(/BwA=/g)).toHaveLength(1);
-    expect(repeated).toContain('$rt.avm1Actions($t, "BwA=")');
+    expect(repeated.match(/\$t\.stop\(\)/g)).toHaveLength(1);
+    expect(repeated).toContain('$t.stop();');
     expect(repeated).not.toContain('$rt.avm1Actions($t, "BwA=", "scripts/');
     for (const frame of [1, 5, 10, 15]) expect(repeated).toContain(`  ${frame}: ${sharedCallback},`);
-    expect(single).toContain('$rt.avm1Actions($t, "BwA=")');
+    expect(single).toContain('$t.stop();');
 
     const named = transpileProject([
       ...[1, 5, 10, 15].map((frame) => ({
@@ -247,7 +247,7 @@ describe('project mapping', () => {
         frameLabels: new Map([[1, 'idle'], [5, 'throw'], [10, 'release']]),
       }]]),
     }).files.get('timelines/rod_3.ts')!;
-    expect(named.match(/BwA=/g)).toHaveLength(1);
+    expect(named.match(/\$t\.stop\(\)/g)).toHaveLength(1);
     expect(named).toContain('const rod_3_idle_shared = function');
     expect(named).toContain('1: rod_3_idle_shared,');
     expect(named).toContain('5: rod_3_idle_shared,');
@@ -263,6 +263,7 @@ describe('project mapping', () => {
   });
 
   const project = [
+    { path: 'scripts/frame_3/DoAction.as', content: 'avm1Actions("lg4AAAAHAQAAAABfcm9vdAAclgYAAG1haW4ATpYMAABzZXRNZXNzYWdlAFIXAA==");' },
     { path: 'scripts/frame_1/DoAction.as', content: 'stop();\nvar lobby = new com.game.Lobby(this);\nObject.registerClass("fishClip", com.game.Fish);' },
     { path: 'scripts/frame_1/DoAction_2.as', content: 'import com.game.Fish;\nvar f:Fish = Fish(attachMovie("fishClip", "f1", 1));' },
     { path: 'scripts/DefineSprite_5/frame_10/DoAction.as', content: '_parent.gotoAndStop(1);\n#include "shared.as"' },
@@ -281,14 +282,14 @@ describe('project mapping', () => {
     ]);
     const root = project.files.get('timelines/root.ts')!;
     expect(root.split('\n').slice(0, 2).join('\n')).toContain('scripts/frame_1/shared.as');
-    expect(root).toContain('$rt.avm1Actions($t, "BwA=")');
+    expect(root).toContain('$t.stop();');
     expect(root).not.toContain('scripts/frame_1/shared.as", 1');
   });
 
   it('generates timelines, handlers, classes and an index', () => {
     const r = transpileProject(project);
     expect([...r.files.keys()].sort()).toEqual([
-      'as2ts-report.md', 'buttons/button_7.ts', 'classes/com/game/Fish.ts', 'classes/com/game/Lobby.ts',
+      'actors/root.ts', 'actors/sprite_5.ts', 'as2ts-report.md', 'buttons/button_7.ts', 'classes/com/game/Fish.ts', 'classes/com/game/Lobby.ts',
       'index.ts', 'timelines/root.ts', 'timelines/sprite_5.ts',
     ]);
     const root = r.files.get('timelines/root.ts')!;
@@ -320,7 +321,7 @@ describe('project mapping', () => {
         expect(() => transform(c, { transforms: ['typescript', 'imports'] })).not.toThrow();
       }
       mkdirSync(join(dir, 'runtime', 'as2'), { recursive: true });
-      for (const file of ['index.ts', 'avm1.ts']) {
+      for (const file of ['index.ts', 'avm1.ts', 'actor.ts']) {
         writeFileSync(join(dir, 'runtime', 'as2', file), readFileSync(join(repo, 'src/runtime/as2', file), 'utf8'));
       }
       writeFileSync(join(dir, 'tsconfig.json'), JSON.stringify({

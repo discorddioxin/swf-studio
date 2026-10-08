@@ -19,16 +19,18 @@ Options:
   -o, --out <dir>      output folder (default: ./as2ts-out)
   --runtime <module>   module the generated code imports its runtime from
                        (default: @/runtime/as2 – the runtime inside swf-studio)
+  --interpret-avm1     retain all AVM1 bytecode instead of decoding supported blocks
   --strict             exit with code 1 if any script failed to parse
   -h, --help           show this help
 `;
 
 function parseArgs(argv: string[]) {
-  const opts = { input: '', out: '', runtime: '@/runtime/as2', strict: false, help: false };
+  const opts = { input: '', out: '', runtime: '@/runtime/as2', strict: false, help: false, avm1: 'decode' as 'decode' | 'interpret' };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-o' || a === '--out') opts.out = argv[++i] ?? '';
     else if (a === '--runtime') opts.runtime = argv[++i] ?? opts.runtime;
+    else if (a === '--interpret-avm1') opts.avm1 = 'interpret';
     else if (a === '--strict') opts.strict = true;
     else if (a === '-h' || a === '--help') opts.help = true;
     else if (!opts.input) opts.input = a;
@@ -72,7 +74,7 @@ async function main() {
 
   // single file
   if (statSync(input).isFile() && /\.as$/i.test(input)) {
-    const { code, diagnostics } = transpileScript(readFileSync(input, 'utf8'), { runtime: opts.runtime });
+    const { code, diagnostics } = transpileScript(readFileSync(input, 'utf8'), { runtime: opts.runtime, avm1: opts.avm1 });
     for (const d of diagnostics) process.stderr.write(`${d.level}${d.line ? ` (line ${d.line})` : ''}: ${d.message}\n`);
     if (opts.out) {
       const target = opts.out.endsWith('.ts') ? resolve(opts.out) : join(resolve(opts.out), input.replace(/^.*[\\/]/, '').replace(/\.as$/i, '.ts'));
@@ -85,7 +87,7 @@ async function main() {
 
   const files = statSync(input).isDirectory() ? walk(input) : await readZip(input);
   if (!files.length) throw new Error(`No .as files found in ${input}`);
-  const result = transpileProject(files, { runtime: opts.runtime });
+  const result = transpileProject(files, { runtime: opts.runtime, avm1: opts.avm1 });
   const outDir = resolve(opts.out || 'as2ts-out');
   writeTree(outDir, result.files);
 

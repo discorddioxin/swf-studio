@@ -2,6 +2,8 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AssetBundle, Project, SwfDocument } from '../types';
 import { useAS2Project } from '../engine/as2/useAS2Build';
 import { buildWorkbenchTimelineMetadata } from '../engine/as2/workbenchMetadata';
+import { triggerDownload } from '../lib/exporter';
+import { createTypeScriptArchive } from '../lib/typescriptExport';
 import { disassembleAVM1Source } from '../lib/avm1Disassembly';
 import { cn } from '../utils/cn';
 
@@ -108,6 +110,8 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
 }) {
   const timelineMetadata = useMemo(() => buildWorkbenchTimelineMetadata(doc, project), [doc, project]);
   const projectState = useAS2Project(assets, timelineMetadata);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
   const [mode, setMode] = useState<ProjectMode>('typescript');
   const [area, setArea] = useState<TypeScriptArea>('application');
   const [search, setSearch] = useState('');
@@ -173,6 +177,17 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
     : 0;
   const projectTitle = projectName.replace(/\.(?:xml|swf)$/i, '') || 'Untitled project';
 
+  const exportTypeScript = async () => {
+    if (projectState.status !== 'ready' || exporting) return;
+    setExporting(true); setExportError('');
+    try {
+      const blob = await createTypeScriptArchive(projectState.project);
+      triggerDownload(blob, `${projectName.replace(/[^\w.-]+/g, '_')}-typescript.zip`);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : String(error));
+    } finally { setExporting(false); }
+  };
+
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[#0b0d12] text-zinc-200" aria-label="Code Editor">
       <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[#252936] bg-[#10131b] px-4 py-2.5">
@@ -193,9 +208,14 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
           {mode === 'typescript' && projectState.status === 'ready' && (
             <span className="hidden text-[10px] text-zinc-500 lg:inline">{generatedFileCount} generated files · {issueCount} transpiler diagnostics</span>
           )}
+          <button type="button" disabled={projectState.status !== 'ready' || exporting} onClick={exportTypeScript}
+            className="rounded-md bg-violet-500/15 px-3 py-1.5 text-xs font-semibold text-violet-200 ring-1 ring-violet-400/20 disabled:opacity-40">
+            {exporting ? 'Exporting…' : 'Export TypeScript'}
+          </button>
           {onRun && <button type="button" onClick={onRun} className="rounded-md bg-sky-500/15 px-3 py-1.5 text-xs font-semibold text-sky-200 ring-1 ring-sky-400/20 transition hover:bg-sky-500/25">Run in Execute <span aria-hidden="true">↗</span></button>}
         </div>
       </header>
+      {exportError && <div role="alert" className="px-4 py-2 text-xs text-rose-300">TypeScript export failed: {exportError}</div>}
 
       <div className="flex shrink-0 items-center gap-3 border-b border-[#252936] bg-[#0d1017] px-4 py-2">
         {mode === 'typescript' ? (
@@ -292,7 +312,7 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
           </div>
           {mode === 'actionscript' && activeAVM1?.blockCount ? (
             <div role="note" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-amber-400/15 bg-amber-400/[0.04] px-4 py-2 text-[11px] text-amber-100/80">
-              <span>Raw SWFs store AVM1 bytecode, not recoverable .as text. This is a best-effort disassembly; Execute keeps the original bytes.</span>
+              <span>Raw SWFs store AVM1 bytecode, not recoverable .as text. This is a best-effort disassembly. The TypeScript project decodes supported blocks into editable logic; unsupported blocks retain the original bytes.</span>
               <button
                 type="button"
                 aria-pressed={showRawActionBytes}
@@ -302,7 +322,7 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
             </div>
           ) : mode === 'typescript' && area === 'application' && activeTSHasAVM1 ? (
             <div role="note" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-sky-400/15 bg-sky-400/[0.04] px-4 py-2 text-[11px] text-sky-100/80">
-              <span>avm1Actions(base64) carries the SWF’s original AVM1 bytes for faithful execution by the interpreter.</span>
+              <span>This module contains an AVM1 interpreter fallback. See its byte-offset diagnostic for the unsupported construct; the original bytes are retained to avoid a partial translation.</span>
               <button
                 type="button"
                 onClick={() => { setMode('actionscript'); setShowRawActionBytes(false); }}
