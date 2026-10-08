@@ -33,6 +33,7 @@ import {
   cssFont, estimateWidth, layout, paragraphsToHtml, paragraphsToText, parseHtml, plainToParagraphs,
   type Line, type Paragraph, type TextStyle,
 } from './text';
+import { globalDebugger } from '../../debug/store';
 
 export const TWIPS = 20;
 /** AS depth = SWF depth − DEPTH_OFFSET (timeline objects have negative AS depths) */
@@ -315,7 +316,77 @@ export class AS2Player {
   }
 
   /** Run game code; synchronous throws and async rejections are attributed to the callback that failed. */
-  guard(label: string, fn: () => unknown) {
+  guard(label: string, fn: () => unknown, scopeHint?: Record<string, unknown>) {
+    // debug: breakpoint check before running
+    const dbg = globalDebugger;
+    const state = dbg.getState();
+    // quick path: if paused, don't run new code until resumed (prevents queue drain while stepping)
+    if (state.paused) {
+      // queue will be drained on resume
+      return undefined;
+    }
+    // check breakpoints / step pause before this call
+    // derive a synthetic source path from label for file-level breakpoint matching
+    const shouldBreak = (() => {
+      if (state.breakpoints.length === 0 && !state.breakOnExceptions && dbg.stepRequest == null) return null;
+      // step: break on every guard when stepping
+      if (dbg.stepRequest) {
+        return { path: label, line: 1 };
+      }
+      for (const bp of state.breakpoints) {
+        if (!bp.enabled) continue;
+        const p = bp.path.toLowerCase();
+        const l = label.toLowerCase();
+        // very permissive file match: breakpoint path contains timeline id or frame marker
+        if (p.includes('root') && l.includes('_root')) return { path: bp.path, line: bp.line };
+        if (p.includes('sprite') && l.includes('sprite')) {
+          // extract sprite id from bp path if present
+          const m = p.match(/sprite[_-]?(\d+)/);
+          if (m && l.includes(m[1])) return { path: bp.path, line: bp.line };
+        }
+        // fallback: label contains file basename without extension
+        const base = p.split('/').pop()?.replace(/\.ts$/,'') ?? '';
+        if (base && l.includes(base.replace(/_/g,' '))) return { path: bp.path, line: bp.line };
+        if (base && l.includes(base)) return { path: bp.path, line: bp.line };
+        // if breakpoint is on a generic path, treat any frame as hit
+        if (p.endsWith('.ts') && l.includes('frame')) return { path: bp.path, line: bp.line };
+      }
+      return null;
+    })();
+    if (shouldBreak) {
+      const scope = scopeHint ?? {};
+      // capture a lightweight scope: include label and root reference
+      const frame = { id: Date.now() + Math.floor(Math.random()*1000), name: label, source: shouldBreak.path, line: shouldBreak.line, scope: { _label: label, ...scope } } as any;
+      // pause player loop
+      const wasRunning = this.running;
+      this.pause();
+      (dbg as any).pause('breakpoint', { path: shouldBreak.path, line: shouldBreak.line }, [frame, ...state.stack.slice(0, 31)]);
+      // hook resume to restart player if it was running
+      // we don't override globally; instead schedule a one-time resume handler
+      // The component will call dbg.continue() which resumes; we also need to restart player tick.
+      // We store the running state on the store and let the component restart via callback.
+      // For now, just pause and don't execute this guard's fn until resumed.
+      // To avoid dropping this action, re-queue it to front and return.
+      // We'll re-enqueue the action by pushing to front of queue via a deferred call:
+      // However guard is sometimes called outside queue (direct). For those, we simply not run fn now.
+      // Instead, we stash a resolver to re-run fn on continue.
+      const pending = { label, fn, scope };
+      const unsub = dbg.subscribe(() => {
+        if (!dbg.getState().paused) {
+          unsub();
+          if (wasRunning) this.play();
+          // re-run the pending call
+          try { this.guard(pending.label, pending.fn, pending.scope); this.runQueue(); } catch {}
+        }
+      });
+      return undefined;
+    }
+
+    // push stack frame
+    const frameId = Date.now() + Math.floor(Math.random()*1000);
+    const pushScope = scopeHint ?? {};
+    // try to enrich scope with node object if label describes a display node
+    (dbg as any).pushFrame?.({ id: frameId, name: label, source: label, line: 1, scope: pushScope });
     try {
       const result = fn();
       if (result && typeof (result as { then?: unknown }).then === 'function') {
@@ -325,12 +396,28 @@ export class AS2Player {
     } catch (error) {
       this.reportProblem(error, label);
       return undefined;
+    } finally {
+      // pop if we pushed
+      try { (dbg as any).popFrame?.(); } catch {}
     }
   }
 
   private reportProblem(error: unknown, label: string) {
     const err = error instanceof Error ? error : new Error(String(error));
     this.log('error', `${label}: ${err.message}`, err.stack, { source: 'app', kind: 'problem', context: label });
+    // debug: break on exception if enabled
+    try {
+      const dbg = globalDebugger;
+      const s = dbg.getState();
+      if (s.breakOnExceptions || s.breakOnUncaught) {
+        const wasRunning = this.running;
+        this.pause();
+        dbg.pause('exception', undefined, [{ id: Date.now(), name: label, source: 'exception', line: 1, scope: { error: err.message, label } } as any, ...s.stack.slice(0,31)], { message: err.message, stack: err.stack });
+        const unsub = dbg.subscribe(() => {
+          if (!dbg.getState().paused) { unsub(); if (wasRunning) this.play(); }
+        });
+      }
+    } catch {}
   }
 
   /** Object.registerClass library of a movie (null = the main movie) */
@@ -479,13 +566,44 @@ export class AS2Player {
   private draining = false;
   runQueue() {
     if (this.draining) return;
+    // if debugger is paused, defer queue draining until resume
+    const dbg = globalDebugger;
+    if (dbg.getState().paused) return;
     this.draining = true;
     try {
       let guard = 0;
       while (this.queue.length) {
+        if (dbg.getState().paused) break;
         const a = this.queue.shift()!;
         if (a.node.removed && !a.always) continue;
-        this.guard(a.label, a.run);
+        // enrich scope hint with node object for watch evaluation
+        const scopeHint: Record<string, unknown> = {};
+        try {
+          if (a.node?.obj) {
+            scopeHint['this'] = a.node.obj;
+            scopeHint['_this'] = a.node.obj;
+            // shallow copy properties for quick watch
+            for (const k of Object.keys(a.node.obj).slice(0, 20)) {
+              if (k.startsWith('_') || /^[a-zA-Z_]/.test(k)) scopeHint[k] = (a.node.obj as any)[k];
+            }
+          }
+          scopeHint['_label'] = a.label;
+          scopeHint['_node'] = a.node;
+        } catch {}
+        this.guard(a.label, a.run, scopeHint);
+        // step handling: after each action, if step requested, pause
+        if (dbg.stepRequest === 'over' || dbg.stepRequest === 'into') {
+          // pause after one action
+          const wasRunning = this.running;
+          this.pause();
+          const frame = { id: Date.now(), name: a.label, source: a.label, line: 1, scope: scopeHint } as any;
+          dbg.pause('step', undefined, [frame, ...dbg.getState().stack.slice(0,31)]);
+          dbg.stepRequest = null;
+          const unsub = dbg.subscribe(() => {
+            if (!dbg.getState().paused) { unsub(); if (wasRunning) this.play(); this.runQueue(); }
+          });
+          break;
+        }
         if (++guard > 200000) { this.log('error', 'action queue overflow – aborting this tick'); this.queue.length = 0; }
       }
     } finally { this.draining = false; }

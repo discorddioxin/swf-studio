@@ -17,6 +17,7 @@ import { useProject } from './lib/project';
 import type { AssetBundle, FlattenedSprite, SwfDocument } from './types';
 import { flattenSpriteToPng } from './lib/render';
 import { cn } from './utils/cn';
+import { DebuggerProvider } from './debug/store';
 
 function disposeFlattenedSprites(sprites: Set<FlattenedSprite>) {
   sprites.forEach((sprite) => sprite.frames.forEach((frame) => URL.revokeObjectURL(frame.url)));
@@ -374,6 +375,7 @@ export default function App() {
   const specialCount = timeline.frames.filter((f) => f.special).length;
 
   return (
+  <DebuggerProvider>
     <div className="forge-shell flex h-screen w-full flex-col overflow-hidden text-zinc-200">
       {/* top bar */}
       <div className="forge-chrome z-20 flex h-14 shrink-0 items-center gap-3 border-b border-zinc-800/80 px-3">
@@ -644,5 +646,6 @@ export default function App() {
       )}
       </ErrorBoundary>
     </div>
+  </DebuggerProvider>
   );
 }

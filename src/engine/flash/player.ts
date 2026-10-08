@@ -24,6 +24,7 @@ import {
 } from './display';
 import { Event, EventDispatcher, IOErrorEvent, KeyboardEvent, MouseEvent } from './events';
 import { Point, Rectangle } from './geom';
+import { globalDebugger } from '../../debug/store';
 import type { AudioBackend, AudioHandle, SoundChannel } from './media';
 import { TextField } from './text';
 
@@ -369,6 +370,13 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     } else if (this.errorCount === 201) {
       this.log('error', 'Too many errors; further errors are not logged.', undefined, { source, kind: 'problem', context: where });
     }
+    try {
+      const dbg = globalDebugger;
+      const s = dbg.getState();
+      if (s.breakOnExceptions || s.breakOnUncaught) {
+        dbg.pause('exception', undefined, [{ id: Date.now(), name: where, source: 'exception', line: 1, scope: { error: e.message, where } } as any, ...s.stack.slice(0,31)], { message: e.message, stack: e.stack });
+      }
+    } catch {}
   }
 
   private log(level: LogLevel, message: string, detail?: string, metadata: LogMetadata = {}) {
@@ -384,7 +392,47 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     try { this.onLog(entry); }
     catch (error) { console.error('[flash engine] log handler failed', error); }
   }
-  private guard<T>(fn: () => T, where: string, source: LogSource = 'app') { return runtime.guard(fn, where, source); }
+  private guard<T>(fn: () => T, where: string, source: LogSource = 'app') {
+    const dbg = globalDebugger;
+    const state = dbg.getState();
+    if (state.paused) return undefined as unknown as T;
+    // breakpoint / step check before guard
+    const shouldBreak = (() => {
+      if (state.breakpoints.length === 0 && !state.breakOnExceptions && dbg.stepRequest == null) return null;
+      if (dbg.stepRequest) return { path: where, line: 1 };
+      for (const bp of state.breakpoints) {
+        if (!bp.enabled) continue;
+        const p = bp.path.toLowerCase();
+        const w = where.toLowerCase();
+        const base = p.split('/').pop()?.replace(/\.ts$/,'') ?? '';
+        if (base && w.includes(base)) return { path: bp.path, line: bp.line };
+        if (p.includes('root') && w.includes('root')) return { path: bp.path, line: bp.line };
+      }
+      return null;
+    })();
+    if (shouldBreak) {
+      dbg.pause('breakpoint', { path: shouldBreak.path, line: shouldBreak.line }, [{ id: Date.now(), name: where, source: shouldBreak.path, line: shouldBreak.line, scope: { where } } as any, ...state.stack.slice(0,31)]);
+      // pause not applicable to FlashPlayer tick loop? we just record pause; the ExecuteTab loop will check dbg.paused and stop ticking
+      // stash re-run
+      const pending = { fn, where, source };
+      const unsub = dbg.subscribe(() => {
+        if (!dbg.getState().paused) { unsub(); try { this.guard(pending.fn, pending.where, pending.source as any); this.flushScripts(); } catch {} }
+      });
+      return undefined as unknown as T;
+    }
+    // push stack
+    const fid = Date.now() + Math.floor(Math.random()*1000);
+    try { (dbg as any).pushFrame?.({ id: fid, name: where, source: where, line: 1, scope: { where } }); } catch {}
+    try {
+      const res = runtime.guard(fn, where, source);
+      // step handling
+      if (dbg.stepRequest === 'over' || dbg.stepRequest === 'into') {
+        dbg.pause('step', undefined, [{ id: Date.now(), name: where, source: where, line: 1, scope: { where } } as any, ...dbg.getState().stack.slice(0,31)]);
+        dbg.stepRequest = null;
+      }
+      return res;
+    } finally { try { (dbg as any).popFrame?.(); } catch {} }
+  }
 
   /** Make this the active player while game code runs. */
   private activate<T>(fn: () => T): T {
