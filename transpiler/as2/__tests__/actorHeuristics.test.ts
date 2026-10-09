@@ -15,17 +15,15 @@ describe('actorHeuristics', () => {
   it('proposes fisher actor for bassken_overview', async () => {
     const doc = await docFor('bassken_overview');
     const proposals = proposeActors(doc);
-    // at least one actor with linkage or fisher-like name
-    expect(proposals.some(p => p.timelineIds.length === 1)).toBe(true);
+    expect(proposals.some(p => p.timelineIds.includes(10))).toBe(true);
   });
 
   it('groups directional fish variants in bassken_scene', async () => {
     const doc = await docFor('bassken_scene');
     const proposals = proposeActors(doc);
-    const fishGroup = proposals.find(p => p.timelineIds.length > 1);
-    // the 4 fish sprites share frameCount/labels/code and should group
-    if (fishGroup) expect(fishGroup.timelineIds.length).toBeGreaterThanOrEqual(2);
-    else expect(proposals.length).toBeGreaterThan(0);
+    const fishGroup = proposals.find(p => p.timelineIds.length === 4);
+    expect(fishGroup).toBeDefined();
+    expect(new Set(fishGroup!.timelineIds)).toEqual(new Set([9, 18, 19, 24]));
   });
 
   it('returns empty or low score for library-like gsecs', async () => {

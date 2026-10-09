@@ -93,19 +93,35 @@ export function proposeActors(doc: SwfDocument): ActorProposal[] {
   }
 
   for (const [gKey, g] of groups) {
-    if (g.length > 1 && g.every(t => t.frameCount <= 4)) {
-      // directional variant group → one actor with variants
-      const base = g.map(t => linkage.get(t.characterId!) ?? `sprite_${t.characterId}`).sort()[0] ?? 'fish';
-      const name = base.replace(/^.*\./, '').toLowerCase();
-      proposals.push({
-        name, reason: `variant group ${gKey} — identical code/labels, visual variance only`,
-        score: 3, timelineIds: g.map(t => t.characterId!), kind: 'actor', linkage: base
-      });
-      for (const tl of g) proposals.push({
-        name: `variant_${tl.characterId}`, reason: `directional slice of ${name}`,
-        score: 0, timelineIds: [tl.characterId!], variantOf: name, kind: 'variant'
-      });
-      continue;
+    if (g.length > 1) {
+      const hasSignal = g.some(t => t.frames.some(f => f.events.some(e => e.kind === 'action')) || (labelSets.get(t.characterId!)?.size ?? 0) > 0);
+      const vKeys = new Set(g.map(t => visualKey(t.frames)));
+      if (hasSignal && vKeys.size > 1) {
+        const base = g.map(t => linkage.get(t.characterId!) ?? `sprite_${t.characterId}`).sort()[0] ?? 'fish';
+        const name = base.replace(/^.*\./, '').toLowerCase();
+        proposals.push({
+          name, reason: `variant group ${gKey} — identical code/labels, visual variance only`,
+          score: 3, timelineIds: g.map(t => t.characterId!), kind: 'actor', linkage: base
+        });
+        for (const tl of g) proposals.push({
+          name: `variant_${tl.characterId}`, reason: `directional slice of ${name}`,
+          score: 0, timelineIds: [tl.characterId!], variantOf: name, kind: 'variant'
+        });
+        continue;
+      }
+      if (hasSignal && g.length > 2) {
+        const base = g.map(t => linkage.get(t.characterId!) ?? `sprite_${t.characterId}`).sort()[0] ?? 'fish';
+        const name = base.replace(/^.*\./, '').toLowerCase();
+        proposals.push({
+          name, reason: `variant group ${gKey} — identical code/labels`,
+          score: 3, timelineIds: g.map(t => t.characterId!), kind: 'actor', linkage: base
+        });
+        for (const tl of g) proposals.push({
+          name: `variant_${tl.characterId}`, reason: `directional slice of ${name}`,
+          score: 0, timelineIds: [tl.characterId!], variantOf: name, kind: 'variant'
+        });
+        continue;
+      }
     }
     for (const tl of g) {
       const id = tl.characterId!;
