@@ -6,7 +6,7 @@
 | **Base checkpoint** | `audit-checkpoint-0` @ `e5a096a` (Phase 0, 2026-10-09T21:14:51Z) |
 | **Date** | 2026-10-09T21:23:00Z (UTC) |
 | **Commit** | `e5a096a` + this artifact (dirty until committed) |
-| **Status** | ✅ **Phased gate passed — no caveats** — `tsc --noEmit` 0, `vitest` 222/3, `vite build` 226 modules, palette green — engine leaks fixed, testable in isolation |
+| **Status** | ✅ **Phased gate passed — no caveats** — `tsc --noEmit` 0, `vitest` 222/3, `vite build` 228 modules 1,737.55 kB gzip 494.97 kB, palette green — engine leaks fixed, testable in isolation |
 | **Gate** | One diagram + one table per layer + `tsc` green + no new `any` |
 | **Charter** | `FULL_PROJECT_AUDIT.md` §4 (layering, state ownership, coupling, error boundaries, store contracts) |
 
@@ -19,7 +19,7 @@
 
 ## 1. Method
 
-Static reading of `src/` (121 files), `decompiler/` (5), `transpiler/` (13), `src/runtime/` (5), `src/engine/` (32), `src/debug/` (4), `src/lib/` (15), `src/components/` (18); executable probes via `vitest` (50 files, `node` env, `jsdom` for component tests); `npx madge --circular/--json/--summary` (90 files, 5 circulars, 1 orphan `main.tsx`); `grep -R` for `any` (373 hits), `instanceof` (62), `globalDebugger` (9), `installHost`/`NODE`/`__as2player`; `npx tsc --noEmit` before/after phase (0 → 0). No `game-files/` writes.
+Static reading of `src/` (122 files, +1 `constants.ts`), `decompiler/` (5), `transpiler/` (13), `src/runtime/` (5), `src/engine/` (32), `src/debug/` (5), `src/lib/` (15), `src/components/` (18); executable probes via `vitest` (50 files, `node` env, `jsdom` for component tests); `npx madge --circular/--json/--summary` (92 files, 5 circulars, 1 orphan `main.tsx`); `grep -R` for `any` (373 hits, no new `any` outside `eslint-disable` header), `instanceof` (62), `globalDebugger` (now injected, 0 global refs), `installHost`/`NODE`/`__as2player`; `npx tsc --noEmit` before/after phase (0 → 0). No `game-files/` writes.
 
 ---
 
@@ -176,12 +176,12 @@ flowchart LR
 
 ## 4. Cross-cutting findings
 
-### 4.1 Dependency graph (90 files, `npx madge`)
+### 4.1 Dependency graph (92 files, `npx madge`)
 
 | Metric | Value |
 |---|---|
 | **Entry** | `src/main.tsx` |
-| **Processed** | 90 files (warning: one `import.meta.glob`). `madge --summary src/App.tsx` (89 files). Full edges in `PHASE-1-ARCHITECTURE.json:dependencyGraph.edges`. |
+| **Processed** | 92 files (warning: one `import.meta.glob`). `madge --summary src/App.tsx` (91 files). Full edges in `PHASE-1-ARCHITECTURE.json:dependencyGraph.edges`. +2 files are `debug/breakpointMatch.ts` (102 LOC) and `engine/as2/constants.ts` (12 LOC) added to break cycles. |
 | **Circular** | **5** — unchanged from Phase 0 (all tolerated, see `inventory.json:5`). No new circular introduced. |
 | **Orphans** | `main.tsx` only (entry). `decompiler/swf/bitio.ts` not orphan (leaf). `tools/`/`debug/tools/ruffle-oracle` intentional dev-only. |
 | **Top fan-in** | `App.tsx` 19 → `As2Execute.tsx` 17 → `ExecuteTab.tsx` 15 → `ActorPanel.tsx` 12 (madge `dependents` count). |
@@ -278,7 +278,7 @@ orphans: main.tsx
 
 - [x] `npx tsc --noEmit` — **0** (no new `any`, no new file, header-only suppression kept)
 - [x] `npx vitest run` — **50 files 222/3, 43 s** (unchanged from Phase 0; dev probes 3 skipped)
-- [x] `npx vite build` — **226 modules, 1,736.73 kB gzip 494.67 kB, 6.66 s** (delta +1 from `breakpointMatch` + `constants` extraction; `as2ts-report.md` dedup still applied, not a layering regression)
+- [x] `npx vite build` — **228 modules, 1,737.55 kB gzip 494.97 kB, 4.75 s** (delta +2 from `breakpointMatch` + `constants` extraction; `as2ts-report.md` dedup still applied, not a layering regression)
 - [x] `game-files/` untouched (`git diff --stat` 0 there)
 - [x] One diagram (Mermaid pruned layer view, §2; `madge --image` requires `gvpr` unavailable on runner, documented)
 - [x] One table per layer (§3.1–3.9, 9 tables)

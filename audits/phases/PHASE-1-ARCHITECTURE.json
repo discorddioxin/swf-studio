@@ -22,11 +22,11 @@
       "durationSec": 43.34
     },
     "viteBuild": {
-      "modules": 226,
-      "sizeKb": "1,736.73 kB",
-      "gzipKb": "494.67 kB",
-      "durationSec": 6.66,
-      "deltaFromPhase0": "+1 module (breakpointMatch + constants extraction)"
+      "modules": 228,
+      "sizeKb": "1,737.55 kB",
+      "gzipKb": "494.97 kB",
+      "durationSec": 4.75,
+      "deltaFromPhase0": "+2 modules (breakpointMatch + constants)"
     }
   },
   "layers": [
@@ -166,8 +166,8 @@
     {
       "id": "engine-as2",
       "path": "src/engine/as2/",
-      "files": 12,
-      "loc": 3500,
+      "files": 13,
+      "loc": 3512,
       "representative": [
         "src/engine/as2/player.ts",
         "src/engine/as2/builtins.ts",
@@ -446,7 +446,7 @@
         "ts",
         "tsx"
       ],
-      "processed": 90,
+      "processed": 92,
       "circular": [
         [
           "runtime/as2/index.ts",
@@ -498,7 +498,7 @@
           "dependents": 10
         }
       ],
-      "edgesFile": "madge --json src/main.tsx --extensions ts,tsx (90 files, 1 warning: import.meta.glob); edges captured in this json:dependencyGraph.edges",
+      "edgesFile": "madge --json src/main.tsx --extensions ts,tsx (92 files, 1 warning: import.meta.glob); edges captured in this json:dependencyGraph.edges",
       "edges": {
         "App.tsx": [
           "components/CodeWorkspace.tsx",
@@ -759,7 +759,7 @@
   "exitGate": {
     "tsc": "0",
     "vitest": "50 files 222/3 passed, 3 dev skips, 53s",
-    "viteBuild": "226 modules 1,736.73kB gzip 494.67kB 6.66s",
+    "viteBuild": "228 modules 1,737.55kB gzip 494.97kB 4.75s",
     "gameFilesMutated": false,
     "diagram": "Mermaid pruned layer view \u00a72 (madge --image requires gvpr not on runner, documented)",
     "tables": 9,
