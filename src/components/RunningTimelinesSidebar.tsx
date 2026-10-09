@@ -26,6 +26,7 @@ export function RunningTimelinesSidebar({
   playing,
   project,
   displayTree,
+  onHighlight,
 }: {
   doc: SwfDocument;
   timelines: readonly RunningTimelineSnapshot[];
@@ -33,6 +34,7 @@ export function RunningTimelinesSidebar({
   playing: boolean;
   project?: Project | null;
   displayTree?: ActiveDisplaySnapshot | null;
+  onHighlight?: (ids: Set<number> | null) => void;
 }) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('timelines');
 
@@ -129,6 +131,7 @@ export function RunningTimelinesSidebar({
               doc={doc}
               timeline={timeline}
               title={timelineTitle(timeline, timelineNames)}
+              onHighlight={onHighlight}
             />
           ))}
           {timelines.length === 0 && (
@@ -145,14 +148,14 @@ export function RunningTimelinesSidebar({
 
       {activeTab === 'assets' && (
         displayTree ? (
-          <DisplayTreePanel doc={doc} project={project ?? null} displayTree={displayTree} />
+          <DisplayTreePanel doc={doc} project={project ?? null} displayTree={displayTree} onHighlight={onHighlight} />
         ) : (
           <ActiveAssetsPanel timelines={timelines} activeAssets={activeAssets} />
         )
       )}
 
       {activeTab === 'actors' && (
-        <ActorsPanel project={project ?? null} actorStates={actorStates} />
+        <ActorsPanel project={project ?? null} actorStates={actorStates} displayTree={displayTree ?? null} onHighlight={onHighlight} />
       )}
     </aside>
   );
@@ -204,10 +207,12 @@ function DisplayTreePanel({
   doc,
   project,
   displayTree,
+  onHighlight,
 }: {
   doc: SwfDocument;
   project: Project | null;
   displayTree: ActiveDisplaySnapshot;
+  onHighlight?: (ids: Set<number> | null) => void;
 }) {
   const total = countDisplayNodes(displayTree) - 1;
   if (total === 0) {
@@ -226,7 +231,7 @@ function DisplayTreePanel({
         {displayTree.children.length ? ` · ${displayTree.children.length} top-level` : ''}.
       </div>
       <div className="rounded-md border border-zinc-800 bg-zinc-900/40">
-        <DisplayTreeNode node={displayTree} doc={doc} project={project} depth={0} isRoot />
+        <DisplayTreeNode node={displayTree} doc={doc} project={project} depth={0} isRoot onHighlight={onHighlight} />
       </div>
       <div className="mt-2 px-1 text-[10px] leading-relaxed text-zinc-600">
         Includes <span className="text-zinc-400">buttons, single-frame sprites, shapes, text</span> — not just playing timelines. Hidden instances are dimmed.
@@ -235,7 +240,7 @@ function DisplayTreePanel({
   );
 }
 
-function DisplayTreeNode({ node, doc, project, depth, isRoot }: { node: ActiveDisplaySnapshot; doc: SwfDocument; project: Project | null; depth: number; isRoot?: boolean }) {
+function DisplayTreeNode({ node, doc, project, depth, isRoot, onHighlight }: { node: ActiveDisplaySnapshot; doc: SwfDocument; project: Project | null; depth: number; isRoot?: boolean; onHighlight?: (ids: Set<number> | null) => void }) {
   const [expanded, setExpanded] = useState(depth < 2);
   const label = project?.characters[node.characterId]?.name;
   const kind: string = node.kind;
@@ -251,16 +256,18 @@ function DisplayTreeNode({ node, doc, project, depth, isRoot }: { node: ActiveDi
         </div>
         <div>
           {node.children.map((child) => (
-            <DisplayTreeNode key={child.id} node={child} doc={doc} project={project} depth={depth + 1} />
+            <DisplayTreeNode key={child.id} node={child} doc={doc} project={project} depth={depth + 1} onHighlight={onHighlight} />
           ))}
         </div>
       </div>
     );
   }
 
+  const handleEnter = () => onHighlight?.(new Set([node.id]));
+  const handleLeave = () => onHighlight?.(null);
   return (
     <div className={cn('border-l border-transparent', depth > 1 && 'ml-2 border-zinc-800/50')}>
-      <div className={cn('flex items-center gap-1.5 px-2 py-1', isHidden && 'opacity-50', hasChildren && 'cursor-pointer hover:bg-zinc-800/50')} onClick={() => hasChildren && setExpanded((v) => !v)}>
+      <div className={cn('flex items-center gap-1.5 px-2 py-1', isHidden && 'opacity-50', hasChildren && 'cursor-pointer hover:bg-zinc-800/50')} onClick={() => hasChildren && setExpanded((v) => !v)} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
         {hasChildren ? (
           <span className="shrink-0 text-[10px] text-zinc-500">{expanded ? '▾' : '▸'}</span>
         ) : (
@@ -283,7 +290,7 @@ function DisplayTreeNode({ node, doc, project, depth, isRoot }: { node: ActiveDi
       {hasChildren && expanded && (
         <div className="divide-y divide-zinc-800/30">
           {node.children.map((child) => (
-            <DisplayTreeNode key={child.id} node={child} doc={doc} project={project} depth={depth + 1} />
+            <DisplayTreeNode key={child.id} node={child} doc={doc} project={project} depth={depth + 1} onHighlight={onHighlight} />
           ))}
         </div>
       )}
@@ -359,9 +366,13 @@ function ActiveAssetsPanel({
 function ActorsPanel({
   project,
   actorStates,
+  displayTree,
+  onHighlight,
 }: {
   project: Project | null;
   actorStates: ActorState[];
+  displayTree: ActiveDisplaySnapshot | null;
+  onHighlight?: (ids: Set<number> | null) => void;
 }) {
   if (!project || actorStates.length === 0) {
     return (
@@ -382,13 +393,32 @@ function ActorsPanel({
         <span className="font-medium text-emerald-300">{activeCount}</span> of <span className="font-medium text-zinc-400">{actorStates.length}</span> actor{actorStates.length === 1 ? '' : 's'} active.
       </div>
       <div className="space-y-1.5">
-        {actorStates.map((state) => (
+        {actorStates.map((state) => {
+          const actorIds = (() => {
+            if (!displayTree) return null;
+            const wanted = new Set<number>();
+            const clipCharIds = new Set<number>();
+            for (const c of state.clips) {
+              const m = /^sprite:(\d+)$/.exec(c.timelineId);
+              if (m) clipCharIds.add(Number(m[1]));
+              else if (c.timelineId === 'root') clipCharIds.add(0);
+            }
+            const visit = (n: ActiveDisplaySnapshot) => {
+              if (clipCharIds.has(n.characterId)) wanted.add(n.id);
+              for (const ch of n.children) visit(ch);
+            };
+            visit(displayTree);
+            return wanted.size ? wanted : null;
+          })();
+          return (
           <div
             key={state.actor.id}
             className={cn(
               'rounded-md border px-2.5 py-2',
               state.active ? 'border-emerald-900/60 bg-emerald-950/20' : 'border-zinc-800 bg-zinc-900/60',
             )}
+            onMouseEnter={() => actorIds && onHighlight?.(actorIds)}
+            onMouseLeave={() => onHighlight?.(null)}
           >
             <div className="flex items-center justify-between gap-2">
               <span className="truncate text-[11px] font-medium text-zinc-200">♙ {state.actor.name}</span>
@@ -419,7 +449,8 @@ function ActorsPanel({
               {state.actor.tags?.length ? <span className="truncate text-violet-400">· {state.actor.tags.join(' ')}</span> : null}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -532,10 +563,11 @@ function computeActorStates(
   });
 }
 
-function RunningTimelineRow({ doc, timeline, title }: {
+function RunningTimelineRow({ doc, timeline, title, onHighlight }: {
   doc: SwfDocument;
   timeline: RunningTimelineSnapshot;
   title: string;
+  onHighlight?: (ids: Set<number> | null) => void;
 }) {
   const sourceTimeline = getSourceTimeline(doc, timeline);
   const cellCount = Math.min(timeline.totalFrames, MAX_FRAME_CELLS);
@@ -559,8 +591,10 @@ function RunningTimelineRow({ doc, timeline, title }: {
       data-runtime-timeline={timeline.id}
       data-timeline-path={timeline.path}
       data-current-frame={timeline.frame}
-      className="rounded-md border border-zinc-800 bg-zinc-900/80 px-2.5 py-2 shadow-sm"
+      className="rounded-md border border-zinc-800 bg-zinc-900/80 px-2.5 py-2 shadow-sm hover:border-violet-700/60 hover:bg-zinc-800"
       title={`${title} · ${timeline.path}`}
+      onMouseEnter={() => onHighlight?.(new Set([timeline.id]))}
+      onMouseLeave={() => onHighlight?.(null)}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">

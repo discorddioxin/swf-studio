@@ -80,6 +80,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [runtimeTimelines, setRuntimeTimelines] = useState<RunningTimelineSnapshot[]>([]);
   const [displayTree, setDisplayTree] = useState<ActiveDisplaySnapshot | null>(null);
+  const [highlightedIds, setHighlightedIds] = useState<Set<number> | null>(null);
   const [panel, setPanel] = useState<'console' | 'program' | null>('console');
   const [showDebugger, setShowDebugger] = useState(false);
   const [hud, setHud] = useState({ frame: 1, total: 1, label: null as string | null, time: 0 });
@@ -98,6 +99,14 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
   const pendingLogs = useRef<LogEntry[]>([]);
   const runtimeTimelinesRef = useRef<RunningTimelineSnapshot[]>([]);
   const displayTreeRef = useRef<ActiveDisplaySnapshot | null>(null);
+  // highlight overlay: sync to player and force a frame when paused
+  useEffect(() => {
+    const p = playerRef.current;
+    if (!p) return;
+    p.setHighlightedIds(highlightedIds);
+    // ensure highlight appears even while paused (render loop skips tick)
+    try { p.render(); } catch {}
+  }, [highlightedIds]);
   const executionFaultRef = useRef(false);
   const dbg = useDebugger();
   const dbgState = useDebuggerState();
@@ -342,6 +351,10 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
   }, [dbg]);
 
   // ---- input
+  const handleHighlight = useCallback((ids: Set<number> | null) => {
+    setHighlightedIds(ids && ids.size ? new Set(ids) : null);
+  }, []);
+
   const toStage = useCallback((e: { clientX: number; clientY: number }) => {
     const rect = canvasRef.current!.getBoundingClientRect();
     const v = viewRef.current;
@@ -377,6 +390,38 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
 
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const b = build.status === 'ready' ? build.build : null;
+  const AVM1_SUMMARY = (warnings: { file: string; message: string }[]): LogEntry[] => {
+    const avm1 = warnings.filter((w) => w.message.startsWith('AVM1 interpreter fallback'));
+    const rest = warnings.filter((w) => !w.message.startsWith('AVM1 interpreter fallback'));
+    const out: LogEntry[] = rest.map((issue) => ({
+      level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const,
+      context: issue.file, message: `${issue.file}: ${issue.message}`, time: 0,
+    }));
+    if (!avm1.length) return out;
+    const byReason = new Map<string, number>();
+    for (const w of avm1) {
+      const m = /AVM1 interpreter fallback \(([^)]+)\)/.exec(w.message)?.[1] ?? w.message;
+      // normalize dynamic suffixes like "byte 4278: Unsupported ..." -> "Unsupported ..."
+      const reason = m.replace(/^byte \d+:\s*/, '').split(';')[0].trim();
+      byReason.set(reason, (byReason.get(reason) ?? 0) + 1);
+    }
+    if (avm1.length <= 4) {
+      for (const w of avm1) out.push({ level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const, context: w.file, message: `${w.file}: ${w.message} — running via AVM1 interpreter`, time: 0 });
+    } else {
+      const summary = [...byReason.entries()].map(([r,c]) => `${r} ×${c}`).join(' · ');
+      out.push({ level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const, context: 'AS2 build', message: `AVM1 interpreter fallback: ${avm1.length} blocks will run via interpreter (not transpiled) — ${summary}`, time: 0 });
+      // keep first example per reason for inspection
+      const seen = new Set<string>();
+      for (const w of avm1) {
+        const key = /AVM1 interpreter fallback \(([^)]+)\)/.exec(w.message)?.[1]?.replace(/^byte \d+:\s*/, '').split(';')[0].trim() ?? w.message;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const, context: w.file, message: `${w.file}: ${w.message} — running via AVM1 interpreter`, time: 0 });
+        if (seen.size >= 4) break;
+      }
+    }
+    return out;
+  };
   const forgeProblems: LogEntry[] = build.status === 'failed' ? [{
     level: 'error', kind: 'problem', source: 'forge', context: 'AS2 build', message: build.error, time: 0,
   }] : build.status === 'ready' ? [
@@ -384,10 +429,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
       level: 'error' as const, kind: 'problem' as const, source: 'forge' as const,
       context: issue.file, message: `${issue.file}: ${issue.message}`, time: 0,
     })),
-    ...build.build.warnings.map((issue) => ({
-      level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const,
-      context: issue.file, message: `${issue.file}: ${issue.message}`, time: 0,
-    })),
+    ...AVM1_SUMMARY(build.build.warnings),
     ...missing.map((path) => ({
       level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const,
       context: 'external SWF', message: `Missing bundled external SWF: ${path}`, time: 0,
@@ -524,7 +566,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
           </div>
         )}
       </div>
-      <RunningTimelinesSidebar doc={doc} timelines={runtimeTimelines} timelineNames={timelineMetadata} playing={playing && !dbgState.paused} project={project} displayTree={displayTree} />
+      <RunningTimelinesSidebar doc={doc} timelines={runtimeTimelines} timelineNames={timelineMetadata} playing={playing && !dbgState.paused} project={project} displayTree={displayTree} onHighlight={handleHighlight} />
       </div>
 
       {showDebugger && (

@@ -274,6 +274,8 @@ export class AS2Player {
   cursorHidden = false;
   /** external SWFs the game asked for that could not be resolved */
   readonly missingExternals = new Set<string>();
+  /** ids of display nodes currently hovered in the inspector (highlight overlay) */
+  highlightedIds: Set<number> | null = null;
 
   constructor(opts: AS2PlayerOptions) {
     this.opts = opts;
@@ -1481,6 +1483,11 @@ export class AS2Player {
     this.renderTo(ctx, scale, (canvas.width - this.width * scale) / 2, (canvas.height - this.height * scale) / 2);
   }
 
+  /** Highlight overlay: set from inspector hover. null = no highlight. */
+  setHighlightedIds(ids: Set<number> | null) {
+    this.highlightedIds = ids;
+  }
+
   /** Draw the stage at `scale` (device px per stage px) with its top-left corner at (ox, oy). */
   renderTo(ctx: CanvasRenderingContext2D, scale: number, ox: number, oy: number) {
     ctx.save();
@@ -1493,6 +1500,41 @@ export class AS2Player {
     ctx.clip();
     ctx.scale(1 / TWIPS, 1 / TWIPS);
     this.drawNode(ctx, this.root, 1, undefined);
+    // Inspector hover highlight overlay (drawn in TWIPS space after scene)
+    if (this.highlightedIds && this.highlightedIds.size) {
+      ctx.save();
+      ctx.globalAlpha = 1;
+      const highlightNodes: DisplayNode[] = [];
+      const collect = (n: DisplayNode) => {
+        if (!n.removed && this.highlightedIds!.has(n.id)) highlightNodes.push(n);
+        for (const c of n.children) collect(c);
+      };
+      collect(this.root);
+      for (const n of highlightNodes) {
+        const bounds = this.localBounds(n);
+        if (!bounds) continue;
+        const gm = this.globalMatrix(n);
+        const gb = transformRect(gm, bounds);
+        const w = gb.xMax - gb.xMin;
+        const h = gb.yMax - gb.yMin;
+        if (w <= 0 || h <= 0) continue;
+        // outer glow
+        ctx.fillStyle = "rgba(168,85,247,0.18)";
+        ctx.fillRect(gb.xMin, gb.yMin, w, h);
+        // border
+        ctx.strokeStyle = "rgba(232,121,249,0.95)";
+        ctx.lineWidth = Math.max(28, Math.min(80, Math.max(w, h) * 0.015));
+        ctx.setLineDash([]);
+        ctx.strokeRect(gb.xMin, gb.yMin, w, h);
+        // corner handles
+        const s = Math.max(120, Math.min(320, Math.max(w, h) * 0.04));
+        ctx.fillStyle = "rgba(232,121,249,1)";
+        for (const [x,y] of [[gb.xMin, gb.yMin],[gb.xMax, gb.yMin],[gb.xMin, gb.yMax],[gb.xMax, gb.yMax]]) {
+          ctx.fillRect(x - s/2, y - s/2, s, s);
+        }
+      }
+      ctx.restore();
+    }
     ctx.restore();
   }
 
