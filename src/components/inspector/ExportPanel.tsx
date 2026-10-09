@@ -37,6 +37,10 @@ export function ExportPanel({ doc, api, assets, flattenedSprites }: { doc: SwfDo
             {l}
           </label>
         ))}
+        <label className="flex items-center gap-2 text-violet-300">
+          <input type="checkbox" checked={(opts as any).mergeVariants ?? false} onChange={(e) => setOpts({ ...opts, mergeVariants: e.target.checked } as any)} />
+          Merge directional variants (actors/fish) — P4
+        </label>
       </div>
 
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-2">

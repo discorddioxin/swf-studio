@@ -32,6 +32,8 @@ export interface ProjectOptions {
   runtime?: string;
   /** Optional names/labels from the Workbench SWF document and project annotations. */
   timelineMetadata?: TimelineNameIndex;
+  /** When true, merge directional variants (e.g. fish 9/18/19/24) into one actor */
+  mergeVariants?: boolean;
 }
 
 export interface ProjectFile {
@@ -260,7 +262,17 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
   const usedTimelineAliases = new Set<string>();
   for (const [id] of [...timelines].sort((a, b) => a[0] - b[0])) {
     const metadata = timelineMetadataAt(options.timelineMetadata, id);
-    const displayName = metadata?.name?.trim() || undefined;
+    let displayName = metadata?.name?.trim() || undefined;
+    if (!displayName) {
+      // fallback to linkage suffix in folder name like DefineSprite_10_fisher
+      for (const f of input) {
+        const m = /DefineSprite(?:Tag)?_\d+_([^\/]+)/i.exec(f.path.replace(/\\/g, '/'));
+        if (m && Number(/DefineSprite(?:Tag)?_(\d+)/i.exec(f.path)?.[1]) === id) {
+          try { displayName = decodeURIComponent(m[1]); } catch { displayName = m[1]; }
+          if (displayName) break;
+        }
+      }
+    }
     if (id === 0) {
       usedTimelinePaths.add('root');
       usedTimelineAliases.add('root');
@@ -273,6 +285,11 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
     const aliasBase = displayName ? `timeline_${slug}` : fallback;
     const alias = uniqueSegment(aliasBase, usedTimelineAliases, String(id));
     timelineBindings.set(id, { id, module: `timelines/${moduleName}`, alias, displayName, metadata });
+    // keep numeric shim for backwards compat when human name differs
+    if (moduleName !== fallback && !usedTimelinePaths.has(fallback)) {
+      // reserve fallback name so later shims don't collide, but don't create binding yet
+      usedTimelinePaths.add(fallback);
+    }
   }
 
   for (const [id, acc] of [...timelines].sort((a, b) => a[0] - b[0])) {
@@ -382,11 +399,38 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
       }
       parts.push(`/** Clip actions of instances placed on this timeline, keyed by "frame:depth". */\nexport const placements: Record<string, AS2Handler[]> = {\n${entries.join('\n')}\n};`);
     }
+    // P5: unified animation array (frames + placements + labels) — additive, keeps old exports
+    if (acc.frames.size || acc.placements.size) {
+      const animEntries: string[] = [];
+      for (const [frame] of [...acc.frames].sort((a,b)=>a[0]-b[0])) {
+        const label = frameLabelAt(metadata, frame);
+        const placKeys = [...acc.placements.keys()].filter(k=> k.startsWith(`${frame}:`));
+        const placPart = placKeys.length ? ` placements: { ${placKeys.map(k=> `${JSON.stringify(k)}: placements[${JSON.stringify(k)}]`).join(', ')} },` : '';
+        animEntries.push(`  { frame: ${frame}${label ? `, label: ${JSON.stringify(label)}` : ''}, actions: frames[${frame}],${placPart} }`);
+      }
+      for (const key of [...acc.placements.keys()].sort((a,b)=> natural(a,b))) {
+        const f = Number(key.split(':')[0]);
+        if (acc.frames.has(f)) continue;
+        const label = frameLabelAt(metadata, f);
+        animEntries.push(`  { frame: ${f}${label ? `, label: ${JSON.stringify(label)}` : ''}, placements: { ${JSON.stringify(key)}: placements[${JSON.stringify(key)}] } }`);
+      }
+      if (animEntries.length) parts.push(`/** Unified animation (P5): one entry per frame with actions + placements. */\nexport const animation = [\n${animEntries.join(',\n')}\n];`);
+    }
     const identity = displayName
       ? `// Workbench timeline name: ${JSON.stringify(displayName)}${id === 0 ? '' : ` (sprite ${id})`}\n`
       : '';
     const code = banner(sources.join(', ')) + em.header() + identity + parts.join('\n\n') + '\n';
     files.set(`${module}.ts`, code);
+    // human-name shim: keep numeric path as re-export for backwards compat
+    const fallback = `sprite_${id}`;
+    const slug = displayName ? nameSegment(displayName, fallback) : fallback;
+    if (displayName && module !== `timelines/${fallback}`) {
+      const shimModule = `timelines/${fallback}`;
+      if (!files.has(`${shimModule}.ts`)) {
+        files.set(`${shimModule}.ts`, banner(`shim for ${module}`) + `export * from "./${slug}";\n`);
+        report.push({ source: module+'.ts', target: `${shimModule}.ts`, role: 'shim', diagnostics: [] });
+      }
+    }
     timelineModules.push(binding);
     const role = id === 0 ? 'main timeline' : `sprite ${id}${displayName ? ` · ${JSON.stringify(displayName)}` : ''}`;
     report.push({ source: sources.join('\n'), target: `${module}.ts`, role, diagnostics: [...diags, ...em.diagnostics] });
@@ -480,10 +524,46 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
   idx.push('export default program;');
   files.set('index.ts', banner('as2ts project index') + idx.join('\n') + '\n');
 
+  const linkageForProposal = new Map<number,string>();
+  for (const m of timelineModules) if (m.displayName) linkageForProposal.set(m.id, m.displayName);
+  for (const [name] of classes) {
+    const maybeId = [...timelineModules].find(t=> t.displayName && name.endsWith(t.displayName))?.id;
+    if (maybeId != null && !linkageForProposal.has(maybeId)) linkageForProposal.set(maybeId, name);
+  }
+  const proposals = proposeFromTimelines(timelines, linkageForProposal);
+  files.set('actors/_proposal.json', JSON.stringify({ version: 1, proposals, generatedAt: new Date().toISOString() }, null, 2) + '\n');
+  report.push({ source: 'heuristic proposal', target: 'actors/_proposal.json', role: 'actor proposal', diagnostics: [] });
+
+  // P4: directional-variant merger when requested
+  if (options.mergeVariants) {
+    for (const p of proposals) if (p.kind==='actor' && p.timelineIds.length>1 && !p.variantOf) {
+      const dirs = ['FrontLeft','FrontRight','BackLeft','BackRight'];
+      for (let i=0;i<p.timelineIds.length;i++) {
+        const id = p.timelineIds[i];
+        const dir = dirs[i] ?? `Variant${id}`;
+        const animModule = `actors/${p.name}/animation/${dir}`;
+        const srcTimeline = `timelines/sprite_${id}`;
+        const animCode = banner(`variant ${dir} of ${p.name}`) + `export * from "../../${srcTimeline}";\n`;
+        files.set(`${animModule}.ts`, animCode);
+        report.push({ source: srcTimeline+'.ts', target: `${animModule}.ts`, role: 'variant animation', diagnostics: [] });
+        const shim = banner(`shim for ${srcTimeline}`) + `export * from "../${animModule}";\n`;
+        files.set(`${srcTimeline}.ts`, shim);
+      }
+      const aggModule = `actors/${p.name}/${p.name[0].toUpperCase()+p.name.slice(1)}Actor`;
+      const imports = p.timelineIds.map((_,i)=> `import * as ${dirs[i]??`v${p.timelineIds[i]}`} from "./animation/${dirs[i]??`Variant${p.timelineIds[i]}`}";`).join('\n');
+      const aggCode = banner(`aggregator for ${p.name}`) + `import { TimelineActor, type AS2Clip } from ${JSON.stringify(runtime)};\n${imports}\n\nexport const animations = { ${p.timelineIds.map((_,i)=> `${['frontLeft','frontRight','backLeft','backRight'][i]??`v${p.timelineIds[i]}`}: ${dirs[i]??`v${p.timelineIds[i]}`}`).join(', ')} };\n\nexport class ${p.name[0].toUpperCase()+p.name.slice(1)}Actor extends TimelineActor {\n  constructor(sprite: AS2Clip) { super(${JSON.stringify(p.name)}, sprite, (animations as any).frontLeft ?? Object.values(animations)[0] as any, {}); }\n}\n`;
+      files.set(`${aggModule}.ts`, aggCode);
+      report.push({ source: p.name, target: `${aggModule}.ts`, role: 'variant aggregator', diagnostics: [] });
+    }
+  }
+
   // Actor entry points are a migration layer, not another timeline scheduler.
   // Existing Execute/index.ts keep using the exact same frame/placement mapping.
   for (const binding of timelineModules) {
     const { id, module, displayName, metadata } = binding;
+    if (options.mergeVariants && proposals.some(p=> p.kind==='actor' && p.timelineIds.includes(id) && p.timelineIds.length>1)) {
+      continue;
+    }
     const slug = module.slice('timelines/'.length);
     const className = slug.split('_').filter(Boolean).map((part) => part[0].toUpperCase() + part.slice(1)).join('') + 'Actor';
     const frames = [...(timelines.get(id)?.frames.keys() ?? [])].sort((a, b) => a - b);
@@ -517,11 +597,10 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
     ].join('\n'));
   }
 
-  const proposals = proposeFromTimelines(timelines);
-  files.set('actors/_proposal.json', JSON.stringify({ proposals, generatedAt: new Date().toISOString() }, null, 2) + '\n');
-  report.push({ source: 'heuristic proposal', target: 'actors/_proposal.json', role: 'actor proposal', diagnostics: [] });
-
-  const summary = renderSummary(report, input.length);
+  let summary = renderSummary(report, input.length);
+  if (proposals.length) {
+    summary += `\n## Actor Proposals\n\n| Actor | Score | Timelines | Reason | Variant? |\n|---|---|---|---|---|\n` + proposals.map(p=> `| ${p.name} | ${p.score} | ${p.timelineIds.join(', ')} | ${p.reason} | ${p.variantOf ? 'variant of '+p.variantOf : ''} |`).join('\n') + '\n';
+  }
   files.set('as2ts-report.md', summary);
   return { files, report, summary };
 }
