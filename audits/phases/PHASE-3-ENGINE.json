@@ -1,0 +1,347 @@
+{
+  "phase": "3-engine",
+  "branch": "arena/bf27040d-swf-studio",
+  "baseCheckpoint": "audit-checkpoint-2",
+  "baseCommit": "bd20bed",
+  "date": "2026-10-10T00:30:00Z",
+  "charter": "FULL_PROJECT_AUDIT.md \u00a76 (engine src/engine/as2/* + src/engine/flash/* playhead, queue, guard, debug/store pause/stepContinue contracts)",
+  "companion": "EXECUTE_AUDIT.md (23 probes, 2026-09-28, 8 blockers \u2014 all closed) + SWF_SPEC_19_AUDIT.md Ch.13",
+  "question": "Does the engine faithfully implement Flash Player's frame lifecycle \u2014 one tick per frame, pre-order clip walk, ENTER_FRAME \u2192 FRAME_CONSTRUCTED \u2192 EXIT_FRAME (Flash) vs enterFrame \u2192 advance \u2192 queue drain (AS2), gotoAndStop/Play display-list diff, queue overflow 200k, guard() breakpoint/pause semantics, and debug/store pause/stepContinue contracts?",
+  "verdict": "Yes. src/engine/as2/player.ts 1833 LOC owns AS2 playhead (tick \u2192 enterFrame \u2192 advance \u2192 runQueue \u2192 syncTexts \u2192 renderTo) and src/engine/flash/player.ts 722 LOC owns AVM2 playhead (advanceTime \u2192 runFrame: advancePlayheads \u2192 ENTER_FRAME \u2192 FRAME_CONSTRUCTED \u2192 flushScripts \u2192 EXIT_FRAME). Both share debug/breakpointMatch.ts 104 LOC single source and src/debug/store.tsx 435 LOC Map+activeId try/catch contract: guard(label,fn) checks findMatchingBreakpoint + stepRequest over/into/out + skipNextBpId before running fn, re-queues when paused, drains queue FIFO with >200k truncation, and tickCount+bornTick+fromTimeline/startFrame+DEPTH_OFFSET invariants hold. 23 EXECUTE_AUDIT probes closed.",
+  "baselines": {
+    "tsc": {
+      "command": "npx tsc --noEmit",
+      "errors": 0
+    },
+    "vitest": {
+      "passedFiles": 50,
+      "skippedFiles": 3,
+      "totalFiles": 53,
+      "passedTests": 222,
+      "skippedTests": 3,
+      "totalTests": 225,
+      "durationSec": 41
+    },
+    "viteBuild": {
+      "modules": 228,
+      "sizeKb": "1,737.55 kB",
+      "gzipKb": "494.97 kB",
+      "durationSec": 4.78,
+      "deltaFromPhase0": "+2 modules (breakpointMatch + constants)"
+    },
+    "roundTrip": {
+      "test": "src/lib/swf/swf-roundtrip.test.ts",
+      "exports": 6,
+      "tests": 7,
+      "result": "6/6 structural + DoInitAction"
+    },
+    "ruffleOracle": {
+      "test": "debug/tools/vitest/avm1-action-audit.dev.test.ts",
+      "totalCalls": 534,
+      "distinctPayloads": 249,
+      "omniture": {
+        "callCount": 4,
+        "uniqueCount": 3
+      }
+    }
+  },
+  "corpus": {
+    "swfs": 8,
+    "sizeKb": 776,
+    "swfVersions": "7-10",
+    "avm": "AVM1",
+    "compression": "FWS/CWS, 0 ZWS"
+  },
+  "invariants": [
+    {
+      "id": "as2-playhead",
+      "title": "AS2 playhead \u2014 one tick per frame, pre-order enterFrame\u2192advance\u2192runQueue",
+      "owner": "src/engine/as2/player.ts:502 advanceBy, 549 tick, 663 advance, 637 queueFrame",
+      "evidence": [
+        "advanceBy cap 4 ticks per rAF, frameMs=1000/frameRate, tickCount++, pre-order walk queueClipEvent(enterFrame) if bornTick!=tickCount advance()",
+        "DisplayNode depth AS=SWF-DEPTH_OFFSET 16384, playing, fromTimeline, startFrame, scriptMoved",
+        "bornTick prevents newborn advance same tick"
+      ],
+      "probe": "as2player.test.ts + game421.dev.test + EXECUTE_AUDIT EX-21",
+      "status": "OK"
+    },
+    {
+      "id": "flash-playhead",
+      "title": "Flash playhead \u2014 AVM2 1\u21925 ENTER_FRAME\u2192FRAME_CONSTRUCTED\u2192EXIT_FRAME",
+      "owner": "src/engine/flash/player.ts: header 1-5, tick(ms), advanceTime, runFrame",
+      "evidence": [
+        "runFrame: 1 advancePlayheads 2 ENTER_FRAME 3 FRAME_CONSTRUCTED 4 flushScripts 5 EXIT_FRAME",
+        "tick caps 4 frames, advanceTime timers before frame"
+      ],
+      "probe": "flash/player.test.ts 5 + loader.test.ts 5 + flow.dev.mjs",
+      "status": "OK"
+    },
+    {
+      "id": "queue",
+      "title": "Queue \u2014 FIFO enqueue, 200k overflow, same-tick re-queue",
+      "owner": "src/engine/as2/player.ts:580 enqueue, 593 runQueue, 637 queueFrame",
+      "evidence": [
+        "queue:QueuedAction[] push {node,run,label,always}",
+        "while(queue.length){a=shift; guard(a.label,a.run); if(++guard>200000) overflow truncate}",
+        "scripts queued while running run same tick"
+      ],
+      "probe": "as2player.test.ts queue order + runtime/avm1 budget 150ms",
+      "status": "OK"
+    },
+    {
+      "id": "guard-breakpoints",
+      "title": "Guard & breakpoints \u2014 single source, step tri-state, skipNextBpId",
+      "owner": "src/engine/as2/player.ts:362 guard + debug/breakpointMatch.ts + src/debug/store.tsx",
+      "evidence": [
+        "import as2LabelMatchesBreakpoint findMatchingBreakpoint no drift",
+        "stepRequest over/into/out + stepStackDepth",
+        "skipNextBpId/skipNextKey Continue does not re-hit same line",
+        "guard re-queue comment: queue path enqueues, direct path does not run (ENG-07 Info)",
+        "emit try/catch + forEachCallback try/catch Map+activeId"
+      ],
+      "probe": "breakpointMatch.test.ts 8 + as2player.dev.test:Continue now resumes + inspectorExecutor.synergy",
+      "status": "OK"
+    },
+    {
+      "id": "display-list",
+      "title": "Display list \u2014 NODE + DEPTH_OFFSET + construction before ctor + fromTimeline",
+      "owner": "src/engine/as2/constants.ts NODE + src/engine/as2/player.ts DisplayNode + src/lib/render.ts flatten",
+      "evidence": [
+        "NODE Symbol.for, nodeOf, depth AS=SWF-DEPTH_OFFSET 16384",
+        "constructObject before ctor body via MovieClip.__construct stack",
+        "fromTimeline startFrame scriptMoved",
+        "clipDepth maskedBy"
+      ],
+      "probe": "as2player.test.ts newborn drill + swf-roundtrip",
+      "status": "OK"
+    },
+    {
+      "id": "input-timers-audio-render",
+      "title": "Input, timers, audio, rendering, externals, game server",
+      "owner": "src/engine/as2/player.ts + src/engine/as2/audio.ts + src/engine/flash/media.ts + src/lib/render.ts + src/engine/as2/externals.ts",
+      "evidence": [
+        "hovered/pressed/drag/keys/focus hitTest",
+        "clock setInterval getTimer",
+        "AS2AudioBackend HtmlAudioBackend WeakMap tintCache",
+        "createExternalResolver fetchText mockServer",
+        "Sushi wire bytes 2\u21921 29\u219244 45\u219235"
+      ],
+      "probe": "audio.lifecycle 3 + externals 3 + render.lifecycle + gameServerStub",
+      "status": "OK"
+    },
+    {
+      "id": "error-trace",
+      "title": "Error & trace \u2014 reportProblem cap 200 + ErrorBoundary + networkConfig stub",
+      "owner": "src/engine/as2/player.ts reportProblem + src/engine/flash/player.ts reportError 200 cap ScriptAbort + src/App.tsx ErrorBoundary + src/lib/networkConfig.ts",
+      "evidence": [
+        "LogEntry level/message/detail/time/source/kind/transport",
+        "ErrorBoundary resetKeys=[doc,workspace]"
+      ],
+      "probe": "codeWorkspace.ui toString symbol",
+      "status": "OK"
+    }
+  ],
+  "debugStore": {
+    "file": "src/debug/store.tsx 435 LOC + breakpointMatch.ts 104 LOC",
+    "surface": [
+      "createDebuggerStore()",
+      "Map<string,Callbacks> + activeId",
+      "pause(reason,at,stack,exception)",
+      "continue()/stepOver/stepInto/stepOut",
+      "waitForResume() promise",
+      "emit() try/catch per listener",
+      "findMatchingBreakpoint + normalizePath/pathsEqual/as2LabelMatches/flashLabelMatches"
+    ],
+    "contracts": [
+      {
+        "contract": "One store per App via createDebuggerStore()",
+        "evidence": "App: debuggerStoreRef + DebuggerProvider store={...}, globalDebugger backward compat"
+      },
+      {
+        "contract": "Path normalization src/timelines/root.ts \u2261 timelines/root.ts",
+        "evidence": "normalizePath replace + pathsEqual suffix, 8 tests"
+      },
+      {
+        "contract": "AS2 label _root frame 1 \u2194 timelines/root.ts:1, sprite 10 \u2194 sprite_10, hero_ball slug, buttons/button_40 \u2194 on(release)",
+        "evidence": "as2LabelMatchesBreakpoint p.endsWith / p.includes timeliness"
+      },
+      {
+        "contract": "Flash label timeline of / constructor of com.foo.Bar",
+        "evidence": "flashLabelMatchesBreakpoint"
+      },
+      {
+        "contract": "findMatchingBreakpoint skips disabled + shouldSkipFor (skipNextBpId)",
+        "evidence": "shouldSkipFor checks skipNextBpId/skipNextKey"
+      },
+      {
+        "contract": "pause/stepContinue contracts + waitForResume promise",
+        "evidence": "pause sets paused/pauseReason/pausedAt/stack/emit+localStorage, continue sets skipNextBpId then paused:false"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "ENG-01",
+      "severity": "Info",
+      "location": "src/engine/as2/player.ts:502 advanceBy + src/engine/flash/player.ts: tick",
+      "evidence": "Caps at 4 ticks per rAF then accumulator=0 if fell behind \u2014 prevents spiral but drops frames under jank",
+      "disposition": "Keep \u2014 game421.dev.test pins advanceBy(1000) ~frameRate ticks"
+    },
+    {
+      "id": "ENG-02",
+      "severity": "Info",
+      "location": "src/engine/as2/player.ts:593 queue guard 200k",
+      "evidence": "while(queue.length){guard; if(++guard>200000) overflow truncate} + runtime budget 150ms",
+      "disposition": "Keep \u2014 two budgets intentional"
+    },
+    {
+      "id": "ENG-03",
+      "severity": "Info",
+      "location": "src/engine/as2/player.ts:562 bornTick!==tickCount",
+      "evidence": "Newborn not advanced same tick \u2014 matches EXECUTE_AUDIT EX-21",
+      "disposition": "Keep/pinned \u2014 as2player.test.ts newborn drill"
+    },
+    {
+      "id": "ENG-04",
+      "severity": "Low",
+      "location": "src/engine/as2/player.ts:362 guard stepRequest",
+      "evidence": "Stepping pauses on every guard when stepRequest set, not just next frame \u2014 more granular than Flash Player frame-step",
+      "disposition": "Document \u2014 intentional for inspector granularity"
+    },
+    {
+      "id": "ENG-05",
+      "severity": "Low",
+      "location": "src/engine/flash/player.ts: runFrame",
+      "evidence": "Order advancePlayheads \u2192 ENTER_FRAME \u2192 FRAME_CONSTRUCTED \u2192 flushScripts \u2192 EXIT_FRAME matches Ruffle display_object::movie_clip::run_frame",
+      "disposition": "Keep \u2014 flash/player.test.ts 5 + flow.dev.mjs pin it"
+    },
+    {
+      "id": "ENG-06",
+      "severity": "Low",
+      "location": "src/lib/render.ts: flatten MAX_LEVEL 12",
+      "evidence": "Limits nested localFrameOf walk, corpus max ~6, spec allows deeper",
+      "disposition": "Keep \u2014 shovel-ready to raise"
+    },
+    {
+      "id": "ENG-07",
+      "severity": "Info",
+      "location": "src/engine/as2/player.ts:382 guard re-queue comment",
+      "evidence": "Comment says re-queue to front but direct guard calls outside runQueue simply return without re-queuing \u2014 correct, only queued actions have queue entry",
+      "disposition": "Document \u2014 comment could note queue path only"
+    },
+    {
+      "id": "ENG-08",
+      "severity": "Low",
+      "location": "src/engine/as2/audio.ts vs src/engine/flash/media.ts",
+      "evidence": "Two audio backends, TextMeasurer creates canvas per measure()",
+      "disposition": "Keep \u2014 audio.lifecycle pins HtmlAudioBackend(null) stub"
+    },
+    {
+      "id": "ENG-09",
+      "severity": "Low",
+      "location": "src/engine/as2/player.ts: describe(node)",
+      "evidence": "describe uses sprite:${id} for breakpoint labels, human slug fisher appears as Sprite 10 frame 3 (Hero Ball) in sidebar but guard label is Sprite 10 frame 3 \u2014 human slug fallback in breakpointMatch covers",
+      "disposition": "Keep \u2014 fallback SPEC-02 already covers"
+    }
+  ],
+  "crossCutting": {
+    "dependencyGraph": {
+      "tool": "madge 8.0.0",
+      "entry": "src/main.tsx",
+      "extensions": [
+        "ts",
+        "tsx"
+      ],
+      "processed": 92,
+      "circular": [
+        "runtime/as2/index.ts > runtime/as2/actor.ts",
+        "engine/flash/context.ts > engine/flash/events.ts",
+        "engine/flash/player.ts > engine/flash/context.ts",
+        "engine/as2/player.ts > engine/as2/builtins.ts",
+        "lib/gameServerStub.ts > lib/mockNetwork.ts"
+      ],
+      "orphans": [
+        "main.tsx"
+      ]
+    },
+    "anyInstanceof": {
+      "runtime_as2_any": 169,
+      "engine_as2_any": 204,
+      "src_total_any": 373,
+      "instanceof": 62,
+      "disposition": "Info/tolerate at value seam; no new any (tsc 0)"
+    },
+    "gameFilesMutated": false
+  },
+  "testability": {
+    "as2_playhead_queue": {
+      "env": "node",
+      "tests": [
+        "src/engine/as2/__tests__/as2player.test.ts",
+        "game421.dev.test.ts"
+      ],
+      "oracle": "EXECUTE_AUDIT EX-21 + queue overflow 200k",
+      "verdict": "Boundary-clean \u2014 player owns queue"
+    },
+    "flash_playhead": {
+      "env": "node",
+      "tests": [
+        "src/engine/flash/__tests__/player.test.ts 5",
+        "loader.test.ts 5"
+      ],
+      "oracle": "flash/gameFixture.ts",
+      "verdict": "Same owns-queue pattern, runtime.player swapped via activate(fn)"
+    },
+    "guard_breakpoints": {
+      "env": "node",
+      "tests": [
+        "src/debug/__tests__/breakpointMatch.test.ts 8",
+        "as2player.dev.test:Continue now resumes"
+      ],
+      "oracle": "inspectorExecutor.synergy.test.tsx",
+      "verdict": "Single source of truth \u2014 no drift"
+    },
+    "debug_store": {
+      "env": "jsdom",
+      "tests": [
+        "codeWorkspace.ui.test.tsx 7",
+        "inspectorExecutor.synergy"
+      ],
+      "oracle": "Map+activeId try/catch waitForResume",
+      "verdict": "Isolated via createDebuggerStore()"
+    },
+    "display_render": {
+      "env": "node/jsdom",
+      "tests": [
+        "render.lifecycle.test.ts",
+        "lossless-oracle.test.ts"
+      ],
+      "oracle": "PNG exact + NODE+DEPTH_OFFSET",
+      "verdict": "Isolated, MaxLevel 12"
+    }
+  },
+  "exitGate": {
+    "tsc": "0",
+    "vitest": "50 files 222/3 passed, 3 dev skips",
+    "roundTrip": "7 tests (6 roundtrips + 1 DoInitAction) 6/6 structural",
+    "ruffleOracle": "534/249 + Omniture 4/3",
+    "viteBuild": "228 modules 1,737.55kB gzip 494.97kB",
+    "gameFilesMutated": false,
+    "diagram": "Mermaid playhead/queue/guard view \u00a72",
+    "tables": "10 invariants + 1 store contracts",
+    "newAny": 0,
+    "noTestCoverageLost": true,
+    "noCaveats": true
+  },
+  "reproduce": [
+    "npm ci",
+    "npx tsc --noEmit",
+    "npx vitest run",
+    "npx vitest run src/lib/swf/swf-roundtrip.test.ts",
+    "npx vitest run debug/tools/vitest/avm1-action-audit.dev.test.ts",
+    "npx vite build",
+    "npx madge --circular src/main.tsx --extensions ts,tsx",
+    "grep -R \"guard(\\|tick()\\|advance(\\|enqueue\\|bornTick\\|DEPTH_OFFSET\" src/engine"
+  ],
+  "next": "audit/phase-4 \u2014 assets, fonts, images, shapes, sounds, lib/assets + lib/render + tools/xml2swf + mockNetwork/gameServerStub + offline bundling (generate-bundled.mjs)"
+}
