@@ -8,6 +8,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AssetCache, SwfPackage } from '../lib/assets';
 import type { AssetBundle, Project, SwfDocument } from '../types';
 import { Button } from './ui';
+import { RunningTimelinesSidebar } from './RunningTimelinesSidebar';
+import { buildWorkbenchTimelineMetadata } from '../engine/as2/workbenchMetadata';
 import { ExecutionConsole } from './ExecutionConsole';
 import { useExecutionDiagnostics } from './useExecutionDiagnostics';
 import { compileSources, expectedClasses, isCodeFile, linkProgram, mergeSources, type CompiledSources, type LinkedProgram } from '../engine/flash/loader';
@@ -36,10 +38,10 @@ const MAX_LOG = 500;
 export function ExecuteTab({ externals, project, ...props }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[] }) {
   return isAs2Bundle(props.doc, props.assets)
     ? <As2Execute {...props} project={project} externals={externals} />
-    : <As3Execute {...props} externals={externals} />;
+    : <As3Execute {...props} project={project} externals={externals} />;
 }
 
-function As3Execute({ doc, cache, assets, externals = [] }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; externals?: SwfPackage[] }) {
+function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<FlashPlayer | null>(null);
@@ -112,6 +114,7 @@ function As3Execute({ doc, cache, assets, externals = [] }: { doc: SwfDocument; 
     }))
     .filter((dependency) => dependency.files.length > 0), [externals]);
   const dependencyKey = dependencyFiles.map((d) => `${d.name}:${d.files.length}`).join('|');
+  const as3TimelineNames = useMemo(() => buildWorkbenchTimelineMetadata(doc, project), [doc, project]);
 
   // ---- compile the transpiled code in the bundle (once per bundle)
   useEffect(() => {
@@ -380,24 +383,27 @@ function As3Execute({ doc, cache, assets, externals = [] }: { doc: SwfDocument; 
         </div>
       )}
 
-      <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden">
-        <canvas
-          ref={canvasRef}
-          tabIndex={0}
-          aria-label="Game stage"
-          className="block outline-none"
-          width={Math.round(size.w * dpr)}
-          height={Math.round(size.h * dpr)}
-          style={{ width: size.w, height: size.h }}
-          onKeyDown={onKey(true)}
-          onKeyUp={onKey(false)}
-          onPointerMove={(e) => { const [x, y] = toStage(e); playerRef.current?.pointerMove(x, y); }}
-          onPointerDown={(e) => { e.currentTarget.focus(); e.currentTarget.setPointerCapture?.(e.pointerId); const [x, y] = toStage(e); playerRef.current?.pointerDown(x, y); }}
-          onPointerUp={(e) => { const [x, y] = toStage(e); playerRef.current?.pointerUp(x, y); }}
-          onPointerLeave={() => playerRef.current?.pointerLeave()}
-          onContextMenu={(e) => e.preventDefault()}
-        />
-        {dbgState.paused && <div className="pointer-events-none absolute inset-0 border-2 border-amber-500/40 bg-amber-500/5" />}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div ref={wrapRef} className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+          <canvas
+            ref={canvasRef}
+            tabIndex={0}
+            aria-label="Game stage"
+            className="block outline-none"
+            width={Math.round(size.w * dpr)}
+            height={Math.round(size.h * dpr)}
+            style={{ width: size.w, height: size.h }}
+            onKeyDown={onKey(true)}
+            onKeyUp={onKey(false)}
+            onPointerMove={(e) => { const [x, y] = toStage(e); playerRef.current?.pointerMove(x, y); }}
+            onPointerDown={(e) => { e.currentTarget.focus(); e.currentTarget.setPointerCapture?.(e.pointerId); const [x, y] = toStage(e); playerRef.current?.pointerDown(x, y); }}
+            onPointerUp={(e) => { const [x, y] = toStage(e); playerRef.current?.pointerUp(x, y); }}
+            onPointerLeave={() => playerRef.current?.pointerLeave()}
+            onContextMenu={(e) => e.preventDefault()}
+          />
+          {dbgState.paused && <div className="pointer-events-none absolute inset-0 border-2 border-amber-500/40 bg-amber-500/5" />}
+        </div>
+        <RunningTimelinesSidebar doc={doc} timelines={[]} timelineNames={as3TimelineNames} playing={playing && !dbgState.paused} project={project} />
       </div>
 
       {showDebugger && (

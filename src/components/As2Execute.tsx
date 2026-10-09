@@ -503,7 +503,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
           </div>
         )}
       </div>
-      <RunningTimelinesSidebar doc={doc} timelines={runtimeTimelines} timelineNames={timelineMetadata} playing={playing && !dbgState.paused} />
+      <RunningTimelinesSidebar doc={doc} timelines={runtimeTimelines} timelineNames={timelineMetadata} playing={playing && !dbgState.paused} project={project} />
       </div>
 
       {showDebugger && (
