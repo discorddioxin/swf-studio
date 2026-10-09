@@ -333,6 +333,26 @@ export class AS2Player {
     });
   }
 
+  /** Execute fn with stack tracking but without an upfront breakpoint check (used to resume after a pause). */
+  private runGuardFn(label: string, fn: () => unknown, scopeHint?: Record<string, unknown>) {
+    const dbg = globalDebugger;
+    const frameId = Date.now() + Math.floor(Math.random() * 1000);
+    const pushScope = scopeHint ?? {};
+    (dbg as any).pushFrame?.({ id: frameId, name: label, source: label, line: 1, scope: pushScope });
+    try {
+      const result = fn();
+      if (result && typeof (result as { then?: unknown }).then === 'function') {
+        void Promise.resolve(result).catch((error: unknown) => this.reportProblem(error, label));
+      }
+      return result;
+    } catch (error) {
+      this.reportProblem(error, label);
+      return undefined;
+    } finally {
+      try { (dbg as any).popFrame?.(); } catch {}
+    }
+  }
+
   /** Run game code; synchronous throws and async rejections are attributed to the callback that failed. */
   guard(label: string, fn: () => unknown, scopeHint?: Record<string, unknown>) {
     // debug: breakpoint check before running
@@ -344,7 +364,6 @@ export class AS2Player {
       return undefined;
     }
     // check breakpoints / step pause before this call
-    // derive a synthetic source path from label for file-level breakpoint matching
     const shouldBreak = (() => {
       if (state.breakpoints.length === 0 && !state.breakOnExceptions && dbg.stepRequest == null) return null;
       // step: break on every guard when stepping
@@ -353,21 +372,63 @@ export class AS2Player {
       }
       for (const bp of state.breakpoints) {
         if (!bp.enabled) continue;
+        // honour "continue" skip — don't re-hit the breakpoint we just left
+        if ((dbg as any).shouldSkipFor?.(bp)) continue;
         const p = bp.path.toLowerCase();
         const l = label.toLowerCase();
-        // very permissive file match: breakpoint path contains timeline id or frame marker
-        if (p.includes('root') && l.includes('_root')) return { path: bp.path, line: bp.line };
-        if (p.includes('sprite') && l.includes('sprite')) {
-          // extract sprite id from bp path if present
-          const m = p.match(/sprite[_-]?(\d+)/);
-          if (m && l.includes(m[1])) return { path: bp.path, line: bp.line };
+        // timelines/root.ts ↔ _root / main timeline
+        if (p.endsWith('/timelines/root.ts') || p === 'timelines/root.ts') {
+          if (l.includes('_root') || l.includes('main timeline')) return { path: bp.path, line: bp.line };
+          continue;
         }
-        // fallback: label contains file basename without extension
-        const base = p.split('/').pop()?.replace(/\.ts$/,'') ?? '';
-        if (base && l.includes(base.replace(/_/g,' '))) return { path: bp.path, line: bp.line };
-        if (base && l.includes(base)) return { path: bp.path, line: bp.line };
-        // if breakpoint is on a generic path, treat any frame as hit
-        if (p.endsWith('.ts') && l.includes('frame')) return { path: bp.path, line: bp.line };
+        // timelines/... — sprite or human-named timeline
+        if (p.includes('/timelines/')) {
+          const mNum = p.match(/sprite[_-]?(\d+)/);
+          if (mNum && l.includes(mNum[1]) && l.includes('sprite')) return { path: bp.path, line: bp.line };
+          // human-named timeline: match slug against label when numeric id not present;
+          // fall back to any sprite frame so the breakpoint still does something
+          if (!mNum) {
+            const base = p.split('/').pop()?.replace(/\.ts$/,'') ?? '';
+            if (base && base !== 'root') {
+              const slug = base.replace(/_/g, ' ');
+              if ((l.includes(base) || l.includes(slug)) && (l.includes('frame') || l.includes('sprite') || l.includes('init'))) {
+                return { path: bp.path, line: bp.line };
+              }
+              // fallback: human-named timelines still represent a sprite; break on any sprite frame
+              if (l.includes('sprite') && (l.includes('frame') || l.includes('init'))) {
+                return { path: bp.path, line: bp.line };
+              }
+            }
+          }
+          continue;
+        }
+        // buttons
+        if (p.includes('/buttons/')) {
+          const m = p.match(/button[_-]?(\d+)/);
+          if (m && l.includes(m[1]) && (l.includes('button') || l.includes('on(') || l.includes('onclip'))) {
+            return { path: bp.path, line: bp.line };
+          }
+          continue;
+        }
+        // init actions
+        if (p.includes('/init/')) {
+          if (l.startsWith('init action')) {
+            const base = p.split('/').pop()?.replace(/\.ts$/,'') ?? '';
+            if (base.startsWith('action_')) return { path: bp.path, line: bp.line };
+            if (base && l.includes(base.toLowerCase())) return { path: bp.path, line: bp.line };
+            // generic init file matches any init label only if no more specific init file matched;
+            // keep permissive for init folder but narrowed to init labels only
+            if (p.includes('/init/action_')) return { path: bp.path, line: bp.line };
+          }
+          continue;
+        }
+        // classes — match by short class name
+        if (p.includes('/classes/')) {
+          const base = p.split('/').pop()?.replace(/\.ts$/,'') ?? '';
+          if (base && l.includes(base.toLowerCase())) return { path: bp.path, line: bp.line };
+          continue;
+        }
+        // No generic fallback — a breakpoint on an unrelated file no longer stops every frame.
       }
       return null;
     })();
@@ -393,31 +454,15 @@ export class AS2Player {
         if (!dbg.getState().paused) {
           unsub();
           if (wasRunning) this.play();
-          // re-run the pending call
-          try { this.guard(pending.label, pending.fn, pending.scope); this.runQueue(); } catch {}
+          // Run the pending action without re-checking the breakpoint that just caused the pause;
+          // otherwise Continue would immediately re-break on the same location.
+          try { this.runGuardFn(pending.label, pending.fn, pending.scope); this.runQueue(); } catch {}
         }
       });
       return undefined;
     }
 
-    // push stack frame
-    const frameId = Date.now() + Math.floor(Math.random()*1000);
-    const pushScope = scopeHint ?? {};
-    // try to enrich scope with node object if label describes a display node
-    (dbg as any).pushFrame?.({ id: frameId, name: label, source: label, line: 1, scope: pushScope });
-    try {
-      const result = fn();
-      if (result && typeof (result as { then?: unknown }).then === 'function') {
-        void Promise.resolve(result).catch((error: unknown) => this.reportProblem(error, label));
-      }
-      return result;
-    } catch (error) {
-      this.reportProblem(error, label);
-      return undefined;
-    } finally {
-      // pop if we pushed
-      try { (dbg as any).popFrame?.(); } catch {}
-    }
+    return this.runGuardFn(label, fn, scopeHint);
   }
 
   private reportProblem(error: unknown, label: string) {

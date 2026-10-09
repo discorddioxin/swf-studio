@@ -17,6 +17,9 @@ class DebuggerStore {
   // step request
   stepRequest: 'over' | 'into' | 'out' | null = null;
   stepStackDepth = 0;
+  // continue() should not immediately re-hit the same breakpoint
+  private skipNextBpId: string | null = null;
+  private skipNextKey: string | null = null;
 
   constructor() {
     this.state = {
@@ -170,6 +173,25 @@ class DebuggerStore {
     this.emit();
   }
 
+  /** Let a guard skip the breakpoint that just caused the pause when the user hits Continue. */
+  private shouldSkipHit(hit: Breakpoint | undefined, fallbackKey?: string): boolean {
+    if (!hit && !fallbackKey) return false;
+    if (hit && this.skipNextBpId === hit.id) { this.skipNextBpId = null; this.skipNextKey = null; return true; }
+    const key = fallbackKey ?? (hit ? `${hit.path}:${hit.line}` : null);
+    if (key && this.skipNextKey === key) { this.skipNextBpId = null; this.skipNextKey = null; return true; }
+    return false;
+  }
+
+  /** Called by player guards to honour the same skip logic without duplicating it. */
+  shouldSkipFor(hit: Breakpoint): boolean {
+    return this.shouldSkipHit(hit);
+  }
+
+  clearSkip() {
+    this.skipNextBpId = null;
+    this.skipNextKey = null;
+  }
+
   async maybePauseAt(path: string, line: number, scope: Record<string, unknown>, label: string): Promise<void> {
     const bp = this.hasEnabledBreakpoint(path, line);
     const shouldBreakForStep = this.stepRequest != null;
@@ -178,6 +200,7 @@ class DebuggerStore {
     if (!bp && !fileBp && !shouldBreakForStep) return;
     // check condition
     const hit = bp ?? fileBp;
+    if (hit && this.shouldSkipHit(hit)) return;
     if (hit?.condition) {
       try {
         const fn = new Function(...Object.keys(scope), `return (${hit.condition});`);
@@ -206,23 +229,49 @@ class DebuggerStore {
 
   // step controls set request and resume
   stepOver() {
+    this.skipNextBpId = null;
+    this.skipNextKey = null;
     this.stepRequest = 'over';
     this.stepStackDepth = this.state.stack.length;
     this.resume();
     this.callbacks.onStepOver?.();
   }
   stepInto() {
+    this.skipNextBpId = null;
+    this.skipNextKey = null;
     this.stepRequest = 'into';
     this.resume();
     this.callbacks.onStepInto?.();
   }
   stepOut() {
+    this.skipNextBpId = null;
+    this.skipNextKey = null;
     this.stepRequest = 'out';
     this.stepStackDepth = this.state.stack.length;
     this.resume();
     this.callbacks.onStepOut?.();
   }
   continue() {
+    // Don't immediately re-break on the breakpoint we just left.
+    if (this.state.paused && this.state.pauseReason === 'breakpoint' && this.state.pausedAt) {
+      const at = this.state.pausedAt;
+      const exact = this.state.breakpoints.find(b => b.enabled && b.path === at.path && b.line === at.line);
+      if (exact) {
+        this.skipNextBpId = exact.id;
+        this.skipNextKey = `${exact.path}:${exact.line}`;
+      } else {
+        const fileBp = this.state.breakpoints.find(b => b.enabled && b.path === at.path);
+        if (fileBp) {
+          this.skipNextBpId = fileBp.id;
+          this.skipNextKey = `${fileBp.path}:${fileBp.line}`;
+        } else {
+          this.skipNextKey = `${at.path}:${at.line}`;
+        }
+      }
+    } else {
+      this.skipNextBpId = null;
+      this.skipNextKey = null;
+    }
     this.stepRequest = null;
     this.resume();
     this.callbacks.onContinue?.();

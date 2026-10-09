@@ -392,6 +392,20 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     try { this.onLog(entry); }
     catch (error) { console.error('[flash engine] log handler failed', error); }
   }
+  private runGuardBody<T>(fn: () => T, where: string, source: LogSource): T | undefined {
+    const dbg = globalDebugger;
+    const fid = Date.now() + Math.floor(Math.random() * 1000);
+    try { (dbg as any).pushFrame?.({ id: fid, name: where, source: where, line: 1, scope: { where } }); } catch {}
+    try {
+      const res = runtime.guard(fn, where, source);
+      if (dbg.stepRequest === 'over' || dbg.stepRequest === 'into') {
+        dbg.pause('step', undefined, [{ id: Date.now(), name: where, source: where, line: 1, scope: { where } } as any, ...dbg.getState().stack.slice(0, 31)]);
+        dbg.stepRequest = null;
+      }
+      return res;
+    } finally { try { (dbg as any).popFrame?.(); } catch {} }
+  }
+
   private guard<T>(fn: () => T, where: string, source: LogSource = 'app') {
     const dbg = globalDebugger;
     const state = dbg.getState();
@@ -402,36 +416,35 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
       if (dbg.stepRequest) return { path: where, line: 1 };
       for (const bp of state.breakpoints) {
         if (!bp.enabled) continue;
+        if ((dbg as any).shouldSkipFor?.(bp)) continue;
         const p = bp.path.toLowerCase();
         const w = where.toLowerCase();
+        // timelines/root.ts ↔ timeline of root / stage
+        if (p.endsWith('/timelines/root.ts') || p === 'timelines/root.ts') {
+          if (w.includes('root') || w.includes('timeline of')) return { path: bp.path, line: bp.line };
+          continue;
+        }
+        // AS3 timeline / class matching — require base name to appear and be a game file
         const base = p.split('/').pop()?.replace(/\.ts$/,'') ?? '';
-        if (base && w.includes(base)) return { path: bp.path, line: bp.line };
-        if (p.includes('root') && w.includes('root')) return { path: bp.path, line: bp.line };
+        // only consider game-generated files, not arbitrary engine files; and require where to be a frame/timeline/class context
+        if ((p.includes('/timelines/') || p.includes('/classes/') || p.includes('/buttons/')) && base) {
+          if (w.includes(base.toLowerCase()) && (w.includes('timeline') || w.includes('frame') || w.includes('constructor') || w.includes('drawing'))) {
+            return { path: bp.path, line: bp.line };
+          }
+        }
       }
       return null;
     })();
     if (shouldBreak) {
       dbg.pause('breakpoint', { path: shouldBreak.path, line: shouldBreak.line }, [{ id: Date.now(), name: where, source: shouldBreak.path, line: shouldBreak.line, scope: { where } } as any, ...state.stack.slice(0,31)]);
-      // pause not applicable to FlashPlayer tick loop? we just record pause; the ExecuteTab loop will check dbg.paused and stop ticking
-      // stash re-run
+      // stash re-run without re-checking the breakpoint that just caused the pause
       const pending = { fn, where, source };
       const unsub = dbg.subscribe(() => {
-        if (!dbg.getState().paused) { unsub(); try { this.guard(pending.fn, pending.where, pending.source as any); this.flushScripts(); } catch {} }
+        if (!dbg.getState().paused) { unsub(); try { this.runGuardBody(pending.fn, pending.where, pending.source); this.flushScripts(); } catch {} }
       });
       return undefined as unknown as T;
     }
-    // push stack
-    const fid = Date.now() + Math.floor(Math.random()*1000);
-    try { (dbg as any).pushFrame?.({ id: fid, name: where, source: where, line: 1, scope: { where } }); } catch {}
-    try {
-      const res = runtime.guard(fn, where, source);
-      // step handling
-      if (dbg.stepRequest === 'over' || dbg.stepRequest === 'into') {
-        dbg.pause('step', undefined, [{ id: Date.now(), name: where, source: where, line: 1, scope: { where } } as any, ...dbg.getState().stack.slice(0,31)]);
-        dbg.stepRequest = null;
-      }
-      return res;
-    } finally { try { (dbg as any).popFrame?.(); } catch {} }
+    return this.runGuardBody(fn, where, source);
   }
 
   /** Make this the active player while game code runs. */

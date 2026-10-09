@@ -168,7 +168,8 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
     pendingLogs.current = [];
     setLogs([]);
     dbg.clearStack();
-    if (dbgState.paused) dbg.resume();
+    (dbg as any).clearSkip?.();
+    if (dbg.getState().paused) dbg.resume();
     const audio = new HtmlAudioBackend(cache);
     const gatedAudio: AudioBackend = { play: (...args) => (mutedRef.current ? null : audio.play(...args)) };
     const player = new FlashPlayer({

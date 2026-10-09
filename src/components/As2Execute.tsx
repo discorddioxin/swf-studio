@@ -185,7 +185,8 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
     setLogs([]);
     setRuntimeTimelines([]);
     dbg.clearStack();
-    if (dbgState.paused) dbg.resume();
+    (dbg as any).clearSkip?.();
+    if (dbg.getState().paused) dbg.resume();
     const audio = new AS2AudioBackend(cache, soundFilesOf(assets?.files ?? []));
     audio.muted = muted;
     audioRef.current = audio;
