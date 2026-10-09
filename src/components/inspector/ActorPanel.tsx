@@ -13,6 +13,7 @@ import { Button, Field, TagInput, inputCls } from '../ui';
 import { ACTOR_CLASSIFICATIONS, ACTOR_COMBAT_OPTIONS, ACTOR_FACING_SLOTS, ACTOR_LAYERS, ACTOR_MOVEMENT_SLOTS, ACTOR_WALK_SLOTS } from './actorConsts';
 import { collectActorImageDependencies, normalizeActorKey } from './actorHelpers';
 import { ActorCodeDependencies, ActorImageDependencies, ActorSoundDependencies } from './actorDependencies';
+import { ActorProposals } from './ActorProposals';
 
 // ---------------------------------------------------------------- actors ----
 
@@ -34,7 +35,12 @@ export function ActorPanel({ doc, cache, api, selectedActorId, onOpenTimeline, s
   const [newBindingAction, setNewBindingAction] = useState('');
   const [newSequenceName, setNewSequenceName] = useState('');
   const actor = (api.project.actors ?? []).find((a) => a.id === selectedActorId);
-  if (!actor) return <Empty>Select or create an actor from the Actors list.</Empty>;
+  if (!actor) return (
+    <div className="space-y-2">
+      <ActorProposals doc={doc} api={api} onOpenTimeline={onOpenTimeline} setFrame={setFrame} setLoopRange={setLoopRange} />
+      <Empty>Select or create an actor from the Actors list.</Empty>
+    </div>
+  );
 
   const clips = api.project.clips;
   const assigned = new Set(actor.clipIds);
@@ -86,6 +92,7 @@ export function ActorPanel({ doc, cache, api, selectedActorId, onOpenTimeline, s
 
   return (
     <div className="space-y-4 p-3 text-xs">
+      <ActorProposals doc={doc} api={api} onOpenTimeline={onOpenTimeline} setFrame={setFrame} setLoopRange={setLoopRange} />
       <div className="space-y-2 rounded-lg border border-emerald-900/40 bg-emerald-950/10 p-3">
         <div className="flex items-center gap-2">
           <span className="text-xl text-emerald-300">♙</span>

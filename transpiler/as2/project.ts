@@ -12,6 +12,7 @@
 // File contents decide handler types (on(...) / onClipEvent(...) blocks), not names.
 
 import type { ClassDecl, Stmt } from './ast';
+import { proposeFromTimelines } from './actorHeuristics';
 import { ModuleEmitter, type Diagnostic, type KnownClass } from './emit';
 import { LexError } from './lexer';
 import { ParseError, parseProgram } from './parser';
@@ -515,6 +516,10 @@ export function transpileProject(input: ProjectFile[], options: ProjectOptions =
       '',
     ].join('\n'));
   }
+
+  const proposals = proposeFromTimelines(timelines);
+  files.set('actors/_proposal.json', JSON.stringify({ proposals, generatedAt: new Date().toISOString() }, null, 2) + '\n');
+  report.push({ source: 'heuristic proposal', target: 'actors/_proposal.json', role: 'actor proposal', diagnostics: [] });
 
   const summary = renderSummary(report, input.length);
   files.set('as2ts-report.md', summary);
