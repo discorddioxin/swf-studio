@@ -24,7 +24,8 @@ import {
 } from './display';
 import { Event, EventDispatcher, IOErrorEvent, KeyboardEvent, MouseEvent } from './events';
 import { Point, Rectangle } from './geom';
-import { globalDebugger } from '../../debug/store';
+import { globalDebugger, type DebuggerStore } from '../../debug/store';
+import { findMatchingBreakpoint, flashLabelMatchesBreakpoint } from '../../debug/breakpointMatch';
 import type { AudioBackend, AudioHandle, SoundChannel } from './media';
 import { TextField } from './text';
 
@@ -90,6 +91,8 @@ export interface PlayerOptions {
   documentClass?: string | null;
   audio?: AudioBackend | null;
   onLog?: (entry: LogEntry) => void;
+  /** Injected debugger (defaults to globalDebugger singleton for backward compat). */
+  debugger?: DebuggerStore;
 }
 
 interface Scheduled { id: number; due: number; interval: number; repeat: boolean; fn: () => void }
@@ -127,12 +130,14 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
   private frameSounds = new Map<number, AudioHandle>();
   private errorCount = 0;
   private networkRequestSequence = 0;
+  private readonly dbg: DebuggerStore;
 
   constructor(opts: PlayerOptions) {
     this.doc = opts.doc;
     this.assets = opts.assets ?? null;
     this.audio = opts.audio ?? null;
     this.onLog = opts.onLog ?? (() => {});
+    this.dbg = opts.debugger ?? globalDebugger;
     const s = this.doc.header.stage;
     const previous = runtime.player;
     runtime.player = this as unknown as typeof runtime.player; // Stage construction reads host()
@@ -371,7 +376,7 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
       this.log('error', 'Too many errors; further errors are not logged.', undefined, { source, kind: 'problem', context: where });
     }
     try {
-      const dbg = globalDebugger;
+      const dbg = this.dbg;
       const s = dbg.getState();
       if (s.breakOnExceptions || s.breakOnUncaught) {
         dbg.pause('exception', undefined, [{ id: Date.now(), name: where, source: 'exception', line: 1, scope: { error: e.message, where } } as any, ...s.stack.slice(0,31)], { message: e.message, stack: e.stack });
@@ -393,7 +398,7 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     catch (error) { console.error('[flash engine] log handler failed', error); }
   }
   private runGuardBody<T>(fn: () => T, where: string, source: LogSource): T | undefined {
-    const dbg = globalDebugger;
+    const dbg = this.dbg;
     const fid = Date.now() + Math.floor(Math.random() * 1000);
     try { (dbg as any).pushFrame?.({ id: fid, name: where, source: where, line: 1, scope: { where } }); } catch {}
     try {
@@ -407,32 +412,15 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
   }
 
   private guard<T>(fn: () => T, where: string, source: LogSource = 'app') {
-    const dbg = globalDebugger;
+    const dbg = this.dbg;
     const state = dbg.getState();
     if (state.paused) return undefined as unknown as T;
-    // breakpoint / step check before guard
+    // breakpoint / step check before guard — single source of truth via breakpointMatch
     const shouldBreak = (() => {
       if (state.breakpoints.length === 0 && !state.breakOnExceptions && dbg.stepRequest == null) return null;
       if (dbg.stepRequest) return { path: where, line: 1 };
-      for (const bp of state.breakpoints) {
-        if (!bp.enabled) continue;
-        if ((dbg as any).shouldSkipFor?.(bp)) continue;
-        const p = bp.path.toLowerCase();
-        const w = where.toLowerCase();
-        // timelines/root.ts ↔ timeline of root / stage
-        if (p.endsWith('/timelines/root.ts') || p === 'timelines/root.ts') {
-          if (w.includes('root') || w.includes('timeline of')) return { path: bp.path, line: bp.line };
-          continue;
-        }
-        // AS3 timeline / class matching — require base name to appear and be a game file
-        const base = p.split('/').pop()?.replace(/\.ts$/,'') ?? '';
-        // only consider game-generated files, not arbitrary engine files; and require where to be a frame/timeline/class context
-        if ((p.includes('/timelines/') || p.includes('/classes/') || p.includes('/buttons/')) && base) {
-          if (w.includes(base.toLowerCase()) && (w.includes('timeline') || w.includes('frame') || w.includes('constructor') || w.includes('drawing'))) {
-            return { path: bp.path, line: bp.line };
-          }
-        }
-      }
+      const hit = findMatchingBreakpoint(where, state.breakpoints, (bp) => (dbg as any).shouldSkipFor?.(bp) ?? false, flashLabelMatchesBreakpoint);
+      if (hit) return { path: hit.path, line: hit.line };
       return null;
     })();
     if (shouldBreak) {

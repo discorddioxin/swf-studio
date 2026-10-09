@@ -85,13 +85,36 @@ export interface AS2Host {
 
 // ---------------------------------------------------------------- host glue
 
-let host: AS2Host | null = null;
+const hostStack: AS2Host[] = [];
 const log: string[] = [];
 
 export function installHost(h: AS2Host | null) {
-  host = h;
-  installAvm1Bridge(h);
-  if (h) installAS2Extensions();
+  if (h) {
+    hostStack.push(h);
+  } else {
+    hostStack.pop();
+  }
+  const cur = hostStack[hostStack.length - 1] ?? null;
+  installAvm1Bridge(cur);
+  if (cur) installAS2Extensions();
+}
+
+export function uninstallHost(h: AS2Host) {
+  let idx = hostStack.lastIndexOf(h as any);
+  if (idx < 0) {
+    // fallback: find by __player reference (host objects are fresh each time, so match via player)
+    const player = (h as any)?.__player ?? h;
+    idx = hostStack.findIndex(x => (x as any)?.__player === player || x === player);
+  }
+  if (idx >= 0) hostStack.splice(idx, 1);
+  const cur = hostStack[hostStack.length - 1] ?? null;
+  installAvm1Bridge(cur);
+  if (cur) installAS2Extensions();
+}
+
+export function resetHostStack() {
+  hostStack.length = 0;
+  installAvm1Bridge(null);
 }
 
 /** Diagnostics the AVM1 interpreter collected (unknown opcodes, failed targets…). */
@@ -147,10 +170,11 @@ function installAvm1Bridge(h: AS2Host | null): void {
     },
   });
 }
-export function currentHost(): AS2Host | null { return host; }
+export function currentHost(): AS2Host | null { return hostStack[hostStack.length - 1] ?? null; }
 function need(): AS2Host {
-  if (!host) throw new Error('AS2 runtime: no host installed (call installHost() from the engine first)');
-  return host;
+  const cur = currentHost();
+  if (!cur) throw new Error('AS2 runtime: no host installed (call installHost() from the engine first)');
+  return cur;
 }
 
 // ------------------------------------------------------------------ _global
@@ -355,13 +379,13 @@ export const $rt = {
   /** Marker emitted where FFDec could not decompile bytecode (§§push etc.). */
   ffdec(marker: string): any {
     const msg = `as2ts: reached undecompiled code (${marker})`;
-    if (host) host.trace(msg); else log.push(msg);
+    if (currentHost()) currentHost()!.trace(msg); else log.push(msg);
     return undefined;
   },
   /** Emitted for scripts that could not be parsed at all. */
   untranslated(file: string, error: string): void {
     const msg = `as2ts: ${file} was not translated (${error})`;
-    if (host) host.trace(msg); else log.push(msg);
+    if (currentHost()) currentHost()!.trace(msg); else log.push(msg);
   },
 };
 
@@ -375,13 +399,13 @@ export function resolvePath(from: AS2Clip, path: string): AS2Clip | undefined {
   let cur: AS2Clip | undefined = from;
   let p = path.trim();
   if (!p) return from;
-  if (p.startsWith('/')) { cur = cur?._root ?? host?.root; p = p.slice(1); }
+  if (p.startsWith('/')) { cur = cur?._root ?? currentHost()?.root; p = p.slice(1); }
   for (const seg of p.split(/[./]/)) {
     if (!cur) return undefined;
     if (seg === '' || seg === 'this') continue;
     if (seg === '..' || seg === '_parent') cur = cur._parent;
-    else if (seg === '_root') cur = cur._root ?? host?.root;
-    else if (/^_level\d+$/.test(seg)) cur = host?.level(Number(seg.slice(6)));
+    else if (seg === '_root') cur = cur._root ?? currentHost()?.root;
+    else if (/^_level\d+$/.test(seg)) cur = currentHost()?.level(Number(seg.slice(6)));
     else cur = cur[seg];
   }
   return cur;
@@ -402,7 +426,7 @@ function resolveVar(from: AS2Clip, path: string): any {
 
 export function trace(value: unknown): void {
   const msg = value === undefined ? 'undefined' : String(value);
-  if (host) host.trace(msg); else log.push(msg);
+  if (currentHost()) currentHost()!.trace(msg); else log.push(msg);
 }
 export function getTimer(): number { return need().getTimer(); }
 export function random(n: number): number { return Math.floor(Math.random() * Math.max(0, Number(n) || 0)); }
@@ -475,19 +499,38 @@ export function toggleHighQuality(): void { /* no-op */ }
  */
 export class MovieClip {
   [key: string]: any;
-  static __construct: ((obj: any) => void) | null = null;
+  private static _constructStack: ((obj: any) => void)[] = [];
+  static get __construct(): ((obj: any) => void) | null { return this._constructStack[this._constructStack.length - 1] ?? null; }
+  static set __construct(v: ((obj: any) => void) | null) {
+    if (v) this._constructStack.push(v);
+    else this._constructStack.pop();
+  }
+  static _clearConstructStack() { this._constructStack.length = 0; }
+  static _stackDepth() { return this._constructStack.length; }
   constructor() {
     const c = MovieClip.__construct; MovieClip.__construct = null; c?.(this);
   }
 }
 export class Button {
   [key: string]: any;
-  static __construct: ((obj: any) => void) | null = null;
+  private static _constructStack: ((obj: any) => void)[] = [];
+  static get __construct(): ((obj: any) => void) | null { return this._constructStack[this._constructStack.length - 1] ?? null; }
+  static set __construct(v: ((obj: any) => void) | null) {
+    if (v) this._constructStack.push(v);
+    else this._constructStack.pop();
+  }
+  static _clearConstructStack() { this._constructStack.length = 0; }
   constructor() { const c = Button.__construct; Button.__construct = null; c?.(this); }
 }
 export class TextField {
   [key: string]: any;
-  static __construct: ((obj: any) => void) | null = null;
+  private static _constructStack: ((obj: any) => void)[] = [];
+  static get __construct(): ((obj: any) => void) | null { return this._constructStack[this._constructStack.length - 1] ?? null; }
+  static set __construct(v: ((obj: any) => void) | null) {
+    if (v) this._constructStack.push(v);
+    else this._constructStack.pop();
+  }
+  static _clearConstructStack() { this._constructStack.length = 0; }
   constructor() { const c = TextField.__construct; TextField.__construct = null; c?.(this); }
 }
 export class TextFormat {
@@ -602,6 +645,11 @@ export function resetRuntime() {
   linkage.clear();
   linkageScope = null;
   log.length = 0;
+  hostStack.length = 0;
+  try { MovieClip._clearConstructStack(); } catch {}
+  try { Button._clearConstructStack(); } catch {}
+  try { TextField._clearConstructStack(); } catch {}
+  installAvm1Bridge(null);
 }
 
 /** Messages logged before a host was installed. */

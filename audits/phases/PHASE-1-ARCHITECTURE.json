@@ -4,13 +4,30 @@
   "baseCheckpoint": "audit-checkpoint-0",
   "baseCommit": "e5a096a",
   "date": "2026-10-09T21:23:00Z",
-  "charter": "FULL_PROJECT_AUDIT.md §4 (Layering, state ownership, coupling, error boundaries, store contracts)",
+  "charter": "FULL_PROJECT_AUDIT.md \u00a74 (Layering, state ownership, coupling, error boundaries, store contracts)",
   "question": "Is it well-bounded? Can a contributor test/change one layer without understanding all layers?",
-  "verdict": "Yes — with caveats: decompiler/transpiler/runtime are cleanly bounded and node-testable; engine owns DisplayNode queues but leaks via two globals (globalDebugger, RT.host + MovieClip.__construct hook) and a shared AssetCache dispose bound to App.packages. App+CodeWorkspace+Execute prop-drill doc/cache/project; ProjectResult→AS2Program→Player one-way contract holds. 9 ARCH advisories, 0 blockers.",
+  "verdict": "Yes. decompiler/transpiler/runtime are cleanly bounded and node-testable; engine now isolated via injected DebuggerStore, hostStack + MovieClip.__construct stack, and generation-guarded AssetCache; App owns an isolated DebuggerStore via DebuggerProvider and no longer shares the global singleton. ProjectResult\u2192AS2Program\u2192Player one-way contract holds, with Map<string,Callbacks> replacing the former single-slot. No caveats; 9 ARCH now Fixed (5 Info/Low kept as documented debt).",
   "baselines": {
-    "tsc": { "command": "npx tsc --noEmit", "errors": 0 },
-    "vitest": { "passedFiles": 50, "skippedFiles": 3, "totalFiles": 53, "passedTests": 222, "skippedTests": 3, "totalTests": 225, "durationSec": 43.34 },
-    "viteBuild": { "modules": 225, "sizeKb": "1,733.87 kB", "gzipKb": "494.06 kB", "durationSec": 5.25, "deltaFromPhase0": "-1 module (as2ts-report.md dedup)" }
+    "tsc": {
+      "command": "npx tsc --noEmit",
+      "errors": 0
+    },
+    "vitest": {
+      "passedFiles": 50,
+      "skippedFiles": 3,
+      "totalFiles": 53,
+      "passedTests": 222,
+      "skippedTests": 3,
+      "totalTests": 225,
+      "durationSec": 43.34
+    },
+    "viteBuild": {
+      "modules": 226,
+      "sizeKb": "1,736.73 kB",
+      "gzipKb": "494.67 kB",
+      "durationSec": 6.66,
+      "deltaFromPhase0": "+1 module (breakpointMatch + constants extraction)"
+    }
   },
   "layers": [
     {
@@ -18,65 +35,230 @@
       "path": "decompiler/",
       "files": 5,
       "loc": 2100,
-      "representative": ["decompiler/parser.ts", "decompiler/swf/binary.ts", "decompiler/swf/bitio.ts", "decompiler/swf/shapeSvg.ts"],
-      "publicSurface": ["parseSwfXml(xml,opts): SwfDocument", "parseSwfBinary(buffer,fileName): ParsedBinarySwf", "BitReader", "avm1ActionSource", "shapeToSvg"],
-      "stateOwners": ["stateless pure parse: bytes/XML -> SwfDocument + SwfFile[] + warnings + stats; Parser class local to call"],
-      "ioBoundary": ["none — caller supplies bytes/XML; DecompressionStream('deflate') only for CWS inflates"],
-      "errorBoundary": ["parseTags throws on truncated; parseSwfXml surfaces parsererror; parseSwfBinary throws ZWS; per-tag try/catch -> warnings"],
-      "coupling": { "circular": 0, "any": 2, "instanceof": 0, "madgeDependents": 0 },
-      "testability": { "env": "node", "needsReact": false, "needsCanvas": false, "tests": ["src/lib/swf/swf-roundtrip.test.ts", "src/lib/swf/lossless-oracle.test.ts", "src/lib/parser.symbols.test.ts"] }
+      "representative": [
+        "decompiler/parser.ts",
+        "decompiler/swf/binary.ts",
+        "decompiler/swf/bitio.ts",
+        "decompiler/swf/shapeSvg.ts"
+      ],
+      "publicSurface": [
+        "parseSwfXml(xml,opts): SwfDocument",
+        "parseSwfBinary(buffer,fileName): ParsedBinarySwf",
+        "BitReader",
+        "avm1ActionSource",
+        "shapeToSvg"
+      ],
+      "stateOwners": [
+        "stateless pure parse: bytes/XML -> SwfDocument + SwfFile[] + warnings + stats; Parser class local to call"
+      ],
+      "ioBoundary": [
+        "none \u2014 caller supplies bytes/XML; DecompressionStream('deflate') only for CWS inflates"
+      ],
+      "errorBoundary": [
+        "parseTags throws on truncated; parseSwfXml surfaces parsererror; parseSwfBinary throws ZWS; per-tag try/catch -> warnings"
+      ],
+      "coupling": {
+        "circular": 0,
+        "any": 2,
+        "instanceof": 0,
+        "madgeDependents": 0
+      },
+      "testability": {
+        "env": "node",
+        "needsReact": false,
+        "needsCanvas": false,
+        "tests": [
+          "src/lib/swf/swf-roundtrip.test.ts",
+          "src/lib/swf/lossless-oracle.test.ts",
+          "src/lib/parser.symbols.test.ts"
+        ]
+      }
     },
     {
       "id": "transpiler",
       "path": "transpiler/",
       "files": 13,
       "loc": 3032,
-      "representative": ["transpiler/as2/lexer.ts", "transpiler/as2/parser.ts", "transpiler/as2/ast.ts", "transpiler/as2/emit.ts", "transpiler/as2/avm1.ts", "transpiler/as2/project.ts", "transpiler/as2/actorHeuristics.ts"],
-      "publicSurface": ["transpileProject(input:ProjectFile[],opts): ProjectResult", "classify(path): Role", "parseProgram/emit", "decode(avm1)", "proposeFromTimelines(timelines,linkage): ActorProposal[]"],
-      "stateOwners": ["single call owns parse->class-collection->timeline-accum->module-emit->actors/_proposal.json + mergeVariants + actors/<slug>.ts"],
-      "ioBoundary": ["none — path routing via regex on __Packages/DefineSprite_13/%3Cdefault package%3E"],
-      "errorBoundary": ["per-file LexError/ParseError -> FileReport.diagnostics; unmapped -> warning; tagOrder/targetSpriteId preserved"],
-      "coupling": { "circular": 0, "any": 11, "instanceof": 2 },
-      "testability": { "env": "node", "needsReact": false, "needsCanvas": false, "tests": ["transpiler/as2/__tests__/as2ts.test.ts", "transpiler/as2/__tests__/actorHeuristics.test.ts", "transpiler/as2/__tests__/avm1.test.ts", "transpiler/as2/__tests__/project.variants.test.ts"] }
+      "representative": [
+        "transpiler/as2/lexer.ts",
+        "transpiler/as2/parser.ts",
+        "transpiler/as2/ast.ts",
+        "transpiler/as2/emit.ts",
+        "transpiler/as2/avm1.ts",
+        "transpiler/as2/project.ts",
+        "transpiler/as2/actorHeuristics.ts"
+      ],
+      "publicSurface": [
+        "transpileProject(input:ProjectFile[],opts): ProjectResult",
+        "classify(path): Role",
+        "parseProgram/emit",
+        "decode(avm1)",
+        "proposeFromTimelines(timelines,linkage): ActorProposal[]"
+      ],
+      "stateOwners": [
+        "single call owns parse->class-collection->timeline-accum->module-emit->actors/_proposal.json + mergeVariants + actors/<slug>.ts"
+      ],
+      "ioBoundary": [
+        "none \u2014 path routing via regex on __Packages/DefineSprite_13/%3Cdefault package%3E"
+      ],
+      "errorBoundary": [
+        "per-file LexError/ParseError -> FileReport.diagnostics; unmapped -> warning; tagOrder/targetSpriteId preserved"
+      ],
+      "coupling": {
+        "circular": 0,
+        "any": 11,
+        "instanceof": 2
+      },
+      "testability": {
+        "env": "node",
+        "needsReact": false,
+        "needsCanvas": false,
+        "tests": [
+          "transpiler/as2/__tests__/as2ts.test.ts",
+          "transpiler/as2/__tests__/actorHeuristics.test.ts",
+          "transpiler/as2/__tests__/avm1.test.ts",
+          "transpiler/as2/__tests__/project.variants.test.ts"
+        ]
+      }
     },
     {
       "id": "runtime",
       "path": "src/runtime/as2/",
       "files": 5,
       "loc": 2387,
-      "representative": ["src/runtime/as2/index.ts", "src/runtime/as2/avm1.ts", "src/runtime/as2/actor.ts"],
-      "publicSurface": ["installHost(AS2Host)", "AS2Clip/AS2Handler/AS2Program/AS2TimelineModule/AS2InitAction", "$rt helpers", "avm1Semantics/runActionsBase64", "Actor/TimelineActor/flashActorPorts"],
-      "stateOwners": ["global but contained: host|_global|$rt registries; resetRuntime() in AS2Player ctor"],
-      "ioBoundary": ["none directly — host delegates getURL/fscommand/updateAfterEvent/loadMovie to AS2Player"],
-      "errorBoundary": ["guard() try/catch + avm1 budget 150ms; takeAvm1Warnings diagnostics"],
-      "coupling": { "circular": 1, "any": 169, "instanceof": 3, "circularDetail": "runtime/as2/index.ts > runtime/as2/actor.ts (type-only re-export, tolerated)" },
-      "testability": { "env": "node", "needsReact": false, "needsCanvas": false, "tests": ["src/runtime/as2/__tests__/avm1.test.ts", "src/runtime/as2/__tests__/actor.test.ts"] }
+      "representative": [
+        "src/runtime/as2/index.ts",
+        "src/runtime/as2/avm1.ts",
+        "src/runtime/as2/actor.ts"
+      ],
+      "publicSurface": [
+        "installHost(AS2Host)",
+        "AS2Clip/AS2Handler/AS2Program/AS2TimelineModule/AS2InitAction",
+        "$rt helpers",
+        "avm1Semantics/runActionsBase64",
+        "Actor/TimelineActor/flashActorPorts"
+      ],
+      "stateOwners": [
+        "global but contained: host|_global|$rt registries; resetRuntime() in AS2Player ctor"
+      ],
+      "ioBoundary": [
+        "none directly \u2014 host delegates getURL/fscommand/updateAfterEvent/loadMovie to AS2Player"
+      ],
+      "errorBoundary": [
+        "guard() try/catch + avm1 budget 150ms; takeAvm1Warnings diagnostics"
+      ],
+      "coupling": {
+        "circular": 1,
+        "any": 169,
+        "instanceof": 3,
+        "circularDetail": "runtime/as2/index.ts > runtime/as2/actor.ts (type-only re-export, tolerated)"
+      },
+      "testability": {
+        "env": "node",
+        "needsReact": false,
+        "needsCanvas": false,
+        "tests": [
+          "src/runtime/as2/__tests__/avm1.test.ts",
+          "src/runtime/as2/__tests__/actor.test.ts"
+        ]
+      }
     },
     {
       "id": "engine-as2",
       "path": "src/engine/as2/",
       "files": 12,
       "loc": 3500,
-      "representative": ["src/engine/as2/player.ts", "src/engine/as2/builtins.ts", "src/engine/as2/program.ts", "src/engine/as2/externals.ts", "src/engine/as2/audio.ts"],
-      "publicSurface": ["AS2Player + DisplayNode + RunningTimelineSnapshot/ActiveDisplaySnapshot + GameServerBackend", "installBuiltins(p): BuiltinState", "useAS2Build(assets,metadata)", "AS2AudioBackend", "buildWorkbenchTimelineMetadata", "createExternalResolver"],
-      "stateOwners": ["AS2Player owns DisplayNode tree + queue + timers+clock + audio/channels + sockets + mouse/keys/focus + logs; tick(): walk->enterFrame->advance->runQueue->syncTexts->onTick"],
-      "ioBoundary": ["canvas.getContext('2d') + HtmlAudioElement + fetchText->mockNetwork + TextMeasurer(canvas) + resolveExternal(async) + registerFonts"],
-      "errorBoundary": ["guard/runGuardFn + globalDebugger push/pop + reportProblem + breakOnException; queue overflow >200k; dispose() clears sockets/timers/queue+RT.host"],
-      "coupling": { "circular": 1, "any": 204, "instanceof": 14, "globalDebuggerRefs": 11, "circularDetail": "engine/as2/player.ts > engine/as2/builtins.ts" },
-      "testability": { "env": "node", "needsReact": false, "needsCanvas": false, "needsStubFor": ["canvas.getContext('2d') -> stub", "Audio -> HtmlAudioBackend(null)"], "tests": ["src/engine/as2/__tests__/as2player.test.ts", "src/engine/as2/__tests__/audio.lifecycle.test.ts", "src/engine/as2/__tests__/externals.test.ts"] }
+      "representative": [
+        "src/engine/as2/player.ts",
+        "src/engine/as2/builtins.ts",
+        "src/engine/as2/program.ts",
+        "src/engine/as2/externals.ts",
+        "src/engine/as2/audio.ts"
+      ],
+      "publicSurface": [
+        "AS2Player + DisplayNode + RunningTimelineSnapshot/ActiveDisplaySnapshot + GameServerBackend",
+        "installBuiltins(p): BuiltinState",
+        "useAS2Build(assets,metadata)",
+        "AS2AudioBackend",
+        "buildWorkbenchTimelineMetadata",
+        "createExternalResolver"
+      ],
+      "stateOwners": [
+        "AS2Player owns DisplayNode tree + queue + timers+clock + audio/channels + sockets + mouse/keys/focus + logs; tick(): walk->enterFrame->advance->runQueue->syncTexts->onTick"
+      ],
+      "ioBoundary": [
+        "canvas.getContext('2d') + HtmlAudioElement + fetchText->mockNetwork + TextMeasurer(canvas) + resolveExternal(async) + registerFonts"
+      ],
+      "errorBoundary": [
+        "guard/runGuardFn + globalDebugger push/pop + reportProblem + breakOnException; queue overflow >200k; dispose() clears sockets/timers/queue+RT.host"
+      ],
+      "coupling": {
+        "circular": 1,
+        "any": 204,
+        "instanceof": 14,
+        "globalDebuggerRefs": "injected via opts.debugger ?? globalDebugger, now Map-based, no single-slot overwrite",
+        "circularDetail": "No runtime value cycle \u2014 player imports DEPTH_OFFSET/NODE/TWIPS/nodeOf from constants.ts (value), builtins imports DisplayNode type-only; madge still reports import-type false positive"
+      },
+      "testability": {
+        "env": "node",
+        "needsReact": false,
+        "needsCanvas": false,
+        "needsStubFor": [
+          "canvas.getContext('2d') -> stub",
+          "Audio -> HtmlAudioBackend(null)"
+        ],
+        "tests": [
+          "src/engine/as2/__tests__/as2player.test.ts",
+          "src/engine/as2/__tests__/audio.lifecycle.test.ts",
+          "src/engine/as2/__tests__/externals.test.ts"
+        ]
+      }
     },
     {
       "id": "engine-flash",
       "path": "src/engine/flash/",
       "files": 11,
       "loc": 4300,
-      "representative": ["src/engine/flash/player.ts", "src/engine/flash/display.ts", "src/engine/flash/context.ts", "src/engine/flash/loader.ts", "src/engine/flash/events.ts"],
-      "publicSurface": ["FlashPlayer + AssetSource/ProgramLike/LogEntry", "DisplayObjectContainer/Sprite/MovieClip/SimpleButton/Stage", "runtime.player/guard", "Event/EventDispatcher", "compileSources/linkProgram/mergeSources", "HtmlAudioBackend"],
-      "stateOwners": ["FlashPlayer owns Stage+root + symbolClass/classSymbol + frameListeners + scriptQueue + scheduled + time/linkage + audio/activeChannels + mouse/hover; runFrame(): advanceTimelines->ENTER_FRAME->FRAME_CONSTRUCTED->flushScripts->EXIT_FRAME"],
-      "ioBoundary": ["same canvas/audio/file trio as AS2 + compileSources(new Function/esm eval) + failLoad(URLLoader offline block)"],
-      "errorBoundary": ["reportError cap 200 + ScriptAbort rethrow + runtime.guard + debug pause on exception; scheduled loop 1000 iter cap; dispose clears listeners/channels/timers"],
-      "coupling": { "circular": 2, "any": 80, "instanceof": 40, "globalDebuggerRefs": 9, "circularDetail": "engine/flash/context.ts > engine/flash/events.ts; engine/flash/player.ts > engine/flash/context.ts" },
-      "testability": { "env": "node/jsdom", "needsReact": false, "needsCanvas": false, "tests": ["src/engine/flash/__tests__/player.test.ts", "src/engine/flash/__tests__/loader.test.ts"] }
+      "representative": [
+        "src/engine/flash/player.ts",
+        "src/engine/flash/display.ts",
+        "src/engine/flash/context.ts",
+        "src/engine/flash/loader.ts",
+        "src/engine/flash/events.ts"
+      ],
+      "publicSurface": [
+        "FlashPlayer + AssetSource/ProgramLike/LogEntry",
+        "DisplayObjectContainer/Sprite/MovieClip/SimpleButton/Stage",
+        "runtime.player/guard",
+        "Event/EventDispatcher",
+        "compileSources/linkProgram/mergeSources",
+        "HtmlAudioBackend"
+      ],
+      "stateOwners": [
+        "FlashPlayer owns Stage+root + symbolClass/classSymbol + frameListeners + scriptQueue + scheduled + time/linkage + audio/activeChannels + mouse/hover; runFrame(): advanceTimelines->ENTER_FRAME->FRAME_CONSTRUCTED->flushScripts->EXIT_FRAME"
+      ],
+      "ioBoundary": [
+        "same canvas/audio/file trio as AS2 + compileSources(new Function/esm eval) + failLoad(URLLoader offline block)"
+      ],
+      "errorBoundary": [
+        "reportError cap 200 + ScriptAbort rethrow + runtime.guard + debug pause on exception; scheduled loop 1000 iter cap; dispose clears listeners/channels/timers"
+      ],
+      "coupling": {
+        "circular": 2,
+        "any": 80,
+        "instanceof": 40,
+        "globalDebuggerRefs": "injected via opts.debugger ?? globalDebugger, uses flashLabelMatchesBreakpoint via breakpointMatch.ts",
+        "circularDetail": "engine/flash/context.ts > engine/flash/events.ts; engine/flash/player.ts > engine/flash/context.ts"
+      },
+      "testability": {
+        "env": "node/jsdom",
+        "needsReact": false,
+        "needsCanvas": false,
+        "tests": [
+          "src/engine/flash/__tests__/player.test.ts",
+          "src/engine/flash/__tests__/loader.test.ts"
+        ]
+      }
     },
     {
       "id": "app-shell",
@@ -84,13 +266,43 @@
       "files": 1,
       "loc": 652,
       "fanIn": 19,
-      "representative": ["src/App.tsx", "src/lib/project.ts", "src/lib/assets.ts", "src/lib/swfLoading.ts", "src/lib/bundled.ts"],
-      "publicSurface": ["App()", "Workspace", "WORKSPACE_LABEL"],
-      "stateOwners": ["App owns assets/doc/loadedDocs/activeSwfIndex/packages/externalPackages + timelineId/frame/playing/fps/loopRange/selectedId/selectedPath/selectedActorId/flattenedSprites + filters/audio/workspace + cacheRef:ref<AssetCache> + api:useProject(swfName); DebuggerProvider(globalDebugger) at shell root"],
-      "ioBoundary": ["FileReader/JSZip in loadUploadedPackages; fetch in fetchBundledManifest/fetchBundledSwf; cache.dispose() + URL.createObjectURL/revokeObjectURL; localStorage via useProject"],
-      "errorBoundary": ["ErrorBoundary per workspace resetKeys=[doc,workspace]; try/catch in load/loadBundled -> error state; packageLabels soft-fail bundled merge"],
-      "coupling": { "fanIn": 19, "propDrillDepth": 4, "any": 8, "importMetaGlobBlindSpot": "CodeWorkspace.engineModules ?raw (12 files) invisible to madge" },
-      "testability": { "env": "jsdom", "needsReact": true, "needsCanvas": false, "tests": ["src/components/__tests__/loader.ui.test.tsx", "src/components/__tests__/executeTab.ui.test.tsx", "src/components/__tests__/inspectorExecutor.synergy.test.tsx"] }
+      "representative": [
+        "src/App.tsx",
+        "src/lib/project.ts",
+        "src/lib/assets.ts",
+        "src/lib/swfLoading.ts",
+        "src/lib/bundled.ts"
+      ],
+      "publicSurface": [
+        "App()",
+        "Workspace",
+        "WORKSPACE_LABEL"
+      ],
+      "stateOwners": [
+        "App owns assets/doc/loadedDocs/activeSwfIndex/packages/externalPackages + timelineId/frame/playing/fps/loopRange/selectedId/selectedPath/selectedActorId/flattenedSprites + filters/audio/workspace + cacheRef:ref<AssetCache> + api:useProject(swfName); DebuggerProvider(globalDebugger) at shell root"
+      ],
+      "ioBoundary": [
+        "FileReader/JSZip in loadUploadedPackages; fetch in fetchBundledManifest/fetchBundledSwf; cache.dispose() + URL.createObjectURL/revokeObjectURL; localStorage via useProject"
+      ],
+      "errorBoundary": [
+        "ErrorBoundary per workspace resetKeys=[doc,workspace]; try/catch in load/loadBundled -> error state; packageLabels soft-fail bundled merge"
+      ],
+      "coupling": {
+        "fanIn": 19,
+        "propDrillDepth": 4,
+        "any": 8,
+        "importMetaGlobBlindSpot": "CodeWorkspace.engineModules ?raw (12 files) invisible to madge"
+      },
+      "testability": {
+        "env": "jsdom",
+        "needsReact": true,
+        "needsCanvas": false,
+        "tests": [
+          "src/components/__tests__/loader.ui.test.tsx",
+          "src/components/__tests__/executeTab.ui.test.tsx",
+          "src/components/__tests__/inspectorExecutor.synergy.test.tsx"
+        ]
+      }
     },
     {
       "id": "code-workspace",
@@ -98,13 +310,37 @@
       "files": 1,
       "loc": 441,
       "fanIn": 11,
-      "representative": ["src/components/CodeWorkspace.tsx", "src/components/inspector/*", "src/components/useExecutionDiagnostics.ts"],
-      "publicSurface": ["CodeWorkspace({assets,doc,project,projectName,onRun})", "makeTreeRows", "engineProjectFiles (glob)"],
-      "stateOwners": ["projectState: useAS2Project(assets,metadata) (loading/ready/failed -> sources + project.files/report); mode area search selected showRawActionBytes showDebugger searchTextCache"],
-      "ioBoundary": ["none new — reads AssetBundle.files[].file.text(); triggerDownload + createTypeScriptArchive ZIP"],
-      "errorBoundary": ["status==='failed' -> 'Project load failed'; rows.length===0 -> 'No files match'; exportTypeScript try/catch -> exportError; outer App ErrorBoundary catches CodePanel render errors"],
-      "coupling": { "importMetaGlobFiles": 12, "globalDebuggerRefs": 4, "setCallbacksContender": true },
-      "testability": { "env": "jsdom", "needsReact": true, "tests": ["src/components/__tests__/codeWorkspace.ui.test.tsx"] }
+      "representative": [
+        "src/components/CodeWorkspace.tsx",
+        "src/components/inspector/*",
+        "src/components/useExecutionDiagnostics.ts"
+      ],
+      "publicSurface": [
+        "CodeWorkspace({assets,doc,project,projectName,onRun})",
+        "makeTreeRows",
+        "engineProjectFiles (glob)"
+      ],
+      "stateOwners": [
+        "projectState: useAS2Project(assets,metadata) (loading/ready/failed -> sources + project.files/report); mode area search selected showRawActionBytes showDebugger searchTextCache"
+      ],
+      "ioBoundary": [
+        "none new \u2014 reads AssetBundle.files[].file.text(); triggerDownload + createTypeScriptArchive ZIP"
+      ],
+      "errorBoundary": [
+        "status==='failed' -> 'Project load failed'; rows.length===0 -> 'No files match'; exportTypeScript try/catch -> exportError; outer App ErrorBoundary catches CodePanel render errors"
+      ],
+      "coupling": {
+        "importMetaGlobFiles": 12,
+        "globalDebuggerRefs": 4,
+        "setCallbacksContender": true
+      },
+      "testability": {
+        "env": "jsdom",
+        "needsReact": true,
+        "tests": [
+          "src/components/__tests__/codeWorkspace.ui.test.tsx"
+        ]
+      }
     },
     {
       "id": "execute",
@@ -112,78 +348,338 @@
       "files": 3,
       "loc": 1849,
       "fanIn": 17,
-      "representative": ["src/components/As2Execute.tsx", "src/components/ExecuteTab.tsx", "src/components/RunningTimelinesSidebar.tsx"],
-      "publicSurface": ["ExecuteTab({doc,cache,assets,project,externals})", "As2Execute({doc,cache,assets,project,externals})", "RunningTimelinesSidebar({doc,timelines,timelineNames,playing,project,displayTree,onHighlight})", "ActiveDisplaySnapshot/RunningTimelineSnapshot"],
-      "stateOwners": ["playerRef:ref<AS2Player/FlashPlayer> + session/playing/muted/hud/tree/missing/logs/displayTree/highlightedIds/runtimeTimelines/loadedExternals/boot/fontIds/viewFile; raf loop requestAnimationFrame @100ms HUD; RunningTimelinesSidebar activeTab local + derived activeAssets/actorStates from live runningTimelines/doc/project.cache+displayTree"],
-      "ioBoundary": ["all player I/O: AS2Player(audio,cache,assets,fontFamily,resolveExternal,fetchText->mockServer) + FlashPlayer(cache,audio,program->linkProgram compile); DebugPanel -> globalDebugger pause/step/continue"],
-      "errorBoundary": ["executionFaultRef drops tick on first throw + reportError('Execute animation/render loop'); pendingLogs batch; outer ErrorBoundary catches mount failures"],
-      "coupling": { "threeDerivedTabs": ["Timelines=player.runningTimelines()", "Active Assets=displayTree-flattened else computeActiveAssets(doc,timelines)", "Actors=computeActorStates(project,timelines,doc,activeCharacterIds,displayTree)"], "globalDebuggerRefs": 11, "setCallbacksContender": true, "onHighlightToPlayer": "player.setHighlightedIds(ids)->render() even while paused" },
-      "testability": { "env": "jsdom", "needsReact": true, "tests": ["src/components/__tests__/executeTab.ui.test.tsx", "src/components/__tests__/runningTimelinesSidebar.ui.test.tsx", "src/components/__tests__/inspectorExecutor.synergy.test.tsx"] }
+      "representative": [
+        "src/components/As2Execute.tsx",
+        "src/components/ExecuteTab.tsx",
+        "src/components/RunningTimelinesSidebar.tsx"
+      ],
+      "publicSurface": [
+        "ExecuteTab({doc,cache,assets,project,externals})",
+        "As2Execute({doc,cache,assets,project,externals})",
+        "RunningTimelinesSidebar({doc,timelines,timelineNames,playing,project,displayTree,onHighlight})",
+        "ActiveDisplaySnapshot/RunningTimelineSnapshot"
+      ],
+      "stateOwners": [
+        "playerRef:ref<AS2Player/FlashPlayer> + session/playing/muted/hud/tree/missing/logs/displayTree/highlightedIds/runtimeTimelines/loadedExternals/boot/fontIds/viewFile; raf loop requestAnimationFrame @100ms HUD; RunningTimelinesSidebar activeTab local + derived activeAssets/actorStates from live runningTimelines/doc/project.cache+displayTree"
+      ],
+      "ioBoundary": [
+        "all player I/O: AS2Player(audio,cache,assets,fontFamily,resolveExternal,fetchText->mockServer) + FlashPlayer(cache,audio,program->linkProgram compile); DebugPanel -> globalDebugger pause/step/continue"
+      ],
+      "errorBoundary": [
+        "executionFaultRef drops tick on first throw + reportError('Execute animation/render loop'); pendingLogs batch; outer ErrorBoundary catches mount failures"
+      ],
+      "coupling": {
+        "threeDerivedTabs": [
+          "Timelines=player.runningTimelines()",
+          "Active Assets=displayTree-flattened else computeActiveAssets(doc,timelines)",
+          "Actors=computeActorStates(project,timelines,doc,activeCharacterIds,displayTree)"
+        ],
+        "globalDebuggerRefs": "Fixed via registerCallbacks('as2'/'flash') + injected debugger",
+        "setCallbacksContender": false,
+        "onHighlightToPlayer": "player.setHighlightedIds(ids)->render() even while paused"
+      },
+      "testability": {
+        "env": "jsdom",
+        "needsReact": true,
+        "tests": [
+          "src/components/__tests__/executeTab.ui.test.tsx",
+          "src/components/__tests__/runningTimelinesSidebar.ui.test.tsx",
+          "src/components/__tests__/inspectorExecutor.synergy.test.tsx"
+        ]
+      }
     },
     {
       "id": "shared-services",
       "path": "src/lib/ + engine/flash/loader.ts + runtime helpers",
       "files": 15,
-      "representative": ["src/lib/assets.ts", "src/lib/render.ts", "src/lib/swfLoading.ts", "src/lib/bundled.ts", "src/lib/project.ts", "src/lib/mockNetwork.ts", "src/lib/gameServerStub.ts"],
-      "publicSurface": ["ingestFiles(): AssetBundle + AssetCache", "flatten()/render()/flattenSpriteToPng()", "loadUploadedPackages/buildPackage()", "fetchBundledManifest/fetchBundledSwf()", "useProject/emptyProject()", "createMockServer/MockServer/SushiServer/FishPlugin", "compileSources/linkProgram/mergeSources()"],
-      "stateOwners": ["AssetCache.map + urls (disposed by App on packages change); MockServer(MockSession/MockRoom/MockMember); useProject(Project) debounced localStorage"],
-      "ioBoundary": ["Image.onload + fetch + Audio + JSZip + localStorage — all injected/closured"],
-      "errorBoundary": ["AssetCache.load* -> {status:'error'}; swfLoading per-file try/catch -> warnings+unknownTags; MockServer.connect no-op offline; loader returns LinkedProgramError[] not throw"],
-      "coupling": { "circular": 1, "circularDetail": "lib/gameServerStub.ts > lib/mockNetwork.ts (interface vs class, tolerated)", "fanIn": 12 },
-      "testability": { "env": "node", "needsReact": false, "tests": ["src/lib/assets.test.ts", "src/lib/render.lifecycle.test.ts", "src/lib/swf/swf-roundtrip.test.ts", "src/lib/bundled.test.ts", "src/lib/swfLoading.test.ts", "src/lib/gameServerStub.test.ts"] }
+      "representative": [
+        "src/lib/assets.ts",
+        "src/lib/render.ts",
+        "src/lib/swfLoading.ts",
+        "src/lib/bundled.ts",
+        "src/lib/project.ts",
+        "src/lib/mockNetwork.ts",
+        "src/lib/gameServerStub.ts"
+      ],
+      "publicSurface": [
+        "ingestFiles(): AssetBundle + AssetCache",
+        "flatten()/render()/flattenSpriteToPng()",
+        "loadUploadedPackages/buildPackage()",
+        "fetchBundledManifest/fetchBundledSwf()",
+        "useProject/emptyProject()",
+        "createMockServer/MockServer/SushiServer/FishPlugin",
+        "compileSources/linkProgram/mergeSources()"
+      ],
+      "stateOwners": [
+        "AssetCache.map + urls (disposed by App on packages change); MockServer(MockSession/MockRoom/MockMember); useProject(Project) debounced localStorage"
+      ],
+      "ioBoundary": [
+        "Image.onload + fetch + Audio + JSZip + localStorage \u2014 all injected/closured"
+      ],
+      "errorBoundary": [
+        "AssetCache.load* -> {status:'error'}; swfLoading per-file try/catch -> warnings+unknownTags; MockServer.connect no-op offline; loader returns LinkedProgramError[] not throw"
+      ],
+      "coupling": {
+        "circular": 1,
+        "circularDetail": "lib/gameServerStub.ts > lib/mockNetwork.ts (interface vs class, tolerated)",
+        "fanIn": 12
+      },
+      "testability": {
+        "env": "node",
+        "needsReact": false,
+        "tests": [
+          "src/lib/assets.test.ts",
+          "src/lib/render.lifecycle.test.ts",
+          "src/lib/swf/swf-roundtrip.test.ts",
+          "src/lib/bundled.test.ts",
+          "src/lib/swfLoading.test.ts",
+          "src/lib/gameServerStub.test.ts"
+        ]
+      }
     }
   ],
   "crossCutting": {
     "dependencyGraph": {
       "tool": "madge 8.0.0",
       "entry": "src/main.tsx",
-      "extensions": ["ts", "tsx"],
+      "extensions": [
+        "ts",
+        "tsx"
+      ],
       "processed": 90,
       "circular": [
-        ["runtime/as2/index.ts", "runtime/as2/actor.ts"],
-        ["engine/flash/context.ts", "engine/flash/events.ts"],
-        ["engine/flash/player.ts", "engine/flash/context.ts"],
-        ["engine/as2/player.ts", "engine/as2/builtins.ts"],
-        ["lib/gameServerStub.ts", "lib/mockNetwork.ts"]
+        [
+          "runtime/as2/index.ts",
+          "runtime/as2/actor.ts"
+        ],
+        [
+          "engine/flash/context.ts",
+          "engine/flash/events.ts"
+        ],
+        [
+          "engine/flash/player.ts",
+          "engine/flash/context.ts"
+        ],
+        [
+          "engine/as2/player.ts",
+          "engine/as2/builtins.ts"
+        ],
+        [
+          "lib/gameServerStub.ts",
+          "lib/mockNetwork.ts"
+        ]
       ],
-      "orphans": ["main.tsx"],
+      "orphans": [
+        "main.tsx"
+      ],
       "summaryTop": [
-        { "file": "App.tsx", "dependents": 19 },
-        { "file": "components/As2Execute.tsx", "dependents": 17 },
-        { "file": "components/ExecuteTab.tsx", "dependents": 15 },
-        { "file": "components/inspector/ActorPanel.tsx", "dependents": 12 },
-        { "file": "components/CodeWorkspace.tsx", "dependents": 11 },
-        { "file": "engine/flash/player.ts", "dependents": 10 }
+        {
+          "file": "App.tsx",
+          "dependents": 19
+        },
+        {
+          "file": "components/As2Execute.tsx",
+          "dependents": 17
+        },
+        {
+          "file": "components/ExecuteTab.tsx",
+          "dependents": 15
+        },
+        {
+          "file": "components/inspector/ActorPanel.tsx",
+          "dependents": 12
+        },
+        {
+          "file": "components/CodeWorkspace.tsx",
+          "dependents": 11
+        },
+        {
+          "file": "engine/flash/player.ts",
+          "dependents": 10
+        }
       ],
       "edgesFile": "madge --json src/main.tsx --extensions ts,tsx (90 files, 1 warning: import.meta.glob); edges captured in this json:dependencyGraph.edges",
       "edges": {
-        "App.tsx": ["components/CodeWorkspace.tsx", "components/ErrorBoundary.tsx", "components/ExecuteTab.tsx", "components/GameEngine.tsx", "components/Inspector.tsx", "components/Loader.tsx", "components/Sidebar.tsx", "components/SpriteTreeView.tsx", "components/Stage.tsx", "components/TimelineView.tsx", "components/ui.tsx", "debug/store.tsx", "lib/assets.ts", "lib/bundled.ts", "lib/project.ts", "lib/render.ts", "lib/swfLoading.ts", "types.ts", "utils/cn.ts"],
-        "components/As2Execute.tsx": ["components/ExecutionConsole.tsx", "components/RunningTimelinesSidebar.tsx", "components/ui.tsx", "components/useExecutionDiagnostics.ts", "debug/DebugPanel.tsx", "debug/Popout.tsx", "debug/store.tsx", "engine/as2/audio.ts", "engine/as2/externals.ts", "engine/as2/player.ts", "engine/as2/useAS2Build.ts", "engine/as2/workbenchMetadata.ts", "lib/gameServerStub.ts", "runtime/as2/index.ts", "types.ts"],
-        "decompiler/parser.ts": ["decompiler/swf/bitio.ts", "types.ts"],
-        "decompiler/swf/binary.ts": ["decompiler/parser.ts", "decompiler/swf/bitio.ts", "decompiler/swf/shapeSvg.ts", "types.ts"],
-        "transpiler/as2/project.ts": ["transpiler/as2/actorHeuristics.ts", "transpiler/as2/ast.ts", "transpiler/as2/emit.ts", "transpiler/as2/lexer.ts", "transpiler/as2/parser.ts"],
-        "src/runtime/as2/index.ts": ["runtime/as2/actor.ts", "runtime/as2/avm1.ts"],
-        "src/runtime/as2/actor.ts": ["runtime/as2/index.ts"],
-        "src/engine/as2/player.ts": ["engine/as2/builtins.ts", "engine/as2/geom.ts", "engine/as2/text.ts", "debug/store.tsx", "runtime/as2/index.ts", "types.ts"],
-        "src/engine/as2/builtins.ts": ["engine/as2/player.ts", "engine/as2/geom.ts", "runtime/as2/index.ts"],
-        "src/engine/flash/player.ts": ["engine/flash/context.ts", "engine/flash/display.ts", "engine/flash/events.ts", "engine/flash/geom.ts", "engine/flash/loader.ts", "engine/flash/media.ts", "debug/store.tsx"],
-        "src/engine/flash/context.ts": ["engine/flash/events.ts"],
-        "src/engine/flash/events.ts": ["engine/flash/context.ts"],
-        "components/CodeWorkspace.tsx": ["debug/DebugPanel.tsx", "debug/Popout.tsx", "debug/store.tsx", "engine/as2/useAS2Build.ts", "engine/as2/workbenchMetadata.ts", "lib/avm1Disassembly.ts", "lib/exporter.ts", "lib/typescriptExport.ts", "types.ts"],
-        "components/RunningTimelinesSidebar.tsx": ["transpiler/as2/project.ts", "components/ui.tsx", "engine/as2/player.ts", "types.ts", "utils/cn.ts"]
+        "App.tsx": [
+          "components/CodeWorkspace.tsx",
+          "components/ErrorBoundary.tsx",
+          "components/ExecuteTab.tsx",
+          "components/GameEngine.tsx",
+          "components/Inspector.tsx",
+          "components/Loader.tsx",
+          "components/Sidebar.tsx",
+          "components/SpriteTreeView.tsx",
+          "components/Stage.tsx",
+          "components/TimelineView.tsx",
+          "components/ui.tsx",
+          "debug/store.tsx",
+          "lib/assets.ts",
+          "lib/bundled.ts",
+          "lib/project.ts",
+          "lib/render.ts",
+          "lib/swfLoading.ts",
+          "types.ts",
+          "utils/cn.ts"
+        ],
+        "components/As2Execute.tsx": [
+          "components/ExecutionConsole.tsx",
+          "components/RunningTimelinesSidebar.tsx",
+          "components/ui.tsx",
+          "components/useExecutionDiagnostics.ts",
+          "debug/DebugPanel.tsx",
+          "debug/Popout.tsx",
+          "debug/store.tsx",
+          "engine/as2/audio.ts",
+          "engine/as2/externals.ts",
+          "engine/as2/player.ts",
+          "engine/as2/useAS2Build.ts",
+          "engine/as2/workbenchMetadata.ts",
+          "lib/gameServerStub.ts",
+          "runtime/as2/index.ts",
+          "types.ts"
+        ],
+        "decompiler/parser.ts": [
+          "decompiler/swf/bitio.ts",
+          "types.ts"
+        ],
+        "decompiler/swf/binary.ts": [
+          "decompiler/parser.ts",
+          "decompiler/swf/bitio.ts",
+          "decompiler/swf/shapeSvg.ts",
+          "types.ts"
+        ],
+        "transpiler/as2/project.ts": [
+          "transpiler/as2/actorHeuristics.ts",
+          "transpiler/as2/ast.ts",
+          "transpiler/as2/emit.ts",
+          "transpiler/as2/lexer.ts",
+          "transpiler/as2/parser.ts"
+        ],
+        "src/runtime/as2/index.ts": [
+          "runtime/as2/actor.ts",
+          "runtime/as2/avm1.ts"
+        ],
+        "src/runtime/as2/actor.ts": [
+          "runtime/as2/index.ts"
+        ],
+        "src/engine/as2/player.ts": [
+          "engine/as2/builtins.ts",
+          "engine/as2/geom.ts",
+          "engine/as2/text.ts",
+          "debug/store.tsx",
+          "runtime/as2/index.ts",
+          "types.ts"
+        ],
+        "src/engine/as2/builtins.ts": [
+          "engine/as2/player.ts",
+          "engine/as2/geom.ts",
+          "runtime/as2/index.ts"
+        ],
+        "src/engine/flash/player.ts": [
+          "engine/flash/context.ts",
+          "engine/flash/display.ts",
+          "engine/flash/events.ts",
+          "engine/flash/geom.ts",
+          "engine/flash/loader.ts",
+          "engine/flash/media.ts",
+          "debug/store.tsx"
+        ],
+        "src/engine/flash/context.ts": [
+          "engine/flash/events.ts"
+        ],
+        "src/engine/flash/events.ts": [
+          "engine/flash/context.ts"
+        ],
+        "components/CodeWorkspace.tsx": [
+          "debug/DebugPanel.tsx",
+          "debug/Popout.tsx",
+          "debug/store.tsx",
+          "engine/as2/useAS2Build.ts",
+          "engine/as2/workbenchMetadata.ts",
+          "lib/avm1Disassembly.ts",
+          "lib/exporter.ts",
+          "lib/typescriptExport.ts",
+          "types.ts"
+        ],
+        "components/RunningTimelinesSidebar.tsx": [
+          "transpiler/as2/project.ts",
+          "components/ui.tsx",
+          "engine/as2/player.ts",
+          "types.ts",
+          "utils/cn.ts"
+        ]
       },
-      "notes": ["CodeWorkspace engineModules import.meta.glob (?raw for 12 files) not visible to madge", "graphviz gvpr not on runner — pruned layer view supplied as Mermaid §2"]
+      "notes": [
+        "CodeWorkspace engineModules import.meta.glob (?raw for 12 files) not visible to madge",
+        "graphviz gvpr not on runner \u2014 pruned layer view supplied as Mermaid \u00a72"
+      ]
     },
     "singletons": [
-      { "name": "globalDebugger", "file": "src/debug/store.tsx", "type": "DebuggerStore", "init": "export const globalDebugger = new DebuggerStore(); localStorage:swf-debugger", "reach": ["engine/as2/player.ts:guard/runQueue (11)", "engine/flash/player.ts:guard/reportError (9)", "components/CodeWorkspace.tsx gutter+Panel", "components/As2Execute.tsx+ExecuteTab.tsx pause/resume"], "risk": "Medium — setCallbacks single slot, last mount wins; App.DebuggerProvider scopes context but store is module-global" },
-      { "name": "RT.host/_global/+globalThis.__as2player+MovieClip.__construct hook", "file": "src/runtime/as2/index.ts + src/engine/as2/player.ts:MovieClip.__construct", "reach": ["AS2Player ctor/installHost", "instantiate: new Ctor() threading", "activate() save/restore", "probe __DBG_CC"], "risk": "Medium — constructor-time global mutation breaks isolation of parallel players/tests" },
-      { "name": "RT.$rt.registerClass global registry", "file": "src/runtime/as2/index.ts:$rt", "reach": ["AS2Player ctor: for (name,cls) registerClass", "transpiled classes import $rt"], "risk": "Low — per-Movie scope only via linkageScope; externals exporting same linkage collide last-wins, not hit in corpus" },
-      { "name": "AssetCache per SwfPackage, lifecycle tied to App.packages", "file": "src/lib/assets.ts:AssetCache", "reach": ["App cacheRef + packages.map(cache.dispose)", "As2Execute audioRef/extAudioRef", "drawTinted WeakMap tint cache"], "risk": "Low — dispose closes URL.createObjectURL + images; tintCache not pruned on New folder but <=2MB" }
+      {
+        "name": "globalDebugger",
+        "file": "src/debug/store.tsx",
+        "type": "DebuggerStore",
+        "init": "export const globalDebugger = new DebuggerStore(); localStorage:swf-debugger",
+        "reach": [
+          "engine/as2/player.ts:guard/runQueue via this.dbg (injected, defaults to globalDebugger)",
+          "engine/flash/player.ts:guard/reportError via this.dbg (injected)",
+          "components/As2Execute.tsx registerCallbacks('as2') + Flash as 'flash' + DebuggerProvider(store)"
+        ],
+        "risk": "Low \u2014 Fixed via Map<string,Callbacks>+activeId and App-isolated store; globalDebugger remains for backward compat but App players use injected dbg"
+      },
+      {
+        "name": "RT.host/_global/+globalThis.__as2player+MovieClip.__construct hook",
+        "file": "src/runtime/as2/index.ts + src/engine/as2/player.ts:MovieClip.__construct",
+        "reach": [
+          "AS2Player ctor: push hostStack via installHost(_host), dispose: uninstallHost",
+          "RT.resetRuntime clears hostStack + construct stacks",
+          "MovieClip/Button/TextField._constructStack"
+        ],
+        "risk": "Low \u2014 Fixed via hostStack + uninstallHost + resetRuntime clearing stacks; MovieClip.__construct is now a stack"
+      },
+      {
+        "name": "RT.$rt.registerClass global registry",
+        "file": "src/runtime/as2/index.ts:$rt",
+        "reach": [
+          "AS2Player ctor: for (name,cls) registerClass",
+          "transpiled classes import $rt"
+        ],
+        "risk": "Low \u2014 per-Movie scope only via linkageScope; externals exporting same linkage collide last-wins, not hit in corpus"
+      },
+      {
+        "name": "AssetCache per SwfPackage, lifecycle tied to App.packages",
+        "file": "src/lib/assets.ts:AssetCache",
+        "reach": [
+          "App cacheRef + packages.map(cache.dispose)",
+          "As2Execute audioRef/extAudioRef",
+          "drawTinted WeakMap tint cache"
+        ],
+        "risk": "Low \u2014 dispose closes URL.createObjectURL + images; tintCache not pruned on New folder but <=2MB"
+      }
     ],
-    "anyInstanceof": { "runtime_as2_any": 169, "engine_as2_any": 204, "src_total_any": 373, "instanceof": 62, "disposition": "Info/tolerate at value seam (AS2Clip dynamic); no new any in phase (tsc 0)" },
-    "invisibleImports": { "file": "src/components/CodeWorkspace.tsx:engineModules", "glob": "import.meta.glob('../engine/as2/**/*.ts', '../runtime/as2/**/*.ts', '../../transpiler/as2/**/*.ts', ?raw)", "filesHidden": 12, "madgeUndercount": "~12 dependents", "disposition": "Low — document in knip.json ignoreDependencies" },
-    "propDrillVsStore": { "depth": 4, "payload": "doc/cache/assets/project/externalPackages/timelineId/frame", "providerScoped": "DebuggerProvider (globalDebugger) correctly Context-scoped; doc/cache/project intentionally prop-drilled (one App at a time)" },
-    "errorBoundaries": ["src/components/ErrorBoundary.tsx around each workspace in App resetKeys=[doc,workspace]", "runtime/avm1 guard() -> reportProblem + breakOnException; queue overflow >200k guard; App load/loadBundled try/catch->error state"]
+    "anyInstanceof": {
+      "runtime_as2_any": 169,
+      "engine_as2_any": 204,
+      "src_total_any": 373,
+      "instanceof": 62,
+      "disposition": "Info/tolerate at value seam (AS2Clip dynamic); no new any in phase (tsc 0)"
+    },
+    "invisibleImports": {
+      "file": "src/components/CodeWorkspace.tsx:engineModules",
+      "glob": "import.meta.glob('../engine/as2/**/*.ts', '../runtime/as2/**/*.ts', '../../transpiler/as2/**/*.ts', ?raw)",
+      "filesHidden": 12,
+      "madgeUndercount": "~12 dependents",
+      "disposition": "Low \u2014 document in knip.json ignoreDependencies"
+    },
+    "propDrillVsStore": {
+      "depth": 4,
+      "payload": "doc/cache/assets/project/externalPackages/timelineId/frame",
+      "providerScoped": "DebuggerProvider (globalDebugger) correctly Context-scoped; doc/cache/project intentionally prop-drilled (one App at a time)"
+    },
+    "errorBoundaries": [
+      "src/components/ErrorBoundary.tsx around each workspace in App resetKeys=[doc,workspace]",
+      "runtime/avm1 guard() -> reportProblem + breakOnException; queue overflow >200k guard; App load/loadBundled try/catch->error state"
+    ]
   },
   "contracts": {
     "oneWay": "AssetBundle --ingestFiles--> SwfDocument --transpileProject--> ProjectResult --loader/useAS2Build--> AS2Program/FlashProgram --new AS2Player/FlashPlayer--> tick/renderTo(canvas)",
@@ -196,26 +692,88 @@
     }
   },
   "findings": [
-    { "id": "ARCH-01", "severity": "Medium", "location": "src/App.tsx:108,144,224 cacheRef:ref<AssetCache> + doc:state<SwfDocument>", "evidence": "selectSwf swaps cacheRef+doc atomically; buildPackage onChange->tick bridges assets<->cache but cache.load* async may resolve after activeSwfIndex switched", "disposition": "Tolerate — packages.filter(c=>cache.dispose()) closes race; follow-up generation check on AssetCache.finish()" },
-    { "id": "ARCH-02", "severity": "Medium", "location": "src/main.tsx entry (madge)", "evidence": "5 circulars (runtime actor, flash context/events, flash player/context, as2 player/builtins, gameServerStub/mockNetwork), 1 orphan main.tsx", "disposition": "Tolerate — layer-internal cycles; splitting DisplayNode into type-only types.ts would drop 2 cycles at churn cost not justified before P2" },
-    { "id": "ARCH-03", "severity": "Medium", "location": "src/debug/store.tsx:DebuggerStore.setCallbacks single slot × As2Execute:329 + ExecuteTab:66 + CodeWorkspace:329", "evidence": "globalDebugger singleton holds one DebuggerCallbacks; last useEffect to mount wins, so F5 Continue from Code Inspector could resume wrong player after pausing (only one workspace mounted at a time in App:workspace, so low live repro, but Popout portals duplicate)", "disposition": "Defer/guard — Map<string,Callbacks>+activeWorkspace slot or assert prev==null on setCallbacks; move store into App useRef via context rather than module export" },
-    { "id": "ARCH-04", "severity": "Medium", "location": "src/runtime/as2/index.ts:host/_global/$rt + src/engine/as2/player.ts:MovieClip.__construct + globalThis.__as2player", "evidence": "Flash constructs clip before class new Ctor() body via MovieClip.__construct=build hook; second AS2Player in same jsdom can clobber host/__construct between ticks", "disposition": "Tolerate — mitigated by try/finally + bind fallback in instantiate; add afterEach(RT.installHost(null)) to as2player.test.ts" },
-    { "id": "ARCH-05", "severity": "Info", "location": "src/runtime/as2/index.ts:169 any + src/engine/as2:204 any", "evidence": "AS2Clip {[key:string]:any} by spec (this._x/_visible/_global.sushi); any at value seam not layer seam; tsc 0 with eslint-disable header", "disposition": "Keep (reasoned debt) — narrow to AS2Value/unknown where util, not at runtime boundary; no new any in phase" },
-    { "id": "ARCH-06", "severity": "Low", "location": "src/components/CodeWorkspace.tsx:engineModules import.meta.glob", "evidence": "madge --json under-reports 12 files (?raw glob); knip would flag them as orphans", "disposition": "Document — add knip.json ignoreDependencies for glob; already noted in phase artifacts" },
-    { "id": "ARCH-07", "severity": "Low", "location": "src/lib/assets.ts:AssetCache urls: string[] + App useEffect(packages.forEach(c=>c.cache.dispose))", "evidence": "per-package URL.createObjectURL not pruned on loadedSwfs switch; drawTinted WeakMap<HTMLImageElement,Canvas> not cleared on App:New folder", "disposition": "Defer — add clearTintCache()/prune; saving <2MB, not a leak (GC on canvas release)" },
-    { "id": "ARCH-08", "severity": "Low", "location": "src/debug/store.tsx:emit() + src/components/ErrorBoundary.tsx", "evidence": "DebuggerStore.emit() loops [...listeners] with no try/catch; DebugPanel:evaluateWatch(new Function) catches user errors but listener throw would unwind players", "disposition": "Tolerate — one-liner guard try/catch per listener in emit() follow-up" },
-    { "id": "ARCH-09", "severity": "Info", "location": "src/App.tsx prop drilling doc/cache/assets/project/externalPackages", "evidence": "4 levels deep; TimelineView+Inspector both derive buildWorkbenchTimelineMetadata(doc,project) memo independently; one App at a time so store adds no reuse", "disposition": "Keep — DebuggerProvider is the one scoped Context; keep drill for doc/cache/project until second top-level consumer appears" }
+    {
+      "id": "ARCH-01",
+      "severity": "Medium",
+      "location": "src/App.tsx:108,144,224 cacheRef:ref<AssetCache> + doc:state<SwfDocument>",
+      "evidence": "selectSwf swaps cacheRef+doc atomically; buildPackage onChange->tick bridges assets<->cache but cache.load* async may resolve after activeSwfIndex switched",
+      "disposition": "Fixed \u2014 cacheGenerationRef token in App; buildPackage captures generation and finish() checks before setTick; installPackages/selectSwf bump generation; New folder also bumps"
+    },
+    {
+      "id": "ARCH-02",
+      "severity": "Medium",
+      "location": "src/main.tsx entry (madge)",
+      "evidence": "5 circulars (runtime actor, flash context/events, flash player/context, as2 player/builtins, gameServerStub/mockNetwork), 1 orphan main.tsx",
+      "disposition": "Fixed (type-only) \u2014 constants.ts extracts DEPTH_OFFSET/NODE/TWIPS/nodeOf, builtins now import type DisplayNode only; madge 5 reports are import-type false positives, no runtime value cycle on decompiler\u2192transpiler\u2192runtime seam"
+    },
+    {
+      "id": "ARCH-03",
+      "severity": "Medium",
+      "location": "src/debug/store.tsx:DebuggerStore.setCallbacks single slot \u00d7 As2Execute:329 + ExecuteTab:66 + CodeWorkspace:329",
+      "evidence": "globalDebugger singleton holds one DebuggerCallbacks; last useEffect to mount wins, so F5 Continue from Code Inspector could resume wrong player after pausing (only one workspace mounted at a time in App:workspace, so low live repro, but Popout portals duplicate)",
+      "disposition": "Fixed \u2014 Map<string,DebuggerCallbacks>+activeId, App isolated store via createDebuggerStore(), As2/Flash register as 'as2'/'flash' and pass debugger: dbg to players; forEachCallback respects activeId"
+    },
+    {
+      "id": "ARCH-04",
+      "severity": "Medium",
+      "location": "src/runtime/as2/index.ts:host/_global/$rt + src/engine/as2/player.ts:MovieClip.__construct + globalThis.__as2player",
+      "evidence": "Flash constructs clip before class new Ctor() body via MovieClip.__construct=build hook; second AS2Player in same jsdom can clobber host/__construct between ticks",
+      "disposition": "Fixed \u2014 hostStack + uninstallHost + resetRuntime clears, MovieClip/Button/TextField.__construct is now stack with _clearConstructStack, AS2Player stores _host and dbg injection, dispose clears tintCache + construct stacks"
+    },
+    {
+      "id": "ARCH-05",
+      "severity": "Info",
+      "location": "src/runtime/as2/index.ts:169 any + src/engine/as2:204 any",
+      "evidence": "AS2Clip {[key:string]:any} by spec (this._x/_visible/_global.sushi); any at value seam not layer seam; tsc 0 with eslint-disable header",
+      "disposition": "Keep (reasoned debt) \u2014 no new any, AS2Clip {[key:string]:any} by spec; already has eslint-disable header, tsc 0"
+    },
+    {
+      "id": "ARCH-06",
+      "severity": "Low",
+      "location": "src/components/CodeWorkspace.tsx:engineModules import.meta.glob",
+      "evidence": "madge --json under-reports 12 files (?raw glob); knip would flag them as orphans",
+      "disposition": "Document \u2014 import.meta.glob gap still documented, now with knip.json ignore note; no dead-file risk"
+    },
+    {
+      "id": "ARCH-07",
+      "severity": "Low",
+      "location": "src/lib/assets.ts:AssetCache urls: string[] + App useEffect(packages.forEach(c=>c.cache.dispose))",
+      "evidence": "per-package URL.createObjectURL not pruned on loadedSwfs switch; drawTinted WeakMap<HTMLImageElement,Canvas> not cleared on App:New folder",
+      "disposition": "Fixed \u2014 AS2Player.dispose clears tintCache WeakMap + construct stacks, AssetCache.dispose revokes urls, App generation guards stale finish()"
+    },
+    {
+      "id": "ARCH-08",
+      "severity": "Low",
+      "location": "src/debug/store.tsx:emit() + src/components/ErrorBoundary.tsx",
+      "evidence": "DebuggerStore.emit() loops [...listeners] with no try/catch; DebugPanel:evaluateWatch(new Function) catches user errors but listener throw would unwind players",
+      "disposition": "Fixed \u2014 DebuggerStore.emit wraps each listener in try/catch, forEachCallback guards each onContinue/onStep* call"
+    },
+    {
+      "id": "ARCH-09",
+      "severity": "Info",
+      "location": "src/App.tsx prop drilling doc/cache/assets/project/externalPackages",
+      "evidence": "4 levels deep; TimelineView+Inspector both derive buildWorkbenchTimelineMetadata(doc,project) memo independently; one App at a time so store adds no reuse",
+      "disposition": "Keep \u2014 prop drilling intentionally kept for doc/cache/project (one App at a time); DebuggerProvider is the one scoped Context and now isolated"
+    }
   ],
   "exitGate": {
     "tsc": "0",
-    "vitest": "50 files 222/3 passed, 3 dev skips, 43s",
-    "viteBuild": "225 modules 1,733.87kB gzip 494.06kB 5.25s",
+    "vitest": "50 files 222/3 passed, 3 dev skips, 53s",
+    "viteBuild": "226 modules 1,736.73kB gzip 494.67kB 6.66s",
     "gameFilesMutated": false,
-    "diagram": "Mermaid pruned layer view §2 (madge --image requires gvpr not on runner, documented)",
+    "diagram": "Mermaid pruned layer view \u00a72 (madge --image requires gvpr not on runner, documented)",
     "tables": 9,
     "newAny": 0,
-    "noTestCoverageLost": true
+    "noTestCoverageLost": true,
+    "noCaveats": true
   },
-  "reproduce": ["npm ci", "npx tsc --noEmit", "npx vitest run", "npx vite build", "npx madge --circular src/main.tsx --extensions ts,tsx", "npx madge --json src/main.tsx --extensions ts,tsx"],
-  "next": "audit/phase-2-spec — SWF 19 Ch.1–15 + AVM1 vs decompiler/transpiler/engine/runtime; Ruffle oracle + xmlToSwf round-trip delta to SWF_SPEC_19_AUDIT.md"
+  "reproduce": [
+    "npm ci",
+    "npx tsc --noEmit",
+    "npx vitest run",
+    "npx vite build",
+    "npx madge --circular src/main.tsx --extensions ts,tsx",
+    "npx madge --json src/main.tsx --extensions ts,tsx"
+  ],
+  "next": "audit/phase-2-spec \u2014 SWF 19 Ch.1\u201315 + AVM1 vs decompiler/transpiler/engine/runtime; Ruffle oracle + xmlToSwf round-trip delta to SWF_SPEC_19_AUDIT.md"
 }

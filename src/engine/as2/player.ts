@@ -29,16 +29,16 @@ import {
   type Components,
 } from './geom';
 import { installBuiltins, type BuiltinState } from './builtins';
+import { DEPTH_OFFSET, NODE, TWIPS, nodeOf } from './constants';
 import {
   cssFont, estimateWidth, layout, paragraphsToHtml, paragraphsToText, parseHtml, plainToParagraphs,
   type Line, type Paragraph, type TextStyle,
 } from './text';
-import { globalDebugger } from '../../debug/store';
+import { globalDebugger, type DebuggerStore } from '../../debug/store';
+import { as2LabelMatchesBreakpoint, findMatchingBreakpoint } from '../../debug/breakpointMatch';
 
-export const TWIPS = 20;
-/** AS depth = SWF depth − DEPTH_OFFSET (timeline objects have negative AS depths) */
-export const DEPTH_OFFSET = 16384;
-export const NODE = Symbol.for('swf-studio.as2.node');
+// TWIPS, DEPTH_OFFSET, NODE are re-exported from ./constants for backward compat
+export { DEPTH_OFFSET, NODE, TWIPS } from './constants';
 
 /** A loaded SWF: document + its compiled program + its assets. */
 export interface Movie {
@@ -176,8 +176,7 @@ export class DisplayNode {
   }
 }
 
-export const nodeOf = (o: unknown): DisplayNode | null =>
-  o && (typeof o === 'object' || typeof o === 'function') ? ((o as any)[NODE] as DisplayNode | undefined) ?? null : null;
+export { nodeOf } from './constants';
 
 
 
@@ -190,6 +189,8 @@ export interface AS2PlayerOptions {
   assets?: AssetSource | null;
   audio?: AudioBackend | null;
   onLog?: (entry: LogEntry) => void;
+  /** Injected debugger (defaults to globalDebugger singleton for backward compat). Tests should pass a fresh store. */
+  debugger?: DebuggerStore;
   /** Resolve a CSS font-family list for an embedded font character id / font name. */
   fontFamily?: (fontIdOrName: number | string, movie: Movie) => string;
   /** Load another SWF (loadMovie / MovieClipLoader). null = not available. */
@@ -276,12 +277,15 @@ export class AS2Player {
   readonly missingExternals = new Set<string>();
   /** ids of display nodes currently hovered in the inspector (highlight overlay) */
   highlightedIds: Set<number> | null = null;
+  private readonly dbg: DebuggerStore;
+  private readonly _host: RT.AS2Host;
 
   constructor(opts: AS2PlayerOptions) {
     this.opts = opts;
     this.doc = opts.doc;
     this.movie = { doc: opts.doc, program: opts.program, assets: opts.assets ?? null, url: 'root' };
     this.audio = opts.audio ?? null;
+    this.dbg = opts.debugger ?? globalDebugger;
     const h = opts.doc.header;
     this.frameRate = h.frameRate > 0 ? h.frameRate : 24;
     const b = h.stage;
@@ -290,7 +294,8 @@ export class AS2Player {
     this.background = h.backgroundColor != null ? `#${h.backgroundColor.toString(16).padStart(6, '0')}` : '#ffffff';
 
     RT.resetRuntime();
-    RT.installHost(this.host());
+    this._host = this.host();
+    RT.installHost(this._host);
     this.builtins = installBuiltins(this);
     // AS2 classes live on _global (e.g. _global.com.rawfishsoftware.sushi.SushiAPI)
     for (const [name, cls] of Object.entries(opts.program?.classes ?? {})) RT.$rt.registerClass(name, cls);
@@ -335,7 +340,7 @@ export class AS2Player {
 
   /** Execute fn with stack tracking but without an upfront breakpoint check (used to resume after a pause). */
   private runGuardFn(label: string, fn: () => unknown, scopeHint?: Record<string, unknown>) {
-    const dbg = globalDebugger;
+    const dbg = this.dbg;
     const frameId = Date.now() + Math.floor(Math.random() * 1000);
     const pushScope = scopeHint ?? {};
     (dbg as any).pushFrame?.({ id: frameId, name: label, source: label, line: 1, scope: pushScope });
@@ -355,81 +360,23 @@ export class AS2Player {
 
   /** Run game code; synchronous throws and async rejections are attributed to the callback that failed. */
   guard(label: string, fn: () => unknown, scopeHint?: Record<string, unknown>) {
-    // debug: breakpoint check before running
-    const dbg = globalDebugger;
+    // debug: breakpoint check before running — uses shared matcher (debug/breakpointMatch.ts)
+    const dbg = this.dbg;
     const state = dbg.getState();
     // quick path: if paused, don't run new code until resumed (prevents queue drain while stepping)
     if (state.paused) {
       // queue will be drained on resume
       return undefined;
     }
-    // check breakpoints / step pause before this call
+    // check breakpoints / step pause before this call — single source of truth via breakpointMatch
     const shouldBreak = (() => {
       if (state.breakpoints.length === 0 && !state.breakOnExceptions && dbg.stepRequest == null) return null;
       // step: break on every guard when stepping
       if (dbg.stepRequest) {
         return { path: label, line: 1 };
       }
-      for (const bp of state.breakpoints) {
-        if (!bp.enabled) continue;
-        // honour "continue" skip — don't re-hit the breakpoint we just left
-        if ((dbg as any).shouldSkipFor?.(bp)) continue;
-        const p = bp.path.toLowerCase();
-        const l = label.toLowerCase();
-        // timelines/root.ts ↔ _root / main timeline
-        if (p.endsWith('/timelines/root.ts') || p === 'timelines/root.ts') {
-          if (l.includes('_root') || l.includes('main timeline')) return { path: bp.path, line: bp.line };
-          continue;
-        }
-        // timelines/... — sprite or human-named timeline
-        if (p.includes('/timelines/')) {
-          const mNum = p.match(/sprite[_-]?(\d+)/);
-          if (mNum && l.includes(mNum[1]) && l.includes('sprite')) return { path: bp.path, line: bp.line };
-          // human-named timeline: match slug against label when numeric id not present;
-          // fall back to any sprite frame so the breakpoint still does something
-          if (!mNum) {
-            const base = p.split('/').pop()?.replace(/\.ts$/,'') ?? '';
-            if (base && base !== 'root') {
-              const slug = base.replace(/_/g, ' ');
-              if ((l.includes(base) || l.includes(slug)) && (l.includes('frame') || l.includes('sprite') || l.includes('init'))) {
-                return { path: bp.path, line: bp.line };
-              }
-              // fallback: human-named timelines still represent a sprite; break on any sprite frame
-              if (l.includes('sprite') && (l.includes('frame') || l.includes('init'))) {
-                return { path: bp.path, line: bp.line };
-              }
-            }
-          }
-          continue;
-        }
-        // buttons
-        if (p.includes('/buttons/')) {
-          const m = p.match(/button[_-]?(\d+)/);
-          if (m && l.includes(m[1]) && (l.includes('button') || l.includes('on(') || l.includes('onclip'))) {
-            return { path: bp.path, line: bp.line };
-          }
-          continue;
-        }
-        // init actions
-        if (p.includes('/init/')) {
-          if (l.startsWith('init action')) {
-            const base = p.split('/').pop()?.replace(/\.ts$/,'') ?? '';
-            if (base.startsWith('action_')) return { path: bp.path, line: bp.line };
-            if (base && l.includes(base.toLowerCase())) return { path: bp.path, line: bp.line };
-            // generic init file matches any init label only if no more specific init file matched;
-            // keep permissive for init folder but narrowed to init labels only
-            if (p.includes('/init/action_')) return { path: bp.path, line: bp.line };
-          }
-          continue;
-        }
-        // classes — match by short class name
-        if (p.includes('/classes/')) {
-          const base = p.split('/').pop()?.replace(/\.ts$/,'') ?? '';
-          if (base && l.includes(base.toLowerCase())) return { path: bp.path, line: bp.line };
-          continue;
-        }
-        // No generic fallback — a breakpoint on an unrelated file no longer stops every frame.
-      }
+      const hit = findMatchingBreakpoint(label, state.breakpoints, (bp) => (dbg as any).shouldSkipFor?.(bp) ?? false, as2LabelMatchesBreakpoint);
+      if (hit) return { path: hit.path, line: hit.line };
       return null;
     })();
     if (shouldBreak) {
@@ -470,7 +417,7 @@ export class AS2Player {
     this.log('error', `${label}: ${err.message}`, err.stack, { source: 'app', kind: 'problem', context: label });
     // debug: break on exception if enabled
     try {
-      const dbg = globalDebugger;
+      const dbg = this.dbg;
       const s = dbg.getState();
       if (s.breakOnExceptions || s.breakOnUncaught) {
         const wasRunning = this.running;
@@ -585,7 +532,16 @@ export class AS2Player {
     this.queue.length = 0;
     for (const off of this.listeners) off();
     this.listeners = [];
-    if (RT.currentHost() && (RT.currentHost() as any).__player === this) RT.installHost(null);
+    try { (RT as any).uninstallHost?.(this._host); } catch {}
+    // fallback for older runtime without uninstallHost
+    if (RT.currentHost() && (RT.currentHost() as any).__player === this) {
+      try { RT.installHost(null); } catch {}
+    }
+    // clear any leaked MovieClip construct hook and tint cache
+    try { RT.MovieClip._clearConstructStack?.(); } catch {}
+    try { RT.Button._clearConstructStack?.(); } catch {}
+    try { RT.TextField._clearConstructStack?.(); } catch {}
+    try { (this as any).tintCache = new WeakMap(); } catch {}
     if ((globalThis as any).__as2player === this) delete (globalThis as any).__as2player;
   }
 
@@ -630,7 +586,7 @@ export class AS2Player {
   runQueue() {
     if (this.draining) return;
     // if debugger is paused, defer queue draining until resume
-    const dbg = globalDebugger;
+    const dbg = this.dbg;
     if (dbg.getState().paused) return;
     this.draining = true;
     try {

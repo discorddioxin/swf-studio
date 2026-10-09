@@ -127,13 +127,13 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
   }, [dbg]);
 
   useEffect(() => {
-    dbg.setCallbacks({
+    dbg.registerCallbacks('as2', {
       onContinue: () => { playingRef.current = true; setPlaying(true); },
       onStepOver: () => { playingRef.current = false; setPlaying(false); playerRef.current?.tick(); },
       onStepInto: () => { playingRef.current = false; setPlaying(false); playerRef.current?.tick(); },
       onStepOut: () => { playingRef.current = false; setPlaying(false); playerRef.current?.tick(); },
     });
-    return () => dbg.setCallbacks({});
+    return () => dbg.unregisterCallbacks('as2');
   }, [dbg]);
 
   // Embedded fonts are independent of the source project build.
@@ -218,6 +218,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
       program: build.build.program,
       assets: cache,
       audio,
+      debugger: dbg,
       fontFamily,
       resolveExternal,
       missingExternal: 'empty',

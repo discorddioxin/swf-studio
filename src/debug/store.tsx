@@ -13,7 +13,8 @@ class DebuggerStore {
   private state: DebuggerState;
   private listeners = new Set<() => void>();
   private resumeResolvers: (() => void)[] = [];
-  private callbacks: DebuggerCallbacks = {};
+  private callbacks = new Map<string, DebuggerCallbacks>();
+  private activeCallbackId: string | null = null;
   // step request
   stepRequest: 'over' | 'into' | 'out' | null = null;
   stepStackDepth = 0;
@@ -56,7 +57,9 @@ class DebuggerStore {
   }
 
   private emit() {
-    for (const l of [...this.listeners]) l();
+    for (const l of [...this.listeners]) {
+      try { l(); } catch (e) { console.error('[DebuggerStore] listener threw', e); }
+    }
     // persist breakpoints/watches/settings
     try {
       localStorage.setItem('swf-debugger', JSON.stringify({
@@ -68,8 +71,39 @@ class DebuggerStore {
     } catch { /* ignore */ }
   }
 
-  setCallbacks(cb: DebuggerCallbacks) {
-    this.callbacks = cb;
+  setCallbacks(cb: DebuggerCallbacks, id: string = 'default') {
+    if (!cb || Object.keys(cb).length === 0) {
+      this.callbacks.delete(id);
+      if (this.activeCallbackId === id) this.activeCallbackId = this.callbacks.size ? [...this.callbacks.keys()].pop()! : null;
+    } else {
+      this.callbacks.set(id, cb);
+      this.activeCallbackId = id;
+    }
+  }
+
+  registerCallbacks(id: string, cb: DebuggerCallbacks) {
+    this.callbacks.set(id, cb);
+    this.activeCallbackId = id;
+  }
+
+  unregisterCallbacks(id: string) {
+    this.callbacks.delete(id);
+    if (this.activeCallbackId === id) this.activeCallbackId = this.callbacks.size ? [...this.callbacks.keys()].pop()! : null;
+  }
+
+  setActiveCallbacks(id: string | null) {
+    if (id && this.callbacks.has(id)) this.activeCallbackId = id;
+    else this.activeCallbackId = null;
+  }
+
+  private forEachCallback(fn: (cb: DebuggerCallbacks) => void) {
+    if (this.activeCallbackId && this.callbacks.has(this.activeCallbackId)) {
+      try { fn(this.callbacks.get(this.activeCallbackId)!); } catch (e) { console.error('[DebuggerStore] callback threw', e); }
+      return;
+    }
+    for (const cb of this.callbacks.values()) {
+      try { fn(cb); } catch (e) { console.error('[DebuggerStore] callback threw', e); }
+    }
   }
 
   // breakpoints
@@ -234,14 +268,14 @@ class DebuggerStore {
     this.stepRequest = 'over';
     this.stepStackDepth = this.state.stack.length;
     this.resume();
-    this.callbacks.onStepOver?.();
+    this.forEachCallback(cb => cb.onStepOver?.());
   }
   stepInto() {
     this.skipNextBpId = null;
     this.skipNextKey = null;
     this.stepRequest = 'into';
     this.resume();
-    this.callbacks.onStepInto?.();
+    this.forEachCallback(cb => cb.onStepInto?.());
   }
   stepOut() {
     this.skipNextBpId = null;
@@ -249,7 +283,7 @@ class DebuggerStore {
     this.stepRequest = 'out';
     this.stepStackDepth = this.state.stack.length;
     this.resume();
-    this.callbacks.onStepOut?.();
+    this.forEachCallback(cb => cb.onStepOut?.());
   }
   continue() {
     // Don't immediately re-break on the breakpoint we just left.
@@ -274,7 +308,7 @@ class DebuggerStore {
     }
     this.stepRequest = null;
     this.resume();
-    this.callbacks.onContinue?.();
+    this.forEachCallback(cb => cb.onContinue?.());
   }
   requestPause() {
     if (this.state.paused) return;
@@ -353,6 +387,12 @@ class DebuggerStore {
 }
 
 export const globalDebugger = new DebuggerStore();
+
+export function createDebuggerStore(): DebuggerStore {
+  return new DebuggerStore();
+}
+
+export { DebuggerStore };
 
 // React context
 const DebuggerContext = createContext<DebuggerStore>(globalDebugger);

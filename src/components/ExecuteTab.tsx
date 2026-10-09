@@ -82,7 +82,7 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
 
   // wire debugger callbacks to player controls
   useEffect(() => {
-    dbg.setCallbacks({
+    dbg.registerCallbacks('flash', {
       onContinue: () => {
         playingRef.current = true;
         setPlaying(true);
@@ -103,7 +103,7 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
         playerRef.current?.step();
       },
     });
-    return () => dbg.setCallbacks({});
+    return () => dbg.unregisterCallbacks('flash');
   }, [dbg]);
 
   /** Dependency SWFs (everything loaded besides the main one) and their code files. */
@@ -176,6 +176,7 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
       doc,
       assets: cache,
       audio: gatedAudio,
+      debugger: dbg,
       program: code.compiled.modules.length ? () => linkProgram(code.compiled) : null,
       documentClass: docClass,
       onLog: (entry) => {
