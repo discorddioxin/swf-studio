@@ -68,6 +68,22 @@ export interface RunningTimelineSnapshot {
   movieName?: string;
 }
 
+export interface ActiveDisplaySnapshot {
+  id: number;
+  characterId: number;
+  kind: NodeKind;
+  name: string;
+  path: string;
+  depth: number;
+  visible: boolean;
+  frame: number;
+  totalFrames: number;
+  playing: boolean;
+  /** Whether this node's timeline was placed by a parent timeline. */
+  fromTimeline: boolean;
+  children: ActiveDisplaySnapshot[];
+}
+
 export interface TextState {
   paras: Paragraph[];
   html: boolean;
@@ -1709,6 +1725,44 @@ export class AS2Player {
     };
     visit(this.root);
     return timelines;
+  }
+
+  /** Full display-list snapshot including static/single-frame clips and UI (buttons, shapes, text). */
+  activeDisplayTree(node: DisplayNode = this.root): ActiveDisplaySnapshot {
+    const ch = node.character;
+    const snap: ActiveDisplaySnapshot = {
+      id: node.id,
+      characterId: node.characterId,
+      kind: node.kind,
+      name: node === this.root ? (node.timeline?.name || 'Main Timeline') : (ch?.exportName || node.name || `${node.kind} ${node.characterId}`),
+      path: this.describe(node),
+      depth: node.depth,
+      visible: node.visible,
+      frame: node.frame + 1,
+      totalFrames: node.totalFrames,
+      playing: node.playing,
+      fromTimeline: node.fromTimeline,
+      children: [],
+    };
+    for (const child of node.children) {
+      if (child.removed) continue;
+      snap.children.push(this.activeDisplayTree(child));
+    }
+    // Sort by depth (SWF depth order) for stable tree view
+    snap.children.sort((a, b) => a.depth - b.depth);
+    return snap;
+  }
+
+  /** Flat set of every characterId currently instantiated (including single-frame UI). */
+  activeCharacterIds(): Set<number> {
+    const ids = new Set<number>();
+    const visit = (node: DisplayNode) => {
+      if (node.removed) return;
+      ids.add(node.characterId);
+      for (const c of node.children) visit(c);
+    };
+    visit(this.root);
+    return ids;
   }
 
   /** Snapshot of the display list (for the UI / tests). */

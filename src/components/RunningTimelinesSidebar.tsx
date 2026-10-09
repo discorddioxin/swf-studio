@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Project, SwfCharacter, SwfDocument, Timeline } from '../types';
 import type { TimelineNameIndex, TimelineNameMetadata } from '../../transpiler/as2/project';
-import type { RunningTimelineSnapshot } from '../engine/as2/player';
+import type { ActiveDisplaySnapshot, RunningTimelineSnapshot } from '../engine/as2/player';
 import { cn } from '../utils/cn';
 import { KIND_COLOR } from './ui';
 
@@ -25,19 +25,41 @@ export function RunningTimelinesSidebar({
   timelineNames,
   playing,
   project,
+  displayTree,
 }: {
   doc: SwfDocument;
   timelines: readonly RunningTimelineSnapshot[];
   timelineNames: TimelineNameIndex;
   playing: boolean;
   project?: Project | null;
+  displayTree?: ActiveDisplaySnapshot | null;
 }) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('timelines');
 
-  const activeAssets = useMemo(() => computeActiveAssets(doc, timelines, project), [doc, timelines, project]);
-  const actorStates = useMemo(() => computeActorStates(project ?? null, timelines, doc), [project, timelines, doc]);
+  // Active assets: prefer live display tree (includes static UI) else fallback to running timelines
+  const activeAssets = useMemo(() => {
+    if (displayTree) return flattenDisplayTree(displayTree, doc, project);
+    return computeActiveAssets(doc, timelines, project);
+  }, [doc, timelines, project, displayTree]);
 
-  const tabCountLabel = activeTab === 'timelines' ? timelines.length : activeTab === 'assets' ? activeAssets.length : actorStates.filter(a => a.active).length;
+  const activeCharacterIds = useMemo(() => {
+    if (displayTree) {
+      const ids = new Set<number>();
+      const visit = (n: ActiveDisplaySnapshot) => {
+        ids.add(n.characterId);
+        for (const c of n.children) visit(c);
+      };
+      visit(displayTree);
+      return ids;
+    }
+    return new Set(timelines.map((t) => t.characterId));
+  }, [displayTree, timelines]);
+
+  const actorStates = useMemo(() => computeActorStates(project ?? null, timelines, doc, activeCharacterIds, displayTree), [project, timelines, doc, activeCharacterIds, displayTree]);
+
+  // For header count: assets = total visible nodes (excluding root), timelines = running count, actors = active
+  const assetsCount = displayTree ? countDisplayNodes(displayTree) - 1 : activeAssets.length;
+  const tabCountLabel = activeTab === 'timelines' ? timelines.length : activeTab === 'assets' ? assetsCount : actorStates.filter(a => a.active).length;
 
   return (
     <aside
@@ -69,7 +91,7 @@ export function RunningTimelinesSidebar({
             'flex-1 border-b-2 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider transition-colors',
             activeTab === 'timelines' ? 'border-violet-500 bg-zinc-800 text-violet-200' : 'border-transparent text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300',
           )}
-          title="Running MovieClip playheads"
+          title="Running MovieClip playheads (multi-frame, playing)"
         >
           Timelines{timelines.length ? ` · ${timelines.length}` : ''}
         </button>
@@ -81,9 +103,9 @@ export function RunningTimelinesSidebar({
             'flex-1 border-b-2 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider transition-colors',
             activeTab === 'assets' ? 'border-violet-500 bg-zinc-800 text-violet-200' : 'border-transparent text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300',
           )}
-          title="Assets currently on stage"
+          title="Assets currently on stage (including static UI)"
         >
-          Assets{activeAssets.length ? ` · ${activeAssets.length}` : ''}
+          Assets{assetsCount ? ` · ${assetsCount}` : ''}
         </button>
         <button
           role="tab"
@@ -114,7 +136,7 @@ export function RunningTimelinesSidebar({
               <span aria-hidden="true" className="mb-2 text-xl text-zinc-700">▤</span>
               <p className="text-[11px] font-medium text-zinc-400">No running timelines</p>
               <p className="mt-1 max-w-56 text-[10px] leading-relaxed text-zinc-600">
-                Playing multi-frame MovieClips will appear here with their current frame highlighted.
+                Playing multi-frame MovieClips will appear here. Static UI (buttons, single-frame sprites) lives in the <span className="font-medium text-zinc-500">Assets</span> tab.
               </p>
             </div>
           )}
@@ -122,13 +144,150 @@ export function RunningTimelinesSidebar({
       )}
 
       {activeTab === 'assets' && (
-        <ActiveAssetsPanel timelines={timelines} activeAssets={activeAssets} />
+        displayTree ? (
+          <DisplayTreePanel doc={doc} project={project ?? null} displayTree={displayTree} />
+        ) : (
+          <ActiveAssetsPanel timelines={timelines} activeAssets={activeAssets} />
+        )
       )}
 
       {activeTab === 'actors' && (
         <ActorsPanel project={project ?? null} actorStates={actorStates} />
       )}
     </aside>
+  );
+}
+
+function countDisplayNodes(root: ActiveDisplaySnapshot): number {
+  let n = 1;
+  for (const c of root.children) n += countDisplayNodes(c);
+  return n;
+}
+
+function flattenDisplayTree(root: ActiveDisplaySnapshot, doc: SwfDocument, project: Project | null | undefined): ActiveAssetEntry[] {
+  const entries: ActiveAssetEntry[] = [];
+  const visit = (node: ActiveDisplaySnapshot, parent: ActiveDisplaySnapshot | null) => {
+    if (node !== root) {
+      // For backward compat, create an entry that looks like it belongs to its parent timeline
+      // Use parent's id as ownerId where possible, else root id
+      const ownerId = parent?.id ?? root.id;
+      const ch: SwfCharacter | undefined = doc.characters.get(node.characterId);
+      const label = project?.characters[node.characterId]?.name;
+      const baseName = label || ch?.exportName || ch?.className || (ch ? `${ch.kind} ${ch.id}` : `character ${node.characterId}`);
+      // Find a snapshot-like owner for grouping – we synthesize one from parent if needed
+      const snapshot = {
+        id: ownerId,
+        characterId: parent?.characterId ?? root.characterId,
+        name: parent?.name ?? root.name,
+        path: parent?.path ?? root.path,
+        frame: parent?.frame ?? root.frame,
+        totalFrames: parent?.totalFrames ?? root.totalFrames,
+      } as RunningTimelineSnapshot;
+      entries.push({
+        ownerId,
+        snapshot,
+        characterId: node.characterId,
+        depth: node.depth,
+        kind: node.kind,
+        name: node.name !== baseName ? `${baseName} · ${node.name}` : baseName,
+        path: node.path,
+        visible: node.visible,
+      });
+    }
+    for (const c of node.children) visit(c, node);
+  };
+  for (const c of root.children) visit(c, root);
+  return entries;
+}
+
+function DisplayTreePanel({
+  doc,
+  project,
+  displayTree,
+}: {
+  doc: SwfDocument;
+  project: Project | null;
+  displayTree: ActiveDisplaySnapshot;
+}) {
+  const total = countDisplayNodes(displayTree) - 1;
+  if (total === 0) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center px-4 py-8 text-center">
+        <span aria-hidden="true" className="mb-2 text-xl text-zinc-700">◇</span>
+        <p className="text-[11px] font-medium text-zinc-400">No active assets</p>
+        <p className="mt-1 max-w-56 text-[10px] leading-relaxed text-zinc-600">Assets appear here when instantiated on stage — including static UI.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div className="mb-2 rounded bg-zinc-900/60 px-2 py-1.5 text-[10px] leading-relaxed text-zinc-500">
+        <span className="font-medium text-zinc-400">{total}</span> asset{total === 1 ? '' : 's'} currently instantiated
+        {displayTree.children.length ? ` · ${displayTree.children.length} top-level` : ''}.
+      </div>
+      <div className="rounded-md border border-zinc-800 bg-zinc-900/40">
+        <DisplayTreeNode node={displayTree} doc={doc} project={project} depth={0} isRoot />
+      </div>
+      <div className="mt-2 px-1 text-[10px] leading-relaxed text-zinc-600">
+        Includes <span className="text-zinc-400">buttons, single-frame sprites, shapes, text</span> — not just playing timelines. Hidden instances are dimmed.
+      </div>
+    </div>
+  );
+}
+
+function DisplayTreeNode({ node, doc, project, depth, isRoot }: { node: ActiveDisplaySnapshot; doc: SwfDocument; project: Project | null; depth: number; isRoot?: boolean }) {
+  const [expanded, setExpanded] = useState(depth < 2);
+  const label = project?.characters[node.characterId]?.name;
+  const kind: string = node.kind;
+  const hasChildren = node.children.length > 0;
+  const isHidden = !node.visible;
+
+  if (isRoot) {
+    return (
+      <div className="divide-y divide-zinc-800/60">
+        <div className="flex items-center gap-2 bg-zinc-900 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+          <span className="truncate">{node.name} — Stage</span>
+          <span className="ml-auto font-mono text-zinc-600">{node.frame}/{node.totalFrames}</span>
+        </div>
+        <div>
+          {node.children.map((child) => (
+            <DisplayTreeNode key={child.id} node={child} doc={doc} project={project} depth={depth + 1} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn('border-l border-transparent', depth > 1 && 'ml-2 border-zinc-800/50')}>
+      <div className={cn('flex items-center gap-1.5 px-2 py-1', isHidden && 'opacity-50', hasChildren && 'cursor-pointer hover:bg-zinc-800/50')} onClick={() => hasChildren && setExpanded((v) => !v)}>
+        {hasChildren ? (
+          <span className="shrink-0 text-[10px] text-zinc-500">{expanded ? '▾' : '▸'}</span>
+        ) : (
+          <span className="shrink-0 w-3" />
+        )}
+        <span className={cn('shrink-0 rounded border px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider', (KIND_COLOR as Record<string, string>)[kind] ?? 'border-zinc-700 bg-zinc-800 text-zinc-400')}>
+          {kind}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-300" title={`${node.path} · #${node.characterId} · d${node.depth}`}>
+          {label && label !== node.name ? `${label} · ${node.name}` : node.name}
+        </span>
+        <span className="shrink-0 font-mono text-[10px] text-zinc-600">#{node.characterId}</span>
+        <span className="shrink-0 font-mono text-[9px] text-zinc-600">d{node.depth}</span>
+        {node.kind === 'clip' && node.totalFrames > 1 && (
+          <span className={cn('shrink-0 rounded px-1 py-0.5 text-[9px] font-mono', node.playing ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300')}>
+            {node.frame}/{node.totalFrames}{node.playing ? ' ▶' : ''}
+          </span>
+        )}
+      </div>
+      {hasChildren && expanded && (
+        <div className="divide-y divide-zinc-800/30">
+          {node.children.map((child) => (
+            <DisplayTreeNode key={child.id} node={child} doc={doc} project={project} depth={depth + 1} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -273,6 +432,8 @@ export interface ActiveAssetEntry {
   depth: number;
   kind: string;
   name: string;
+  path?: string;
+  visible?: boolean;
 }
 
 function computeActiveAssets(
@@ -286,7 +447,6 @@ function computeActiveAssets(
     const tl = snap.characterId === 0 ? doc.root : doc.timelines.get(`sprite:${snap.characterId}`);
     const frame = tl?.frames[snap.frame - 1];
     const display = frame?.display ?? [];
-    // include the timeline's own asset as an entry if not already covered? That would be the sprite itself; we show placements only.
     for (const item of display) {
       const key = `${snap.id}:${item.characterId}:${item.depth}`;
       if (seen.has(key)) continue;
@@ -303,10 +463,7 @@ function computeActiveAssets(
         name: item.name ? `${name} · ${item.name}` : name,
       });
     }
-    // also include nested sprite placements recursively one level deep for tree view depth: show uses of placed sprites
-    // (optional: flatten uses of the placed character)
   }
-  // sort by owner then depth
   entries.sort((a, b) => a.ownerId - b.ownerId || a.depth - b.depth);
   return entries;
 }
@@ -322,13 +479,26 @@ function computeActorStates(
   project: Project | null,
   timelines: readonly RunningTimelineSnapshot[],
   doc: SwfDocument,
+  activeCharacterIds?: Set<number>,
+  displayTree?: ActiveDisplaySnapshot | null,
 ): ActorState[] {
   if (!project?.actors?.length) return [];
-  const runningIds = new Set(timelines.map((t) => t.characterId));
+  const runningIds = activeCharacterIds ?? new Set(timelines.map((t) => t.characterId));
   const runningTimelineIds = new Set<string>();
   for (const t of timelines) {
     if (t.characterId === 0) runningTimelineIds.add('root');
     else runningTimelineIds.add(`sprite:${t.characterId}`);
+  }
+  // Also add characterIds from displayTree's timelines (characterId of each clip node)
+  if (displayTree) {
+    const visit = (n: ActiveDisplaySnapshot) => {
+      if (n.kind === 'clip' && n.totalFrames > 0) {
+        if (n.characterId === 0) runningTimelineIds.add('root');
+        else runningTimelineIds.add(`sprite:${n.characterId}`);
+      }
+      for (const c of n.children) visit(c);
+    };
+    visit(displayTree);
   }
   const clipById = new Map<string, import('../types').Clip>();
   for (const c of project.clips ?? []) clipById.set(c.id, c);
@@ -337,14 +507,21 @@ function computeActorStates(
     const clips = actor.clipIds.map((id) => clipById.get(id)).filter((c): c is import('../types').Clip => !!c);
     const activeClips = new Set<string>();
     for (const c of clips) {
-      if (runningTimelineIds.has(c.timelineId)) activeClips.add(c.id);
-      else {
-        // also match by characterId extracted from timelineId
-        const m = /^sprite:(\d+)$/.exec(c.timelineId);
-        if (m && runningIds.has(Number(m[1]))) activeClips.add(c.id);
+      if (runningTimelineIds.has(c.timelineId)) { activeClips.add(c.id); continue; }
+      const m = /^sprite:(\d+)$/.exec(c.timelineId);
+      if (m && runningIds.has(Number(m[1]))) { activeClips.add(c.id); continue; }
+      // Fallback: clip's timeline character is instantiated somewhere even if not top-level running
+      if (m && displayTree) {
+        const wantId = Number(m[1]);
+        let found = false;
+        const visit = (n: ActiveDisplaySnapshot) => {
+          if (n.characterId === wantId) found = true;
+          for (const child of n.children) if (!found) visit(child);
+        };
+        visit(displayTree);
+        if (found) activeClips.add(c.id);
       }
     }
-    // also consider doc.symbolClasses matching? keep simple
     void doc;
     return {
       actor,

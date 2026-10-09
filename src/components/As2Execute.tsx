@@ -10,7 +10,7 @@ import { ExecutionConsole } from './ExecutionConsole';
 import { RunningTimelinesSidebar } from './RunningTimelinesSidebar';
 import { useExecutionDiagnostics } from './useExecutionDiagnostics';
 import type { LogEntry } from '../engine/flash/player';
-import { AS2Player, type Movie, type RunningTimelineSnapshot } from '../engine/as2/player';
+import { AS2Player, type ActiveDisplaySnapshot, type Movie, type RunningTimelineSnapshot } from '../engine/as2/player';
 import { createExternalResolver, swfNameOf, type ExternalSwf } from '../engine/as2/externals';
 import { readAS2Text, useAS2Build } from '../engine/as2/useAS2Build';
 import { buildWorkbenchTimelineMetadata } from '../engine/as2/workbenchMetadata';
@@ -23,6 +23,14 @@ import { usePopout } from '../debug/Popout';
 
 const MAX_LOG = 500;
 const BOOT_KEY = 'swf-studio.as2.boot';
+
+function flattenDisplayIds(root: ActiveDisplaySnapshot | null): number[] {
+  if (!root) return [];
+  const ids: number[] = [];
+  const visit = (n: ActiveDisplaySnapshot) => { ids.push(n.id); for (const c of n.children) visit(c); };
+  visit(root);
+  return ids;
+}
 
 function sameRunningTimelines(a: readonly RunningTimelineSnapshot[], b: readonly RunningTimelineSnapshot[]): boolean {
   return a.length === b.length && a.every((timeline, index) => {
@@ -71,6 +79,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [runtimeTimelines, setRuntimeTimelines] = useState<RunningTimelineSnapshot[]>([]);
+  const [displayTree, setDisplayTree] = useState<ActiveDisplaySnapshot | null>(null);
   const [panel, setPanel] = useState<'console' | 'program' | null>('console');
   const [showDebugger, setShowDebugger] = useState(false);
   const [hud, setHud] = useState({ frame: 1, total: 1, label: null as string | null, time: 0 });
@@ -88,6 +97,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
   const [viewFile, setViewFile] = useState<string | null>(null);
   const pendingLogs = useRef<LogEntry[]>([]);
   const runtimeTimelinesRef = useRef<RunningTimelineSnapshot[]>([]);
+  const displayTreeRef = useRef<ActiveDisplaySnapshot | null>(null);
   const executionFaultRef = useRef(false);
   const dbg = useDebugger();
   const dbgState = useDebuggerState();
@@ -293,6 +303,17 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
               runtimeTimelinesRef.current = nextTimelines;
               setRuntimeTimelines(nextTimelines);
             }
+            // Full display tree including static UI (buttons, single-frame clips) for Assets/Actors tabs
+            try {
+              const nextTree = player.activeDisplayTree();
+              // shallow diff via JSON stringify of ids / structure size to avoid spamming renders
+              const nextKey = JSON.stringify(flattenDisplayIds(nextTree));
+              const prevKey = displayTreeRef.current ? JSON.stringify(flattenDisplayIds(displayTreeRef.current)) : '';
+              if (nextKey !== prevKey) {
+                displayTreeRef.current = nextTree;
+                setDisplayTree(nextTree);
+              }
+            } catch {}
             if (panelRef.current === 'program') setTree(player.tree());
             setMissing((m) => (m.length === player.missingExternals.size ? m : [...player.missingExternals]));
             if (pendingLogs.current.length) {
@@ -503,7 +524,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
           </div>
         )}
       </div>
-      <RunningTimelinesSidebar doc={doc} timelines={runtimeTimelines} timelineNames={timelineMetadata} playing={playing && !dbgState.paused} project={project} />
+      <RunningTimelinesSidebar doc={doc} timelines={runtimeTimelines} timelineNames={timelineMetadata} playing={playing && !dbgState.paused} project={project} displayTree={displayTree} />
       </div>
 
       {showDebugger && (
