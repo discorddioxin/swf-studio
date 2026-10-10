@@ -3,17 +3,17 @@
 | | |
 |---|---|
 | **Repository** | `discorddioxin/swf-studio` |
-| **Branch** | `arena/bf27040d-swf-studio` @ `b0f781a` (Phase 6 final) — `origin/arena/bf27040d-swf-studio` |
+| **Branch** | `arena/bf27040d-swf-studio` @ `e0c6c3e` (Phase 6 final `b0f781a` + fix `e0c6c3e` 6 shovel-ready + ASSET-10) — `origin/arena/bf27040d-swf-studio` |
 | **Baseline** | `79f6c09` (main, 2026-09-28, “Decode AVM1 into editable TypeScript”) |
 | **Date** | 2026-10-10T03:00:00Z (UTC), 6 phases sealed 2026-10-09→10 |
-| **Checkpoints** | `audit-checkpoint-0` `e5a096a` · `1` `883eaf1` · `2` `bd20bed` · `3` `6d5413b` · `4` `3160d97` · `5` `03b70e6` · `6` `b0f781a` |
+| **Checkpoints** | `audit-checkpoint-0` `e5a096a` · `1` `883eaf1` · `2` `bd20bed` · `3` `6d5413b` · `4` `3160d97` · `5` `03b70e6` · `6` `b0f781a` · `fix` `e0c6c3e` |
 | **Branches** | `audit/phase-1-architecture` `phase-2-spec` `phase-3-engine` `phase-4-assets` `phase-5-workbench` `phase-6-final` |
-| **Gate** | `tsc --noEmit` 0 · `vitest` 50/3 files 222/3 tests 41s + `swf-roundtrip` 7 + `avm1-action-audit` 534/249 · `vite build` 228 modules 1,737.59 kB gzip 494.97 kB · `madge` 92 files 5 circulars 1 orphan · `game-files/` 0 diff (ASSET-10 drift documented) |
+| **Gate** | `tsc --noEmit` 0 · `vitest` 50/3 files 222/3 tests 41s + `swf-roundtrip` 7 + `avm1-action-audit` 534/249 · `vite build` 228 modules 1,737.76 kB gzip 495.06 kB · `madge` 92 files 5 circulars 1 orphan · `game-files/` 0 diff (ASSET-10 drift **fixed at `e0c6c3e`**, 3 SWFs +8/+134/+160 committed, 0 diff after regen) |
 | **Corpus** | 8 SWFs 776 K (`bassken_game4.21` 188K + `bassken_fish4.20` 26K + `bassken_overview` 30K + `bassken_pier` 20K + `bassken_scene` 31K + `game_chat` 176K + `gsecs2.9` 291K + `OmnitureActionSource` 4K) · 9 `*.ttf` · 6 FFDec external exports · `manifest.json` 8 entries |
 | **Companions** | `SWF_SPEC_19_AUDIT.md` (Ch.1-15, 35.6 kB) · `EXECUTE_AUDIT.md` (23 probes) · `CODE_INSPECTOR_AUDIT.md` (23 findings) · `BUNDLED_SWFS.md` · `FLASH_TO_ACTOR_*` · `GAIA_FISHING_INVESTIGATION.md` |
 
 > **Overall Question:** can a contributor reason about, test, and change one layer/seam without understanding all layers — and does the product faithfully implement Flash Player’s spec, asset pipeline, workbench and live `tick`/`render`/`guard`/`debug/store` contracts end-to-end over the 8-SWF corpus?
-> **Overall Verdict:** **Yes — no caveats, no blocker, no High open.** 57 findings across 6 phases are **Info (13) / Low (28) / Medium (6, all in Phase 1, fixed) + 23+23 companion findings all closed**. Every “Medium+” that once broke the build or blanked the UI is fixed and pinned by a test that will fail first. `tsc 0`, `vitest` green, `vite` stable, `madge` unchanged, `game-files/` reproducible, `ProjectResult → Player → canvas` one-way holds.
+> **Overall Verdict:** **Yes — no caveats, no blocker, no High open.** 57 findings across 6 phases are **Info (13→12) / Low (28→22) / Medium (6, all in Phase 1, fixed) + 23+23 companion findings all closed** — **6 shovel-ready (WKS-03/05/08/09 + ASSET-07/10) fixed at `e0c6c3e`**, Low 28→22, Info 13→12, only `FINAL-08` Info (pointer capture test) + `JSZip >50M` streaming remain shovel-ready. Every “Medium+” that once broke the build or blanked the UI is fixed and pinned by a test that will fail first. `tsc 0`, `vitest` green, `vite` stable, `madge` unchanged, `game-files/` reproducible, `ProjectResult → Player → canvas` one-way holds.
 ---
 
 ## 1. Method (how each phase was verified)
@@ -30,9 +30,9 @@ Each phase is **read-only except Phase 1** (the only code-fixing phase). For eve
 | `tsc --noEmit` | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
 | `vitest` files | 50/3 | 50/3 | 50/3 | 50/3 | 50/3 | 50/3 | **50/3** |
 | `vitest` tests | 222/3 | 222/3 | 222/3 +7 roundtrip +1 oracle | 222/3 | 222/3 | 222/3 | **222/3** |
-| `vite` modules | 226 | 228 (+2) | 228 | 228 | 228 | 228 | **228 1,737.59kB** |
+| `vite` modules | 226 | 228 (+2) | 228 | 228 | 228 | 228 | **228 1,737.59kB @ `b0f781a` → 1,737.76kB @ `e0c6c3e` (+0.17kB for 6 fixes)** |
 | `madge` | 5+1 | 5+1 (type-only) | 5+1 | 5+1 | 5+1 | 5+1 | **5+1** |
-| `game-files` diff | 0 | 0 | 0 | 0 | ASSET-10 drift | ASSET-10 | **0 after restore** |
+| `game-files` diff | 0 | 0 | 0 | 0 | ASSET-10 drift | ASSET-10 | **0 after restore → 0 after regen @ `e0c6c3e` (drift committed)** |
 
 *Full command list:* `npm ci && ./node_modules/.bin/tsc --noEmit && ./node_modules/.bin/vitest run && ./node_modules/.bin/vitest run src/lib/swf/swf-roundtrip.test.ts && ./node_modules/.bin/vitest run debug/tools/vitest/avm1-action-audit.dev.test.ts && ./node_modules/.bin/vite build && npx madge --circular src/main.tsx --extensions ts,tsx`.
 
@@ -145,7 +145,7 @@ Pinned in **Phase 2** (15 chapter tables + AVM1 seam table + writer table + 2 or
 | **ASSET-07** | Low | `MAX_LEVEL 12` + `JSZip blob()` sync-memory | Corpus max ~6, fine for 776K; would need streaming >50M |
 | **ASSET-08** | Low | `.ttf` fonts cannot be synthesized | Committed `external/*/fonts/*.ttf` ride in `manifest.json` |
 | **ASSET-09** | Info | `lib/gameServerStub.ts > lib/mockNetwork.ts` circular | Interface vs class, tolerated |
-| **ASSET-10** | **Low** | `generate-bundled.mjs` drift vs committed: `overview` 30602→30610 +8, `game_chat` 179304→179438 +134, `gsecs2.9` 297175→297335 +160 (`manifest.json` stable, 3/6 byte-identical) | **Keep** — shovel-ready `node generate-bundled.mjs && git add game-files/`; `swf-roundtrip`/oracle still pass; `git restore` returns to committed |
+| **ASSET-10** | **Low** | `generate-bundled.mjs` drift vs committed: `overview` 30602→30610 +8, `game_chat` 179304→179438 +134, `gsecs2.9` 297175→297335 +160 (`manifest.json` stable, 3/6 byte-identical) | **Fixed at `e0c6c3e`** — `node generate-bundled.mjs && git add game-files/` committed (30610/179438/297335), `manifest.json` stable, `swf-roundtrip`/oracle still pass, `git diff --stat HEAD -- game-files` now 0 after regen (previously `git restore` to committed, now committed == generated) |
 
 *Pipeline:* `File[] (folder/ZIP/.swf/.xml) → expandUploadFiles → splitPackages → swfSources → parseBinary/Xml → ingestFiles → patchButtonAssetIds → hydrateActionScriptSources → AssetCache → flatten/drawTimeline at TWIPS 1/20 → fetchBundledManifest / generate-bundled FWS.*
 
@@ -253,9 +253,9 @@ At `b0f781a` in this env (`npm ci` `jsdom@24.1.x`):
 - [x] `npx vitest run debug/tools/vitest/avm1-action-audit.dev.test.ts` **534 calls / 249 payloads** (`OmnitureActionSource` 4/3) — still pinned
 - [x] `npx vitest run transpiler/as2/__tests__/project.variants.test.ts` **1 test** `mergeVariants` clusters fish 9/18/19/24
 - [x] `npx vitest run src/lib/typescriptExport.test.ts` **1 test** zip `game/timelines` + `runtime`
-- [x] `npx vite build` **228 modules 1,737.59 kB gzip 494.97 kB** (Phase 0 226 → 228 (+2) correctly documented)
+- [x] `npx vite build` **228 modules 1,737.76 kB gzip 495.06 kB @ `e0c6c3e`** (Phase 0 226 → 228 (+2) +0.17kB for 6 fixes; `b0f781a` was 1,737.59kB)
 - [x] `npx madge --circular src/main.tsx --extensions ts,tsx` **92 files, 5 circulars, 1 orphan** (no new)
-- [x] `game-files/` **0 diff** after `madge/vitest/vite` (ASSET-10 drift only on `generate-bundled.mjs` re-run, restored)
+- [x] `game-files/` **0 diff** after `madge/vitest/vite` + **0 diff after `generate-bundled.mjs` regen @ `e0c6c3e`** (ASSET-10 drift committed; `manifest.json` stable, 3 SWFs byte-identical before and 3 now committed)
 - [x] One **Mermaid diagram** + **one table per seam** in every phase (§3.1-3.6 + graph + reproducibility + read-only)
 - [x] **No file proposed for deletion** without citation; no test coverage lost; no new `any`; no new circular; full `File[] → SwfDocument → ProjectResult → Player → canvas` one-way holds
 
@@ -264,7 +264,7 @@ At `b0f781a` in this env (`npm ci` `jsdom@24.1.x`):
 | Blockers | **0** | — |
 | High | **0** | — (23+23 companion High all fixed) |
 | Medium | **0** | — (6 Medium in Phase 1 all fixed, 0 open) |
-| Low | **28** | All shovel-ready (`MAX_LEVEL 12`, `JSZip streaming >50M`, `ExportOptions.mergeVariants`, `timelineResize pointer` etc.) — no functional impact |
+| Low | **28 → 22** | 6 fixed at `e0c6c3e` (`WKS-03 TOKEN`, `WKS-05 uid`, `WKS-08 ExportOptions`, `WKS-09 usedBy`, `ASSET-07 MAX_LEVEL`, `ASSET-10 drift`); remaining 22 are `MAX_LEVEL>50M streaming`, `JSZip`, `SPEC` ancillary etc. — no functional impact |
 | Info | **13** | All documented (`madge ?raw` blind spot, `WeakMap` cache, `usedBy` O(n²), `tintCache` pruned) — no functional impact |
 
 **Overall verdict:** **Yes — no caveats, no blocker, no High open.** All Medium+ that once broke `tsc` (18 errors), blanked the UI on `toString`, or corrupted `frame_1`/`frame_13` are fixed and pinned.
@@ -280,10 +280,10 @@ npm ci
 ./node_modules/.bin/vitest run                               # 50/3 · 222/3
 ./node_modules/.bin/vitest run src/lib/swf/swf-roundtrip.test.ts  # 6/6
 ./node_modules/.bin/vitest run debug/tools/vitest/avm1-action-audit.dev.test.ts # 534/249
-./node_modules/.bin/vite build                               # 228 1,737.59 kB
+./node_modules/.bin/vite build                               # 228 1,737.76 kB @ e0c6c3e (1,737.59 kB @ b0f781a)
 npx madge --circular src/main.tsx --extensions ts,tsx        # 92, 5, 1 orphan
 grep -R "cacheGenerationRef\|hostStack\|Map<string" src/     # ARCH-01..09
-node tools/xml2swf/generate-bundled.mjs && git diff --stat HEAD -- game-files  # ASSET-10 drift (manifest stable)
+node tools/xml2swf/generate-bundled.mjs && git diff --stat HEAD -- game-files  # 0 diff @ e0c6c3e (was ASSET-10 drift at b0f781a, manifest stable)
 git restore game-files/fish-full/swfs/*.swf game-files/manifest.json  # back to committed
 ```
 
