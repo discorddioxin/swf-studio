@@ -220,7 +220,7 @@
       "severity": "Low",
       "location": "src/lib/render.ts: flatten MAX_LEVEL 12",
       "evidence": "Limits nested localFrameOf walk, corpus max ~6, spec allows deeper",
-      "disposition": "Keep \u2014 shovel-ready to raise"
+      "disposition": "Fixed at e0c6c3e \u2192 513f2e3 \u2014 MAX_LEVEL 12\u219220 in src/lib/render.ts:33 (corpus ~6, now safe to 20); sequential guard added via ASSET-07"
     },
     {
       "id": "ENG-07",
