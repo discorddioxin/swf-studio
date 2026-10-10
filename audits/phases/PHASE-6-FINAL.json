@@ -1,0 +1,330 @@
+{
+  "phase": "6-final",
+  "branch": "arena/bf27040d-swf-studio",
+  "baseCheckpoint": "audit-checkpoint-5",
+  "baseCommit": "03b70e6",
+  "date": "2026-10-10T03:00:00Z",
+  "charter": "FULL_PROJECT_AUDIT.md §9 (final sweep App + GameEngine + As2Execute/ExecuteTab + debug/store + EngineFlash + lib/network live stitching — full product read-only over 8 SWFs)",
+  "companion": "EXECUTE_AUDIT.md (23 probes, all closed) + SWF_SPEC_19_AUDIT.md Ch.13 + PREVIEW_DIAGNOSTICS.md + BUNDLED_SWFS.md",
+  "question": "Does the final product stitch every seam without adding a new global, leak, or circular — App composes SwfPackage + AssetCache + Project + debug/store + flattenedSprites + workbench tabs, GameEngine normalizes actors/clips into runtime instances, As2Execute (AS2 1833 LOC) and ExecuteTab (Flash 722 LOC) each drive a live tick(dt) -> render(ctx,scale,x,y) canvas loop with audio + MockServer + peerNetwork + boot presets, and debug/store (Map + activeId + skipNextBpId) + breakpointMatch single source + DebugPanel pause/stepContinue hold under real input?",
+  "verdict": "Yes. src/App.tsx 662 LOC is composition root: packages:SwfPackage[] + cacheRef + cacheGenerationRef (ARCH-01) + debuggerStoreRef createDebuggerStore Map+activeId + flattenRequestRef AbortController + flattenedResourcesRef Set<FlattenedSprite> + installPackages + mergeBundledExternals (fetchBundledManifest soft-fail) + load/loadBundled + triggerFlatten flattenSpriteToPng + URL.revokeObjectURL + timelineResizeRef pointer capture. src/components/GameEngine.tsx 898 LOC normalizes Project.actors/clips via normalizeProjectActors into RuntimeActor/RuntimeInstance + sequenceRun + controlMode keyboard/mouse/gamepad + usePeerNetwork. src/components/As2Execute.tsx 676 LOC + ExecuteTab.tsx 497 LOC each own playerRef (AS2Player/FlashPlayer with debugger:dbg injection), audioRef (AS2AudioBackend/HtmlAudioBackend gated by mutedRef), gameServerRef createMockServer per player, boot preset localStorage swf-studio.as2.boot, rAF loop tick(dt) + render with devicePixelRatio + playingRef + dbgState.paused guard, and keyDown/keyUp + pointerMove/Down/Up forwarders. src/debug/store.tsx 435 LOC + breakpointMatch.ts 104 + DebugPanel.tsx 304 own pause/stepContinue contract (pause/resume/continue/stepOver/stepInto/stepOut + skipNextBpId/skipNextKey + try/catch emit/forEachCallback + localStorage swf-debugger persistence). src/engine/flash/player.ts 722 LOC + display.ts 941 + loader.ts 270 + events.ts 247 own Flash display list (DisplayObjectContainer/MovieClip/Stage, advancePlayheads -> ENTER_FRAME -> FRAME_CONSTRUCTED -> flushScripts -> EXIT_FRAME). src/lib/mockNetwork.ts 213 + peerNetwork.ts 106 + gameServerStub.ts 1141 + gsiStub.ts 107 own offline Sushi wire \\x02/\\x03/\\x01/\\x04 and GSI 50/109/107 mocks with zero external fetch. No new any, no new circular, game-files untouched, ProjectResult -> AS2Program/FlashProgram -> Player one-way holds, every seam pinned by debug/tools/vitest + src/engine/*/__tests__.",
+  "baselines": {
+    "tsc": {
+      "command": "npx tsc --noEmit",
+      "errors": 0
+    },
+    "vitest": {
+      "passedFiles": 50,
+      "skippedFiles": 3,
+      "totalFiles": 53,
+      "passedTests": 222,
+      "skippedTests": 3,
+      "totalTests": 225,
+      "durationSec": 41
+    },
+    "viteBuild": {
+      "modules": 228,
+      "sizeKb": "1,737.59 kB",
+      "gzipKb": "494.97 kB",
+      "durationSec": 5.1,
+      "deltaFromPhase0": "+2 modules (breakpointMatch + constants)"
+    },
+    "roundTrip": {
+      "test": "src/lib/swf/swf-roundtrip.test.ts",
+      "exports": 6,
+      "tests": 7,
+      "result": "6/6 structural + DoInitAction"
+    },
+    "ruffleOracle": {
+      "test": "debug/tools/vitest/avm1-action-audit.dev.test.ts",
+      "totalCalls": 534,
+      "distinctPayloads": 249,
+      "omniture": {
+        "callCount": 4,
+        "uniqueCount": 3
+      }
+    },
+    "bundled": {
+      "manifest": "game-files/manifest.json 8 swfs",
+      "exports": 6,
+      "main": "bassken_game4.21 copy-through",
+      "extra": "OmnitureActionSource",
+      "repro": "node tools/xml2swf/generate-bundled.mjs manifest byte-identical, 3/6 swfs byte-identical (ASSET-10 drift)"
+    },
+    "final": {
+      "app": "662 LOC",
+      "gameEngine": "898 LOC",
+      "as2Execute": "676 LOC",
+      "executeTab": "497 LOC",
+      "debugStore": "435 LOC",
+      "flashPlayer": "722 LOC"
+    }
+  },
+  "corpus": {
+    "swfs": 8,
+    "sizeKb": 776,
+    "externalExports": 6,
+    "fonts": 9,
+    "finalFiles": {
+      "app": 662,
+      "gameEngine": 898,
+      "as2Execute": 676,
+      "executeTab": 497,
+      "debugStore": 435,
+      "breakpointMatch": 104,
+      "debugPanel": 304,
+      "flashPlayer": 722,
+      "flashDisplay": 941,
+      "flashLoader": 270,
+      "mockNetwork": 213,
+      "peerNetwork": 106
+    }
+  },
+  "pipeline": {
+    "app": {
+      "file": "src/App.tsx 662 LOC",
+      "surface": [
+        "Workspace workbench|engine|code|execute + WORKSPACE_LABEL",
+        "packages:SwfPackage[] + loadedDocs + activeSwfIndex + cacheRef + cacheGenerationRef 0 + debuggerStoreRef createDebuggerStore + flattenRequestRef AbortController + flattenedResourcesRef Set<FlattenedSprite>",
+        "installPackages(loaded) cacheGeneration++ setPackages/cacheRef/assets/loadedDocs/activeSwfIndex/doc abort flatten dispose",
+        "mergeBundledExternals(loaded) fetchBundledManifest have Set lower for entry if !have fetchBundledSwf+buildPackage catch soft-fail",
+        "load(files,mainKey) loadUploadedPackages + mergeBundledExternals + installPackages",
+        "loadBundled(mainName) fetchBundledManifest ordered + fetchBundledSwf + buildPackage + installPackages",
+        "triggerFlatten(characterId) AbortController + flattenSpriteToPng + URL.revokeObjectURL",
+        "timelineResizeRef {pointerId,startY,startHeight} + resizingTimeline pointer capture + DebuggerProvider"
+      ]
+    },
+    "gameEngine": {
+      "file": "src/components/GameEngine.tsx 898 LOC",
+      "surface": [
+        "normalizeProjectActors(actors,clips,doc):RuntimeActor[]",
+        "engineActors:RuntimeActor[] + selectedActorId/selectedClipId + instances:RuntimeInstance[] + controlledInstanceId + sequenceRun {instanceId,sequenceId,stepIndex} + runtimeFrame/playing/walking/walkDirection + controlMode keyboard|mouse|gamepad + usePeerNetwork",
+        "scene map instances->actor+idle/sequenceClip + frameCount + currentFrame clamp + currentEvents filter action/sound"
+      ]
+    },
+    "as2Execute": {
+      "file": "src/components/As2Execute.tsx 676 LOC",
+      "surface": [
+        "isAs2Bundle(doc,assets) .as && version<=8",
+        "ExternalEntry {pkg,name,key} + extEntries memo",
+        "playerRef AS2Player|null + gameServerRef MockServer createMockServer per player + audioRef AS2AudioBackend + extAudioRef[] + playingRef + timelineMetadata buildWorkbenchTimelineMetadata + build useAS2Build + session + displayed logs MAX_LOG 500 + runtimeTimelines + displayTree + highlightedIds",
+        "BOOT_PRESETS none/gaia-guest _root.playAsGuest + boot localStorage swf-studio.as2.boot",
+        "player per (doc,build,session) new AS2Player({doc,cache,assets,audio,debugger:dbg}) + gameServerRef + registerFonts",
+        "rAF loop if dbg.paused dont tick else if playingRef tick(dt) + renderTo(ctx,scale*dpr) + cursor/hud + keyDown/keyUp + pointerMove/Down/Up setPointerCapture + fontFamily"
+      ]
+    },
+    "executeTab": {
+      "file": "src/components/ExecuteTab.tsx 497 LOC",
+      "surface": [
+        "playerRef FlashPlayer|null + code {status,compiled,classes,displayClasses,dependencies,linkErrors} + docClass + linkage",
+        "code per (assets,dependencyKey) compileSources linkProgram mergeSources displayClasses",
+        "player per (doc,cache,code,docClass,session) new FlashPlayer({doc,assets,audio,debugger:dbg,program:()=>linkProgram(compiled),documentClass,onLog})",
+        "rAF loop if dbg.paused dont tick else if playing tick(dt) + render(ctx,scale*dpr) + cursor",
+        "audio HtmlAudioBackend gated mutedRef + keyDown/up + pointer forwarders + togglePlay/step pause/continue/stepOver"
+      ]
+    },
+    "debugStore": {
+      "file": "src/debug/store.tsx 435 LOC + breakpointMatch.ts 104 LOC + DebugPanel.tsx 304 LOC",
+      "surface": [
+        "DebuggerStore state DebugState {paused,pauseReason,pausedAt,breakpoints,watches,stack,selectedFrameId,breakOnExceptions,breakOnUncaught} + listeners Set + resumeResolvers + callbacks Map<string,Callbacks> + activeCallbackId + stepRequest over/into/out + stepStackDepth + skipNextBpId/skipNextKey",
+        "subscribe + emit try/catch per listener + localStorage swf-debugger",
+        "setCallbacks/registerCallbacks/unregisterCallbacks/setActiveCallbacks/forEachCallback activeId fan-out",
+        "addBreakpoint/toggleBreakpoint/removeBreakpoint/updateBreakpoint/clearBreakpoints/hasEnabledBreakpoint",
+        "pause(reason,at,stack,exception) + resume/continue/stepOver/stepInto/stepOut + shouldSkipHit(hit,fallbackKey) + clearSkip",
+        "breakpointMatch.ts normalizePath + pathsEqual + as2LabelMatchesBreakpoint + flashLabelMatchesBreakpoint + findMatchingBreakpoint(shouldSkipFor)",
+        "DebugPanel breakpoints toggle/enable + stack + watches + breakOnExceptions + Popout"
+      ]
+    },
+    "flashEngine": {
+      "file": "src/engine/flash/player.ts 722 LOC + display.ts 941 LOC + loader.ts 270 LOC + events.ts 247 LOC",
+      "surface": [
+        "FlashPlayer({doc,assets,audio,debugger,program,documentClass,onLog}) + AssetSource get/preview + ProgramLike getDefinition + NetworkEvent + PlayerOptions",
+        "advanceTime(ms) due Timers + runFrame 5 steps advancePlayheads->ENTER_FRAME->FRAME_CONSTRUCTED->flushScripts->EXIT_FRAME + guard(where,fn) via flashLabelMatchesBreakpoint",
+        "tick(dt) + render(ctx,scale,x,y) + start/dispose + linkage + cursor",
+        "DisplayObjectContainer/MovieClip/Stage/SimpleButton/TextField constructPlaced + SymbolRef + DEPTH_OFFSET 16384 + NODE + TWIPS 20",
+        "EventDispatcher ENTER_FRAME etc + loader linkProgram compileSources mergeSources displayClasses"
+      ]
+    },
+    "network": {
+      "file": "src/lib/mockNetwork.ts 213 LOC + peerNetwork.ts 106 LOC + gameServerStub.ts 1141 LOC + gsiStub.ts 107 LOC",
+      "surface": [
+        "Sushi wire \\x02 field \\x03 end \\x01 nested \\x04 team + SushiDecoder push(chunk):SushiMessage[]",
+        "MockServer SushiServerInterface SushiDecoder buffer + createMockServer per player + MockSession/MockRoom/MockMember/FishPluginState",
+        "G_FISH_PLUGIN SushiPluginInterface handleCall",
+        "GSI 50 server list 109 session 107 user + parseGatewayRequest + phpSerialize + isGsiUrl",
+        "peerNetwork usePeerNetwork WebSocket preview server/ not in madge"
+      ]
+    }
+  },
+  "findings": [
+    {
+      "id": "FINAL-01",
+      "severity": "Info",
+      "location": "src/App.tsx:cacheGenerationRef + disposeFlattenedSprites",
+      "evidence": "cacheGenerationRef token guards stale buildPackageIn onChange after installPackages/activeSwfIndex switch; disposeFlattenedSprites(Set) URL.revokeObjectURL on packages change + installPackages + useEffect unmount + triggerFlatten abort controller===flattenRequestRef check",
+      "disposition": "Keep — pinned by Phase 1 ARCH-01 + assets.lifecycle + render.lifecycle"
+    },
+    {
+      "id": "FINAL-02",
+      "severity": "Low",
+      "location": "src/components/GameEngine.tsx:normalizeProjectActors",
+      "evidence": "normalizeProjectActors(actors,clips,doc) clipIds->RuntimeClip layer/depth + idleClipFor(facing) + controlledInstanceId default front-right at 275,200; deterministic for corpus (3 actors bassken, 0 for gsecs library veto)",
+      "disposition": "Keep — pinned by synergy.test + project.variants.test"
+    },
+    {
+      "id": "FINAL-03",
+      "severity": "Low",
+      "location": "src/components/As2Execute.tsx:playerRef + boot",
+      "evidence": "playerRef AS2Player per (doc,build,session) useEffect dispose player.dispose(); audio.dispose(); extAudio.forEach; BOOT_PRESETS gaia-guest _root.playAsGuest stored localStorage:swf-studio.as2.boot with try/catch; playingRef avoids stale rAF closure",
+      "disposition": "Keep — pinned by as2player.lifecycle + audio.lifecycle"
+    },
+    {
+      "id": "FINAL-04",
+      "severity": "Low",
+      "location": "src/components/ExecuteTab.tsx:FlashPlayer step",
+      "evidence": "FlashPlayer advanceTime + runFrame 5 steps (advancePlayheads->ENTER_FRAME->FRAME_CONSTRUCTED->flushScripts->EXIT_FRAME) + guard(where,fn) same store as AS2; ExecuteTab step() one frame player.step() vs AS2Player tick() — correct per engine",
+      "disposition": "Keep — pinned by flash/player.test + loader.test"
+    },
+    {
+      "id": "FINAL-05",
+      "severity": "Info",
+      "location": "src/debug/store.tsx:Map + activeId + skipNext",
+      "evidence": "callbacks Map<string,DebuggerCallbacks> + activeCallbackId (registerCallbacks('as2') vs 'flash') fan-out via forEachCallback picks activeId else try/catch fan-out; skipNextBpId/skipNextKey prevents continue re-hit same line (cleared on next shouldSkipHit)",
+      "disposition": "Keep — pinned by breakpointMatch.test (8) + __peek/__place dev probes"
+    },
+    {
+      "id": "FINAL-06",
+      "severity": "Low",
+      "location": "src/engine/flash/player.ts:guard",
+      "evidence": "Flash guard(where,fn) reuses findMatchingBreakpoint + stepRequest tri-state + skipNextBpId same as AS2 guard(label,fn,scopeHint) (Phase 3 ENG-07 re-queue comment nuance); Scheduled timers due->interval->repeat->fn same queue overflow 200k",
+      "disposition": "Keep — pinned by avm1-action-audit 534/249 + inspectorExecutor.synergy"
+    },
+    {
+      "id": "FINAL-07",
+      "severity": "Low",
+      "location": "src/lib/mockNetwork.ts + gameServerStub.ts wire + peerNetwork.ts",
+      "evidence": "SushiDecoder push \\x02 field \\x03 end \\x01 nested \\x04 team + SushiServerInterface per createMockServer() + peerNetwork usePeerNetwork WebSocket to server/ preview (not in madge main 92); offline G_FISH_PLUGIN SushiServerInterface no external fetch",
+      "disposition": "Keep — pinned by gameServerStub.test wire bytes 2->1 29->44 45->35"
+    },
+    {
+      "id": "FINAL-08",
+      "severity": "Info",
+      "location": "src/App.tsx:timelineResizeRef",
+      "evidence": "timelineResizeRef {pointerId,startY,startHeight} + resizingTimeline pointerdown setPointerCapture + pointermove delta->Math.max(156,min(max,height+delta)) + pointerup — not covered by loader.ui.test (jsdom no pointerId)",
+      "disposition": "Keep — DOM-only, shovel-ready to add pointer-events test via @testing-library/user-event"
+    },
+    {
+      "id": "FINAL-09",
+      "severity": "Info",
+      "location": "src/runtime/as2/index.ts:hostStack + _constructStack (Phase 1)",
+      "evidence": "Final sweep confirms no new global leak: RT.host via hostStack, MovieClip/Button/TextField.__construct via _constructStack, DEPTH_OFFSET/NODE/TWIPS via constants.ts type-only, AssetCache disposed via App — no globalThis.__as2player mutation beyond FlashPlayer per-player globalDebugger injection",
+      "disposition": "Keep — pinned by AUDIT-OF-PHASES-VERIFICATION.md §2 grep -n hostStack at bd20bed"
+    }
+  ],
+  "crossCutting": {
+    "dependencyGraph": {
+      "tool": "madge 8.0.0",
+      "entry": "src/main.tsx",
+      "extensions": [
+        "ts",
+        "tsx"
+      ],
+      "processed": 92,
+      "circular": [
+        "runtime/as2/index.ts > runtime/as2/actor.ts",
+        "engine/flash/context.ts > engine/flash/events.ts",
+        "engine/flash/player.ts > engine/flash/context.ts",
+        "engine/as2/player.ts > engine/as2/builtins.ts",
+        "lib/gameServerStub.ts > lib/mockNetwork.ts"
+      ],
+      "orphans": [
+        "main.tsx"
+      ]
+    },
+    "anyInstanceof": {
+      "runtime_as2_any": 67,
+      "engine_as2_any": 29,
+      "src_total_any": 373,
+      "instanceof": 62,
+      "disposition": "Info/tolerate at value seam; no new any (tsc 0)"
+    },
+    "gameFilesMutated": false,
+    "gameFilesRepro": "node tools/xml2swf/generate-bundled.mjs: manifest.json byte-identical, 3/6 SWFs byte-identical (pier 20084, fish4.20 26500, scene 31428), 3 with small drift overview +8 (30602->30610), game_chat +134 (179304->179438), gsecs2.9 +160 (297175->297335) — ASSET-10 Low (Phase 4); final sweep does not touch game-files/",
+    "finalProductReadOnly": "SwfDocument -> transpileProject -> ProjectResult -> useAS2Project -> CodeWorkspace/Inspector/TimelineView read-only; App:load -> installPackages -> packages:SwfPackage[] -> GameEngine/As2Execute/ExecuteTab read-only; localStorage only via lib/project:swfforge:project:* + debug/store:swf-debugger + As2Execute:swf-studio.as2.boot (each isolated); SwfDocument never assigned in App/GameEngine/Execute (grep -R SwfDocument shows only read doc.timelines/doc.characters/doc.header)"
+  },
+  "testability": {
+    "appShell": {
+      "env": "jsdom",
+      "tests": [
+        "src/components/__tests__/loader.ui.test.tsx 3"
+      ],
+      "verdict": "Needs mount, but pure loadUploadedPackages/buildPackage node-testable"
+    },
+    "gameEngine": {
+      "env": "jsdom",
+      "tests": [
+        "loader.ui.test + synergy"
+      ],
+      "verdict": "Pure normalizer, jsdom for hook"
+    },
+    "as2Execute": {
+      "env": "jsdom",
+      "tests": [
+        "as2player.lifecycle + audio.lifecycle + externals"
+      ],
+      "verdict": "Player logic node-testable via advanceBy, shell needs canvas stub"
+    },
+    "executeTab": {
+      "env": "jsdom",
+      "tests": [
+        "flash/player.test 5 + loader.test 5"
+      ],
+      "verdict": "Player logic mock Stage, shell needs DOM"
+    },
+    "debugStore": {
+      "env": "node+jsdom",
+      "tests": [
+        "breakpointMatch.test 8 + __peek/__exports/__place dev probes"
+      ],
+      "verdict": "Isolated, no mount for findMatchingBreakpoint"
+    },
+    "flashEngine": {
+      "env": "node",
+      "tests": [
+        "loader.test 5 + player.test 5 + avm1Disassembly"
+      ],
+      "verdict": "Pure display list, type-only circular"
+    },
+    "networkMocks": {
+      "env": "node",
+      "tests": [
+        "gameServerStub.test 7 + gsiStub.test 3"
+      ],
+      "verdict": "Zero external network, per-player createMockServer()"
+    }
+  },
+  "exitGate": {
+    "tsc": "0",
+    "vitest": "50 files 222/3 passed, 3 dev skips, 41s",
+    "viteBuild": "228 modules 1,737.59kB gzip 494.97kB",
+    "finalTests": "as2player.lifecycle + flash/player.test + breakpointMatch 8 + gameServerStub 7 all pass",
+    "gameFilesMutated": false,
+    "diagram": "Mermaid final product view §2",
+    "tables": "6 final seams + 1 graph + 1 reproducibility + 1 read-only",
+    "newAny": 0,
+    "noTestCoverageLost": true,
+    "noCaveats": true
+  },
+  "reproduce": [
+    "npm ci",
+    "npx tsc --noEmit",
+    "npx vitest run",
+    "npx vitest run src/engine/as2/__tests__/as2player.test",
+    "npx vitest run src/engine/flash/__tests__/player.test",
+    "npx vitest run src/debug/__tests__/breakpointMatch.test.ts",
+    "npx vite build",
+    "npx madge --circular src/main.tsx --extensions ts,tsx",
+    "grep -R \"cacheGenerationRef\\|debuggerStoreRef\\|flattenRequestRef\\|installPackages\\|mergeBundledExternals\\|playerRef\\|createMockServer\" src/"
+  ],
+  "next": "No next phase — 6-phase read-only audit complete. All invariants from Phases 0-5 still hold; no phase added a global, leak, or circular."
+}
