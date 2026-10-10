@@ -47,7 +47,7 @@ const KEYWORDS = new Set([
   'readonly', 'return', 'set', 'static', 'super', 'switch', 'this', 'throw', 'true', 'try', 'type', 'typeof',
   'undefined', 'var', 'void', 'while', 'with', 'yield', 'number', 'string', 'boolean',
 ]);
-const TOKEN = /(\/\/.*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b[A-Za-z_$][\w$]*\b|\b\d+(?:\.\d+)?\b)/g;
+const TOKEN = /(\/\/.*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b[A-Za-z_$][\w$]*\b|\b\d+(?:\.\d+)?\b)/g;
 
 function highlight(line: string) {
   const parts: ReactNode[] = [];
@@ -58,7 +58,7 @@ function highlight(line: string) {
   while ((match = TOKEN.exec(line))) {
     if (match.index > cursor) parts.push(<span key={index++}>{line.slice(cursor, match.index)}</span>);
     const token = match[0];
-    const className = token.startsWith('//')
+    const className = token.startsWith('//') || token.startsWith('/*')
       ? 'text-zinc-500 italic'
       : /^["'`]/.test(token)
         ? 'text-emerald-300'

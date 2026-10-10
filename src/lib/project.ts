@@ -18,7 +18,13 @@ export function loadProject(swfName: string): Project {
   return emptyProject(swfName);
 }
 
-export const uid = () => Math.random().toString(36).slice(2, 10);
+export const uid = () => {
+  try {
+    const c = (globalThis as any).crypto;
+    if (c?.randomUUID) return c.randomUUID().slice(0, 8);
+  } catch {}
+  return Math.random().toString(36).slice(2, 10);
+};
 
 export function useProject(swfName: string) {
   const [project, setProject] = useState<Project>(() => emptyProject(swfName));

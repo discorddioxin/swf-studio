@@ -30,7 +30,7 @@ export interface FlatItem {
   level: number;
 }
 
-const MAX_LEVEL = 12;
+const MAX_LEVEL = 20;
 
 export function localFrameOf(item: DisplayItem, parentFrame: number, count: number) {
   if (count <= 1) return 0;

@@ -1,6 +1,7 @@
 // Inspector "Label" tab: character details, uses / used-by.
 // Extracted verbatim from Inspector.tsx (DECOMPOSITION_SPEC phases 3–10).
 
+import { useMemo } from 'react';
 import { Empty, fmt } from './shared';
 import type { AssetCache } from '../../lib/assets';
 import { triggerDownload } from '../../lib/exporter';
@@ -24,7 +25,7 @@ export function LabelPanel({ doc, cache, api, selectedId, onSelect, onOpenTimeli
   const lbl = api.project.characters[ch.id] ?? { tags: [] };
   const prev = cache.preview(ch.id, ch.kind);
   const asset = cache.get(ch.id, ch.kind, ch.bounds);
-  const usedBy = [...doc.characters.values()].filter((c) => c.uses.includes(ch.id));
+  const usedBy = useMemo(() => [...doc.characters.values()].filter((c) => c.uses.includes(ch.id)), [doc, ch.id]);
   const flattened = flattenedSprites.find((sprite) => sprite.characterId === ch.id);
 
   return (
