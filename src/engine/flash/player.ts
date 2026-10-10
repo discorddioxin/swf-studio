@@ -24,6 +24,8 @@ import {
 } from './display';
 import { Event, EventDispatcher, IOErrorEvent, KeyboardEvent, MouseEvent } from './events';
 import { Point, Rectangle } from './geom';
+import { globalDebugger, type DebuggerStore } from '../../debug/store';
+import { findMatchingBreakpoint, flashLabelMatchesBreakpoint } from '../../debug/breakpointMatch';
 import type { AudioBackend, AudioHandle, SoundChannel } from './media';
 import { TextField } from './text';
 
@@ -89,6 +91,8 @@ export interface PlayerOptions {
   documentClass?: string | null;
   audio?: AudioBackend | null;
   onLog?: (entry: LogEntry) => void;
+  /** Injected debugger (defaults to globalDebugger singleton for backward compat). */
+  debugger?: DebuggerStore;
 }
 
 interface Scheduled { id: number; due: number; interval: number; repeat: boolean; fn: () => void }
@@ -126,12 +130,14 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
   private frameSounds = new Map<number, AudioHandle>();
   private errorCount = 0;
   private networkRequestSequence = 0;
+  private readonly dbg: DebuggerStore;
 
   constructor(opts: PlayerOptions) {
     this.doc = opts.doc;
     this.assets = opts.assets ?? null;
     this.audio = opts.audio ?? null;
     this.onLog = opts.onLog ?? (() => {});
+    this.dbg = opts.debugger ?? globalDebugger;
     const s = this.doc.header.stage;
     const previous = runtime.player;
     runtime.player = this as unknown as typeof runtime.player; // Stage construction reads host()
@@ -369,6 +375,13 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     } else if (this.errorCount === 201) {
       this.log('error', 'Too many errors; further errors are not logged.', undefined, { source, kind: 'problem', context: where });
     }
+    try {
+      const dbg = this.dbg;
+      const s = dbg.getState();
+      if (s.breakOnExceptions || s.breakOnUncaught) {
+        dbg.pause('exception', undefined, [{ id: Date.now(), name: where, source: 'exception', line: 1, scope: { error: e.message, where } } as any, ...s.stack.slice(0,31)], { message: e.message, stack: e.stack });
+      }
+    } catch {}
   }
 
   private log(level: LogLevel, message: string, detail?: string, metadata: LogMetadata = {}) {
@@ -384,7 +397,43 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     try { this.onLog(entry); }
     catch (error) { console.error('[flash engine] log handler failed', error); }
   }
-  private guard<T>(fn: () => T, where: string, source: LogSource = 'app') { return runtime.guard(fn, where, source); }
+  private runGuardBody<T>(fn: () => T, where: string, source: LogSource): T | undefined {
+    const dbg = this.dbg;
+    const fid = Date.now() + Math.floor(Math.random() * 1000);
+    try { (dbg as any).pushFrame?.({ id: fid, name: where, source: where, line: 1, scope: { where } }); } catch {}
+    try {
+      const res = runtime.guard(fn, where, source);
+      if (dbg.stepRequest === 'over' || dbg.stepRequest === 'into') {
+        dbg.pause('step', undefined, [{ id: Date.now(), name: where, source: where, line: 1, scope: { where } } as any, ...dbg.getState().stack.slice(0, 31)]);
+        dbg.stepRequest = null;
+      }
+      return res;
+    } finally { try { (dbg as any).popFrame?.(); } catch {} }
+  }
+
+  private guard<T>(fn: () => T, where: string, source: LogSource = 'app') {
+    const dbg = this.dbg;
+    const state = dbg.getState();
+    if (state.paused) return undefined as unknown as T;
+    // breakpoint / step check before guard — single source of truth via breakpointMatch
+    const shouldBreak = (() => {
+      if (state.breakpoints.length === 0 && !state.breakOnExceptions && dbg.stepRequest == null) return null;
+      if (dbg.stepRequest) return { path: where, line: 1 };
+      const hit = findMatchingBreakpoint(where, state.breakpoints, (bp) => (dbg as any).shouldSkipFor?.(bp) ?? false, flashLabelMatchesBreakpoint);
+      if (hit) return { path: hit.path, line: hit.line };
+      return null;
+    })();
+    if (shouldBreak) {
+      dbg.pause('breakpoint', { path: shouldBreak.path, line: shouldBreak.line }, [{ id: Date.now(), name: where, source: shouldBreak.path, line: shouldBreak.line, scope: { where } } as any, ...state.stack.slice(0,31)]);
+      // stash re-run without re-checking the breakpoint that just caused the pause
+      const pending = { fn, where, source };
+      const unsub = dbg.subscribe(() => {
+        if (!dbg.getState().paused) { unsub(); try { this.runGuardBody(pending.fn, pending.where, pending.source); this.flushScripts(); } catch {} }
+      });
+      return undefined as unknown as T;
+    }
+    return this.runGuardBody(fn, where, source);
+  }
 
   /** Make this the active player while game code runs. */
   private activate<T>(fn: () => T): T {

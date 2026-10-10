@@ -29,15 +29,16 @@ import {
   type Components,
 } from './geom';
 import { installBuiltins, type BuiltinState } from './builtins';
+import { DEPTH_OFFSET, NODE, TWIPS, nodeOf } from './constants';
 import {
   cssFont, estimateWidth, layout, paragraphsToHtml, paragraphsToText, parseHtml, plainToParagraphs,
   type Line, type Paragraph, type TextStyle,
 } from './text';
+import { globalDebugger, type DebuggerStore } from '../../debug/store';
+import { as2LabelMatchesBreakpoint, findMatchingBreakpoint } from '../../debug/breakpointMatch';
 
-export const TWIPS = 20;
-/** AS depth = SWF depth − DEPTH_OFFSET (timeline objects have negative AS depths) */
-export const DEPTH_OFFSET = 16384;
-export const NODE = Symbol.for('swf-studio.as2.node');
+// TWIPS, DEPTH_OFFSET, NODE are re-exported from ./constants for backward compat
+export { DEPTH_OFFSET, NODE, TWIPS } from './constants';
 
 /** A loaded SWF: document + its compiled program + its assets. */
 export interface Movie {
@@ -65,6 +66,22 @@ export interface RunningTimelineSnapshot {
   frameLabel?: string;
   mainMovie: boolean;
   movieName?: string;
+}
+
+export interface ActiveDisplaySnapshot {
+  id: number;
+  characterId: number;
+  kind: NodeKind;
+  name: string;
+  path: string;
+  depth: number;
+  visible: boolean;
+  frame: number;
+  totalFrames: number;
+  playing: boolean;
+  /** Whether this node's timeline was placed by a parent timeline. */
+  fromTimeline: boolean;
+  children: ActiveDisplaySnapshot[];
 }
 
 export interface TextState {
@@ -159,8 +176,7 @@ export class DisplayNode {
   }
 }
 
-export const nodeOf = (o: unknown): DisplayNode | null =>
-  o && (typeof o === 'object' || typeof o === 'function') ? ((o as any)[NODE] as DisplayNode | undefined) ?? null : null;
+export { nodeOf } from './constants';
 
 
 
@@ -173,6 +189,8 @@ export interface AS2PlayerOptions {
   assets?: AssetSource | null;
   audio?: AudioBackend | null;
   onLog?: (entry: LogEntry) => void;
+  /** Injected debugger (defaults to globalDebugger singleton for backward compat). Tests should pass a fresh store. */
+  debugger?: DebuggerStore;
   /** Resolve a CSS font-family list for an embedded font character id / font name. */
   fontFamily?: (fontIdOrName: number | string, movie: Movie) => string;
   /** Load another SWF (loadMovie / MovieClipLoader). null = not available. */
@@ -257,12 +275,17 @@ export class AS2Player {
   cursorHidden = false;
   /** external SWFs the game asked for that could not be resolved */
   readonly missingExternals = new Set<string>();
+  /** ids of display nodes currently hovered in the inspector (highlight overlay) */
+  highlightedIds: Set<number> | null = null;
+  private readonly dbg: DebuggerStore;
+  private readonly _host: RT.AS2Host;
 
   constructor(opts: AS2PlayerOptions) {
     this.opts = opts;
     this.doc = opts.doc;
     this.movie = { doc: opts.doc, program: opts.program, assets: opts.assets ?? null, url: 'root' };
     this.audio = opts.audio ?? null;
+    this.dbg = opts.debugger ?? globalDebugger;
     const h = opts.doc.header;
     this.frameRate = h.frameRate > 0 ? h.frameRate : 24;
     const b = h.stage;
@@ -271,7 +294,8 @@ export class AS2Player {
     this.background = h.backgroundColor != null ? `#${h.backgroundColor.toString(16).padStart(6, '0')}` : '#ffffff';
 
     RT.resetRuntime();
-    RT.installHost(this.host());
+    this._host = this.host();
+    RT.installHost(this._host);
     this.builtins = installBuiltins(this);
     // AS2 classes live on _global (e.g. _global.com.rawfishsoftware.sushi.SushiAPI)
     for (const [name, cls] of Object.entries(opts.program?.classes ?? {})) RT.$rt.registerClass(name, cls);
@@ -314,8 +338,12 @@ export class AS2Player {
     });
   }
 
-  /** Run game code; synchronous throws and async rejections are attributed to the callback that failed. */
-  guard(label: string, fn: () => unknown) {
+  /** Execute fn with stack tracking but without an upfront breakpoint check (used to resume after a pause). */
+  private runGuardFn(label: string, fn: () => unknown, scopeHint?: Record<string, unknown>) {
+    const dbg = this.dbg;
+    const frameId = Date.now() + Math.floor(Math.random() * 1000);
+    const pushScope = scopeHint ?? {};
+    (dbg as any).pushFrame?.({ id: frameId, name: label, source: label, line: 1, scope: pushScope });
     try {
       const result = fn();
       if (result && typeof (result as { then?: unknown }).then === 'function') {
@@ -325,12 +353,81 @@ export class AS2Player {
     } catch (error) {
       this.reportProblem(error, label);
       return undefined;
+    } finally {
+      try { (dbg as any).popFrame?.(); } catch {}
     }
+  }
+
+  /** Run game code; synchronous throws and async rejections are attributed to the callback that failed. */
+  guard(label: string, fn: () => unknown, scopeHint?: Record<string, unknown>) {
+    // debug: breakpoint check before running — uses shared matcher (debug/breakpointMatch.ts)
+    const dbg = this.dbg;
+    const state = dbg.getState();
+    // quick path: if paused, don't run new code until resumed (prevents queue drain while stepping)
+    if (state.paused) {
+      // queue will be drained on resume
+      return undefined;
+    }
+    // check breakpoints / step pause before this call — single source of truth via breakpointMatch
+    const shouldBreak = (() => {
+      if (state.breakpoints.length === 0 && !state.breakOnExceptions && dbg.stepRequest == null) return null;
+      // step: break on every guard when stepping
+      if (dbg.stepRequest) {
+        return { path: label, line: 1 };
+      }
+      const hit = findMatchingBreakpoint(label, state.breakpoints, (bp) => (dbg as any).shouldSkipFor?.(bp) ?? false, as2LabelMatchesBreakpoint);
+      if (hit) return { path: hit.path, line: hit.line };
+      return null;
+    })();
+    if (shouldBreak) {
+      const scope = scopeHint ?? {};
+      // capture a lightweight scope: include label and root reference
+      const frame = { id: Date.now() + Math.floor(Math.random()*1000), name: label, source: shouldBreak.path, line: shouldBreak.line, scope: { _label: label, ...scope } } as any;
+      // pause player loop
+      const wasRunning = this.running;
+      this.pause();
+      (dbg as any).pause('breakpoint', { path: shouldBreak.path, line: shouldBreak.line }, [frame, ...state.stack.slice(0, 31)]);
+      // hook resume to restart player if it was running
+      // we don't override globally; instead schedule a one-time resume handler
+      // The component will call dbg.continue() which resumes; we also need to restart player tick.
+      // We store the running state on the store and let the component restart via callback.
+      // For now, just pause and don't execute this guard's fn until resumed.
+      // To avoid dropping this action, re-queue it to front and return.
+      // We'll re-enqueue the action by pushing to front of queue via a deferred call:
+      // However guard is sometimes called outside queue (direct). For those, we simply not run fn now.
+      // Instead, we stash a resolver to re-run fn on continue.
+      const pending = { label, fn, scope };
+      const unsub = dbg.subscribe(() => {
+        if (!dbg.getState().paused) {
+          unsub();
+          if (wasRunning) this.play();
+          // Run the pending action without re-checking the breakpoint that just caused the pause;
+          // otherwise Continue would immediately re-break on the same location.
+          try { this.runGuardFn(pending.label, pending.fn, pending.scope); this.runQueue(); } catch {}
+        }
+      });
+      return undefined;
+    }
+
+    return this.runGuardFn(label, fn, scopeHint);
   }
 
   private reportProblem(error: unknown, label: string) {
     const err = error instanceof Error ? error : new Error(String(error));
     this.log('error', `${label}: ${err.message}`, err.stack, { source: 'app', kind: 'problem', context: label });
+    // debug: break on exception if enabled
+    try {
+      const dbg = this.dbg;
+      const s = dbg.getState();
+      if (s.breakOnExceptions || s.breakOnUncaught) {
+        const wasRunning = this.running;
+        this.pause();
+        dbg.pause('exception', undefined, [{ id: Date.now(), name: label, source: 'exception', line: 1, scope: { error: err.message, label } } as any, ...s.stack.slice(0,31)], { message: err.message, stack: err.stack });
+        const unsub = dbg.subscribe(() => {
+          if (!dbg.getState().paused) { unsub(); if (wasRunning) this.play(); }
+        });
+      }
+    } catch {}
   }
 
   /** Object.registerClass library of a movie (null = the main movie) */
@@ -435,7 +532,16 @@ export class AS2Player {
     this.queue.length = 0;
     for (const off of this.listeners) off();
     this.listeners = [];
-    if (RT.currentHost() && (RT.currentHost() as any).__player === this) RT.installHost(null);
+    try { (RT as any).uninstallHost?.(this._host); } catch {}
+    // fallback for older runtime without uninstallHost
+    if (RT.currentHost() && (RT.currentHost() as any).__player === this) {
+      try { RT.installHost(null); } catch {}
+    }
+    // clear any leaked MovieClip construct hook and tint cache
+    try { RT.MovieClip._clearConstructStack?.(); } catch {}
+    try { RT.Button._clearConstructStack?.(); } catch {}
+    try { RT.TextField._clearConstructStack?.(); } catch {}
+    try { (this as any).tintCache = new WeakMap(); } catch {}
     if ((globalThis as any).__as2player === this) delete (globalThis as any).__as2player;
   }
 
@@ -479,13 +585,44 @@ export class AS2Player {
   private draining = false;
   runQueue() {
     if (this.draining) return;
+    // if debugger is paused, defer queue draining until resume
+    const dbg = this.dbg;
+    if (dbg.getState().paused) return;
     this.draining = true;
     try {
       let guard = 0;
       while (this.queue.length) {
+        if (dbg.getState().paused) break;
         const a = this.queue.shift()!;
         if (a.node.removed && !a.always) continue;
-        this.guard(a.label, a.run);
+        // enrich scope hint with node object for watch evaluation
+        const scopeHint: Record<string, unknown> = {};
+        try {
+          if (a.node?.obj) {
+            scopeHint['this'] = a.node.obj;
+            scopeHint['_this'] = a.node.obj;
+            // shallow copy properties for quick watch
+            for (const k of Object.keys(a.node.obj).slice(0, 20)) {
+              if (k.startsWith('_') || /^[a-zA-Z_]/.test(k)) scopeHint[k] = (a.node.obj as any)[k];
+            }
+          }
+          scopeHint['_label'] = a.label;
+          scopeHint['_node'] = a.node;
+        } catch {}
+        this.guard(a.label, a.run, scopeHint);
+        // step handling: after each action, if step requested, pause
+        if (dbg.stepRequest === 'over' || dbg.stepRequest === 'into') {
+          // pause after one action
+          const wasRunning = this.running;
+          this.pause();
+          const frame = { id: Date.now(), name: a.label, source: a.label, line: 1, scope: scopeHint } as any;
+          dbg.pause('step', undefined, [frame, ...dbg.getState().stack.slice(0,31)]);
+          dbg.stepRequest = null;
+          const unsub = dbg.subscribe(() => {
+            if (!dbg.getState().paused) { unsub(); if (wasRunning) this.play(); this.runQueue(); }
+          });
+          break;
+        }
         if (++guard > 200000) { this.log('error', 'action queue overflow – aborting this tick'); this.queue.length = 0; }
       }
     } finally { this.draining = false; }
@@ -1347,6 +1484,11 @@ export class AS2Player {
     this.renderTo(ctx, scale, (canvas.width - this.width * scale) / 2, (canvas.height - this.height * scale) / 2);
   }
 
+  /** Highlight overlay: set from inspector hover. null = no highlight. */
+  setHighlightedIds(ids: Set<number> | null) {
+    this.highlightedIds = ids;
+  }
+
   /** Draw the stage at `scale` (device px per stage px) with its top-left corner at (ox, oy). */
   renderTo(ctx: CanvasRenderingContext2D, scale: number, ox: number, oy: number) {
     ctx.save();
@@ -1359,6 +1501,41 @@ export class AS2Player {
     ctx.clip();
     ctx.scale(1 / TWIPS, 1 / TWIPS);
     this.drawNode(ctx, this.root, 1, undefined);
+    // Inspector hover highlight overlay (drawn in TWIPS space after scene)
+    if (this.highlightedIds && this.highlightedIds.size) {
+      ctx.save();
+      ctx.globalAlpha = 1;
+      const highlightNodes: DisplayNode[] = [];
+      const collect = (n: DisplayNode) => {
+        if (!n.removed && this.highlightedIds!.has(n.id)) highlightNodes.push(n);
+        for (const c of n.children) collect(c);
+      };
+      collect(this.root);
+      for (const n of highlightNodes) {
+        const bounds = this.localBounds(n);
+        if (!bounds) continue;
+        const gm = this.globalMatrix(n);
+        const gb = transformRect(gm, bounds);
+        const w = gb.xMax - gb.xMin;
+        const h = gb.yMax - gb.yMin;
+        if (w <= 0 || h <= 0) continue;
+        // outer glow
+        ctx.fillStyle = "rgba(168,85,247,0.18)";
+        ctx.fillRect(gb.xMin, gb.yMin, w, h);
+        // border
+        ctx.strokeStyle = "rgba(232,121,249,0.95)";
+        ctx.lineWidth = Math.max(28, Math.min(80, Math.max(w, h) * 0.015));
+        ctx.setLineDash([]);
+        ctx.strokeRect(gb.xMin, gb.yMin, w, h);
+        // corner handles
+        const s = Math.max(120, Math.min(320, Math.max(w, h) * 0.04));
+        ctx.fillStyle = "rgba(232,121,249,1)";
+        for (const [x,y] of [[gb.xMin, gb.yMin],[gb.xMax, gb.yMin],[gb.xMin, gb.yMax],[gb.xMax, gb.yMax]]) {
+          ctx.fillRect(x - s/2, y - s/2, s, s);
+        }
+      }
+      ctx.restore();
+    }
     ctx.restore();
   }
 
@@ -1591,6 +1768,44 @@ export class AS2Player {
     };
     visit(this.root);
     return timelines;
+  }
+
+  /** Full display-list snapshot including static/single-frame clips and UI (buttons, shapes, text). */
+  activeDisplayTree(node: DisplayNode = this.root): ActiveDisplaySnapshot {
+    const ch = node.character;
+    const snap: ActiveDisplaySnapshot = {
+      id: node.id,
+      characterId: node.characterId,
+      kind: node.kind,
+      name: node === this.root ? (node.timeline?.name || 'Main Timeline') : (ch?.exportName || node.name || `${node.kind} ${node.characterId}`),
+      path: this.describe(node),
+      depth: node.depth,
+      visible: node.visible,
+      frame: node.frame + 1,
+      totalFrames: node.totalFrames,
+      playing: node.playing,
+      fromTimeline: node.fromTimeline,
+      children: [],
+    };
+    for (const child of node.children) {
+      if (child.removed) continue;
+      snap.children.push(this.activeDisplayTree(child));
+    }
+    // Sort by depth (SWF depth order) for stable tree view
+    snap.children.sort((a, b) => a.depth - b.depth);
+    return snap;
+  }
+
+  /** Flat set of every characterId currently instantiated (including single-frame UI). */
+  activeCharacterIds(): Set<number> {
+    const ids = new Set<number>();
+    const visit = (node: DisplayNode) => {
+      if (node.removed) return;
+      ids.add(node.characterId);
+      for (const c of node.children) visit(c);
+    };
+    visit(this.root);
+    return ids;
   }
 
   /** Snapshot of the display list (for the UI / tests). */

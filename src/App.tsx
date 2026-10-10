@@ -17,6 +17,7 @@ import { useProject } from './lib/project';
 import type { AssetBundle, FlattenedSprite, SwfDocument } from './types';
 import { flattenSpriteToPng } from './lib/render';
 import { cn } from './utils/cn';
+import { DebuggerProvider, createDebuggerStore } from './debug/store';
 
 function disposeFlattenedSprites(sprites: Set<FlattenedSprite>) {
   sprites.forEach((sprite) => sprite.frames.forEach((frame) => URL.revokeObjectURL(frame.url)));
@@ -63,6 +64,9 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const cacheRef = useRef<AssetCache | null>(null);
+  const cacheGenerationRef = useRef(0);
+  const debuggerStoreRef = useRef<ReturnType<typeof createDebuggerStore> | null>(null);
+  if (debuggerStoreRef.current === null) debuggerStoreRef.current = createDebuggerStore();
   /** every loaded FFDec export (index = loadedDocs index); [0] is the main movie */
   const [packages, setPackages] = useState<SwfPackage[]>([]);
   const externalPackages = useMemo(() => packages.filter((_, i) => i !== activeSwfIndex), [packages, activeSwfIndex]);
@@ -109,13 +113,20 @@ export default function App() {
 
   /** bundle + cache one parsed document into a SwfPackage (shared by uploads and bundled SWFs) */
   const buildPackage = useCallback(
-    (files: File[], parsedDoc: SwfDocument) => buildPackageIn(files, parsedDoc, () => setTick((t) => t + 1)),
+    (files: File[], parsedDoc: SwfDocument) => {
+      const generation = cacheGenerationRef.current;
+      return buildPackageIn(files, parsedDoc, () => {
+        if (generation !== cacheGenerationRef.current) return;
+        setTick((t) => t + 1);
+      });
+    },
     [],
   );
 
   const installPackages = useCallback((loaded: SwfPackage[]) => {
     const parsed = loaded[0]?.doc;
     if (!parsed) throw new Error('No readable SWF packages to open.');
+    cacheGenerationRef.current++;
     setPackages(loaded);
     cacheRef.current = loaded[0].cache;
     setAssets(loaded[0].bundle);
@@ -326,6 +337,7 @@ export default function App() {
     const next = loadedDocs[index];
     if (!next) return;
     const pkg = packages[index];
+    cacheGenerationRef.current++;
     if (pkg) { cacheRef.current = pkg.cache; setAssets(pkg.bundle); }
     setActiveSwfIndex(index);
     setDoc(next);
@@ -374,6 +386,7 @@ export default function App() {
   const specialCount = timeline.frames.filter((f) => f.special).length;
 
   return (
+  <DebuggerProvider store={debuggerStoreRef.current!}>
     <div className="forge-shell flex h-screen w-full flex-col overflow-hidden text-zinc-200">
       {/* top bar */}
       <div className="forge-chrome z-20 flex h-14 shrink-0 items-center gap-3 border-b border-zinc-800/80 px-3">
@@ -644,5 +657,6 @@ export default function App() {
       )}
       </ErrorBoundary>
     </div>
+  </DebuggerProvider>
   );
 }

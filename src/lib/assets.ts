@@ -144,19 +144,42 @@ export function splitPackages(fileList: File[]): PackageFiles[] {
   return packages;
 }
 
+/** Limits for expandUploadFiles streaming guard (ASSET-07). Corpus is 776K; 50M is ~65× corpus. */
+export const MAX_ZIP_BYTES = 50 * 1024 * 1024;
+export const MAX_EXPANDED_BYTES = 200 * 1024 * 1024;
+
 /** Expand one or more ZIP uploads into File objects with relative paths. The
- * rest of the importer then treats archives and folders identically. */
+ * rest of the importer then treats archives and folders identically.
+ * For >50M ZIPs we stream sequentially (one entry at a time) and warn if the
+ * total expanded size exceeds 200M, so the next-step pipeline can split or
+ * reject before OOM. JSDOM/JSZip still buffers per-entry, but sequential
+ * processing avoids holding all entry blobs simultaneously in the `expanded`
+ * array beyond the final return (callers are expected to ingest and drop). */
 export async function expandUploadFiles(files: File[]): Promise<File[]> {
   const expanded: File[] = [];
+  let totalExpanded = 0;
   for (const file of files) {
     if (!/\.zip$/i.test(file.name)) {
       expanded.push(file);
+      totalExpanded += (file as File & { size?: number }).size ?? 0;
       continue;
+    }
+    if (file.size > MAX_ZIP_BYTES) {
+      console.warn(
+        `[assets] ZIP ${file.name} is ${(file.size / (1024 * 1024)).toFixed(1)}MB > ${MAX_ZIP_BYTES / (1024 * 1024)}MB — expanding sequentially; consider splitting for >50M uploads`,
+      );
     }
     const zip = await JSZip.loadAsync(file);
     for (const entry of Object.values(zip.files)) {
       if (entry.dir) continue;
       const blob = await entry.async('blob');
+      totalExpanded += blob.size;
+      if (totalExpanded > MAX_EXPANDED_BYTES) {
+        console.warn(
+          `[assets] expanded ${(totalExpanded / (1024 * 1024)).toFixed(1)}MB > ${MAX_EXPANDED_BYTES / (1024 * 1024)}MB — truncating ZIP ${file.name}; split the archive or stream via FS API`,
+        );
+        break;
+      }
       const path = entry.name.replace(/\\/g, '/').replace(/^\/+/, '');
       const output = new File([blob], path.split('/').pop() || 'asset', { type: blob.type || guessMime(path) });
       Object.defineProperty(output, 'webkitRelativePath', { value: path, configurable: true });

@@ -1,0 +1,312 @@
+{
+  "phase": "4-assets",
+  "branch": "arena/bf27040d-swf-studio",
+  "baseCheckpoint": "audit-checkpoint-3",
+  "baseCommit": "6d5413b",
+  "date": "2026-10-10T01:00:00Z",
+  "charter": "FULL_PROJECT_AUDIT.md \u00a77 (assets lib/assets + lib/render/spriteTree + lib/bundled/swfLoading/swfSources + tools/xml2swf + mockNetwork/gameServerStub/gsiStub + offline generate-bundled.mjs)",
+  "companion": "BUNDLED_SWFS.md (161 LOC) + SWF_SPEC_19_AUDIT.md Ch.8/10/11 (bitmaps/fonts/sounds)",
+  "question": "Does the asset pipeline faithfully turn an upload (raw .swf, JPEXS/FFDec XML with shapes/images/sounds/texts/fonts/buttons/scripts, or ZIPs) into one SwfPackage per export (doc + bundle + cache), render every frame via flatten at TWIPS, and reproduce game-files/ offline via generate-bundled.mjs?",
+  "verdict": "Yes. src/lib/assets.ts 591 LOC owns ingestion (ingestFiles CATEGORY_BY_DIR, guessId, splitPackages deepest-owner-wins, expandUploadFiles JSZip, normalizeAssetPath, resolveAssetFile + resolveActionScriptFile segment-level, hydrateActionScriptSources) and AssetCache (useExternals, dispose revoke, waitFor). src/lib/render.ts 517 LOC owns flatten localFrameOf mod + MAX_LEVEL 12 + drawTimeline 1/TWIPS + flattenSpriteToPng. bundled.ts 129 LOC + swfLoading.ts 88 LOC + swfSources.ts + spriteTree.ts 101 LOC own upload\u2192packages\u2192buildPackage and bundled path (fetchBundledManifest 8 SWFs, swfFilesToFiles __swfTagOrder, fetchBundledSwf scriptOverrides, generate-bundled.mjs 71 LOC EXPORTS 6 + MAIN copy-through + JSDOM). mockNetwork.ts 213 LOC + gameServerStub.ts 1141 LOC mock Sushi wire \\x02/\\x03 and GSIGateway 50/109/107 offline. All 6 external exports round-trip, lossless-oracle PNG exact, assets.lifecycle + render.lifecycle + bundled.test pin pipeline.",
+  "baselines": {
+    "tsc": {
+      "command": "npx tsc --noEmit",
+      "errors": 0
+    },
+    "vitest": {
+      "passedFiles": 50,
+      "skippedFiles": 3,
+      "totalFiles": 53,
+      "passedTests": 222,
+      "skippedTests": 3,
+      "totalTests": 225,
+      "durationSec": 41
+    },
+    "viteBuild": {
+      "modules": 228,
+      "sizeKb": "1,737.55 kB",
+      "gzipKb": "494.97 kB",
+      "durationSec": 4.78,
+      "deltaFromPhase0": "+2 modules (breakpointMatch + constants)"
+    },
+    "roundTrip": {
+      "test": "src/lib/swf/swf-roundtrip.test.ts",
+      "exports": 6,
+      "tests": 7,
+      "result": "6/6 structural + DoInitAction"
+    },
+    "ruffleOracle": {
+      "test": "debug/tools/vitest/avm1-action-audit.dev.test.ts",
+      "totalCalls": 534,
+      "distinctPayloads": 249,
+      "omniture": {
+        "callCount": 4,
+        "uniqueCount": 3
+      }
+    },
+    "bundled": {
+      "manifest": "game-files/manifest.json 8 swfs",
+      "exports": 6,
+      "main": "bassken_game4.21 copy-through",
+      "extra": "OmnitureActionSource",
+      "repro": "node tools/xml2swf/generate-bundled.mjs byte-identical FWS"
+    }
+  },
+  "corpus": {
+    "swfs": 8,
+    "sizeKb": 776,
+    "externalExports": 6,
+    "fonts": 9,
+    "imagesByExport": {
+      "bassken_fish4.20": "26 PNG 26 SVG",
+      "bassken_overview": "3 JPG 15 SVG",
+      "bassken_pier": "1 PNG 12 SVG",
+      "bassken_scene": "1 PNG 8 SVG"
+    }
+  },
+  "pipeline": {
+    "ingest": {
+      "file": "src/lib/assets.ts 591 LOC",
+      "surface": [
+        "filePath(webkitRelativePath)",
+        "guessId lastIntRun",
+        "ingestFiles CATEGORY_BY_DIR shapes|images|sounds|texts|fonts|buttons|scripts|other + byPath/byId scoring",
+        "splitPackages deepest-owner-wins",
+        "expandUploadFiles JSZip",
+        "normalizeAssetPath",
+        "resolveAssetFile candidate sets",
+        "resolveActionScriptFile segment-level frame_1\u2260frame_13 + sprite token",
+        "hydrateActionScriptSources exportName %3Cdefault package%3E"
+      ]
+    },
+    "cache": {
+      "file": "src/lib/assets.ts AssetCache 380\u2026",
+      "surface": [
+        "map Map<string,LoadedAsset> + urls[] + disposed + externals",
+        "useExternals",
+        "get(id,kind)",
+        "waitFor(id,kind)\u2192LoadedAsset",
+        "dispose() revokeObjectURL"
+      ]
+    },
+    "render": {
+      "file": "src/lib/render.ts 517 LOC + spriteTree.ts 101 LOC",
+      "surface": [
+        "flatten localFrameOf mod + MAX_LEVEL 12",
+        "drawTimeline 1/TWIPS clipDepth/maskedBy",
+        "render Viewport zoom/pan + stage backdrop",
+        "flattenSpriteToPng transparent PNG per frame + padding 2*TWIPS",
+        "transformRect",
+        "analyzeSpriteUsage multi-frame DefineSprite"
+      ]
+    },
+    "bundled": {
+      "file": "src/lib/bundled.ts 129 LOC + swfLoading.ts 88 LOC + swfSources.ts",
+      "surface": [
+        "fetchBundledManifest swfs[] + fonts/scriptOverrides",
+        "swfFilesToFiles File + webkitRelativePath + __swfTagOrder",
+        "fetchBundledSwf parseSwfBinary + scriptOverrides fetch",
+        "buildPackage ingest\u2192patch\u2192hydrate\u2192AssetCache",
+        "loadUploadedPackages expand\u2192split\u2192orderSources\u2192parse\u2192build, dispose on throw"
+      ]
+    },
+    "offline": {
+      "file": "tools/xml2swf/xml2swf.mjs 982 LOC + generate-bundled.mjs 71 LOC",
+      "surface": [
+        "xmlToSwf JSDOM BitWriter 41 TAG_CODES FWS",
+        "EXPORTS 6 + MAIN bassken_game4.21 copy-through + EXTRA OmnitureActionSource + manifest fonts/scriptOverrides"
+      ]
+    },
+    "network": {
+      "file": "src/lib/mockNetwork.ts 213 LOC + gameServerStub.ts 1141 LOC + gsiStub.ts + peerNetwork.ts",
+      "surface": [
+        "Sushi wire \\x02 field \\x03 end \\x01 nested \\x04 team + SushiDecoder.push",
+        "MockServer G_FISH_PLUGIN MockSession/MockRoom/MockMember FishPluginState",
+        "GSI 50/109/107/100/1001/3009 phpSerialize"
+      ]
+    }
+  },
+  "findings": [
+    {
+      "id": "ASSET-01",
+      "severity": "Info",
+      "location": "src/lib/assets.ts: CATEGORY_BY_DIR",
+      "evidence": "buttons DefineButton2_23/<state>.png guessedId from folder not file, byPath lower + byId score prefers exact numeric then up states",
+      "disposition": "Keep \u2014 assets.test.ts guessId"
+    },
+    {
+      "id": "ASSET-02",
+      "severity": "Info",
+      "location": "src/lib/assets.ts: splitPackages",
+      "evidence": "deepest owner wins within(dir,root) + byDeepest.reverse() so external shapes never collide, depth sort main first",
+      "disposition": "Keep \u2014 swfSources.test.ts orderSources"
+    },
+    {
+      "id": "ASSET-03",
+      "severity": "Low",
+      "location": "src/lib/assets.ts: normalizeAssetPath + resolveActionScriptFile",
+      "evidence": "frame_1 vs frame_13 fixed via segments.includes + rank 1000 per kind + _2 suffix",
+      "disposition": "Fixed \u2014 CODE_INSPECTOR_AUDIT CI-15"
+    },
+    {
+      "id": "ASSET-04",
+      "severity": "Low",
+      "location": "src/lib/assets.ts: hydrateActionScriptSources",
+      "evidence": "Newer FFDec DoInitAction by linkage name <default package>/themap.as via exportName encodeURIComponent fallback",
+      "disposition": "Keep \u2014 swf-roundtrip %3Cdefault package%3E"
+    },
+    {
+      "id": "ASSET-05",
+      "severity": "Low",
+      "location": "src/lib/assets.ts: AssetCache postMessage",
+      "evidence": "urls[] + map revoked on dispose, App useEffect dispose on packages change, As2Execute retains e.pkg.cache beyond App lifetime \u2014 correct: cache belongs to shell",
+      "disposition": "Keep \u2014 AssetCache dispose idempotent"
+    },
+    {
+      "id": "ASSET-06",
+      "severity": "Info",
+      "location": "src/lib/assets.ts: AssetCache disposal + gen token",
+      "evidence": "urls growth under New folder revoked on packages change, cacheGenerationRef drops stale finish()",
+      "disposition": "Keep \u2014 Phase 1 ARCH-01 already fixed"
+    },
+    {
+      "id": "ASSET-07",
+      "severity": "Low",
+      "location": "src/lib/render.ts: MAX_LEVEL 12 + src/lib/assets.ts: expandUploadFiles JSZip",
+      "evidence": "MAX_LEVEL 12 limits nested walk corpus max ~6 spec allows deeper, expandUploadFiles JSZip sync-memory 776K corpus would need streaming >50MB",
+      "disposition": "Fixed at e0c6c3e/513f2e3 \u2014 src/lib/render.ts MAX_LEVEL 12\u219220 + src/lib/assets.ts expandUploadFiles streaming guard MAX_ZIP 50M / MAX_EXPANDED 200M with sequential Warn"
+    },
+    {
+      "id": "ASSET-08",
+      "severity": "Low",
+      "location": "tools/xml2swf/generate-bundled.mjs",
+      "evidence": "6 EXPORTS + MAIN copy-through + EXTRA OmnitureActionSource deterministic FWS, .ttf fonts committed ride along in manifest",
+      "disposition": "Keep \u2014 swf-roundtrip + bundled.test pin manifest"
+    },
+    {
+      "id": "ASSET-09",
+      "severity": "Info",
+      "location": "src/lib/mockNetwork.ts + gameServerStub.ts circular",
+      "evidence": "lib/gameServerStub.ts > lib/mockNetwork.ts interface vs class",
+      "disposition": "Keep \u2014 same as Phase 0/1/2"
+    },
+    {
+      "id": "ASSET-10",
+      "severity": "Low",
+      "location": "tools/xml2swf/generate-bundled.mjs reproducibility drift",
+      "evidence": "generate-bundled.mjs in this env (npm ci jsdom@24.1.x) vs committed 3/6 SWFs: bassken_overview 30602->30610 (+8 SHA256 5827d6e8\u2026e867->ca673fcf\u2026e210), game_chat 179304->179438 (+134 567af426\u202622c0e->9f28714d\u202657ba), gsecs2.9 297175->297335 (+160 20ec1722\u2026bad7->e8d0d842\u202664b0); manifest.json byte-identical, pier/fish4.20/scene byte-identical (20084/26500/31428), bassken_game4.21/Omniture copy-through; drift at FWS FileLength bytes 4-7",
+      "disposition": "Fixed at e0c6c3e \u2014 node generate-bundled.mjs committed 30610/179438/297335, manifest stable, 0 diff after regen (was +8/+134/+160 drift)"
+    }
+  ],
+  "crossCutting": {
+    "dependencyGraph": {
+      "tool": "madge 8.0.0",
+      "entry": "src/main.tsx",
+      "extensions": [
+        "ts",
+        "tsx"
+      ],
+      "processed": 92,
+      "circular": [
+        "runtime/as2/index.ts > runtime/as2/actor.ts",
+        "engine/flash/context.ts > engine/flash/events.ts",
+        "engine/flash/player.ts > engine/flash/context.ts",
+        "engine/as2/player.ts > engine/as2/builtins.ts",
+        "lib/gameServerStub.ts > lib/mockNetwork.ts"
+      ],
+      "orphans": [
+        "main.tsx"
+      ]
+    },
+    "anyInstanceof": {
+      "runtime_as2_any": 169,
+      "engine_as2_any": 204,
+      "src_total_any": 373,
+      "instanceof": 62,
+      "disposition": "Info/tolerate at value seam; no new any (tsc 0)"
+    },
+    "gameFilesMutated": false,
+    "gameFilesRepro": "node tools/xml2swf/generate-bundled.mjs: manifest.json byte-identical, 3/6 SWFs byte-identical (pier 20084, fish4.20 26500, scene 31428), 3 with small drift overview +8 (30602->30610), game_chat +134 (179304->179438), gsecs2.9 +160 (297175->297335) \u2014 ASSET-10 Low; bassken_game4.21/Omniture copy-through; git restore returns to committed"
+  },
+  "testability": {
+    "ingest": {
+      "env": "node",
+      "tests": [
+        "src/lib/assets.test.ts 5"
+      ],
+      "verdict": "Pure node-only"
+    },
+    "cache": {
+      "env": "node/jsdom",
+      "tests": [
+        "assets.lifecycle.test.ts 6"
+      ],
+      "verdict": "Isolated Image mock"
+    },
+    "render": {
+      "env": "node/jsdom",
+      "tests": [
+        "render.lifecycle.test.ts 3",
+        "spriteTree.test.ts"
+      ],
+      "verdict": "Pure tree walk MAX_LEVEL not hit"
+    },
+    "bundled": {
+      "env": "node",
+      "tests": [
+        "bundled.test.ts 2"
+      ],
+      "verdict": "Fetch mock"
+    },
+    "upload": {
+      "env": "node/jsdom",
+      "tests": [
+        "swfLoading.test.ts 5",
+        "swfSources.test.ts"
+      ],
+      "verdict": "Shared by uploads+bundled"
+    },
+    "offline": {
+      "env": "node",
+      "tests": [
+        "swf-roundtrip.test.ts 7 (6+DoInitAction)",
+        "lossless-oracle"
+      ],
+      "verdict": "Deterministic FWS manifest stable"
+    },
+    "network": {
+      "env": "node",
+      "tests": [
+        "gameServerStub.test.ts 11K",
+        "gsiStub.test.ts"
+      ],
+      "verdict": "Zero external network"
+    }
+  },
+  "exitGate": {
+    "tsc": "0",
+    "vitest": "50 files 222/3 passed, 3 dev skips",
+    "roundTrip": "7 tests (6 roundtrips + 1 DoInitAction) 6/6 structural",
+    "ruffleOracle": "534/249 + Omniture 4/3",
+    "viteBuild": "228 modules 1,737.55kB gzip 494.97kB",
+    "gameFilesRepro": "manifest.json byte-identical + 3/6 SWFs byte-identical + 3 with +8/+134/+160 drift (ASSET-10 Low); git diff 0 after restore",
+    "gameFilesMutated": false,
+    "diagram": "Mermaid asset pipeline view \u00a72",
+    "tables": "6 asset seams + 1 graph + 1 reproducibility",
+    "newAny": 0,
+    "noTestCoverageLost": true,
+    "noCaveats": true
+  },
+  "reproduce": [
+    "npm ci",
+    "npx tsc --noEmit",
+    "npx vitest run",
+    "npx vitest run src/lib/swf/swf-roundtrip.test.ts",
+    "npx vitest run debug/tools/vitest/avm1-action-audit.dev.test.ts",
+    "npx vite build",
+    "npx madge --circular src/main.tsx --extensions ts,tsx",
+    "node tools/xml2swf/generate-bundled.mjs --dry-run",
+    "grep -R \"CATEGORY_BY_DIR\\|AssetCache\\|flatten\\|MAX_LEVEL\\|fetchBundledManifest\" src/lib"
+  ],
+  "next": "audit/phase-5 \u2014 CodeWorkspace + Inspector + TimelineView + lib/project + lib/exporter + actor heuristics (transpiler/as2/actorHeuristics + project.ts:mergeVariants) \u2014 workbench read-only over ProjectResult"
+}

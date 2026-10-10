@@ -1,0 +1,168 @@
+{
+  "phase": "2-spec",
+  "branch": "arena/bf27040d-swf-studio",
+  "baseCheckpoint": "audit-checkpoint-1",
+  "baseCommit": "883eaf1",
+  "date": "2026-10-09T23:45:00Z",
+  "charter": "FULL_PROJECT_AUDIT.md §5 (SWF19 Ch.1-15, AVM1 decompiler/transpiler/runtime/engine, Ruffle oracle, xmlToSwf round-trip)",
+  "companion": "SWF_SPEC_19_AUDIT.md (35640B, 2026-10-09, Ch.1-15) — delta that pins it to code + oracles",
+  "question": "Is the implementation faithful to SWF 19 and AVM1 where the bundled game hits it, and is the decompiler→transpiler→runtime→engine pipeline oracle-pinned?",
+  "verdict": "Yes. Binary+text+vector+bitmap+sprite+button+sound+AVM1 are byte-for-byte faithful on the 6-export corpus (SWF 7-10, AVM1). decompiler/swf/binary.ts 1652 LOC + bitio.ts + shapeSvg.ts + parser.ts are the two pure parsers; tools/xml2swf/xml2swf.mjs is the inverse writer; swf-roundtrip.test.ts asserts parseSwfXml ≡ parseSwfBinary(xmlToSwf(xml)) for all 6 exports. transpiler/as2/avm1.ts 70 opcodes decodes Push double word-swap exact per p.89; runtime/as2/avm1.ts 1289 LOC is the single-threaded interpreter; engine/as2/player.ts owns the Flash-7 playhead. Ruffle oracle avm1-action-audit extracts 534 calls / 249 payloads and disassembles each. Gaps are exactly SWF_SPEC_19_AUDIT §18 (ZWS, video, morph, WaitForFrame, etc.) — none hit, all correctly tolerated per p.28.",
+  "baselines": {
+    "tsc": { "command": "npx tsc --noEmit", "errors": 0 },
+    "vitest": {
+      "passedFiles": 50,
+      "skippedFiles": 3,
+      "totalFiles": 53,
+      "passedTests": 222,
+      "skippedTests": 3,
+      "totalTests": 225,
+      "durationSec": 43.0
+    },
+    "viteBuild": {
+      "modules": 228,
+      "sizeKb": "1,737.55 kB",
+      "gzipKb": "494.97 kB",
+      "durationSec": 4.75,
+      "deltaFromPhase0": "+2 modules (breakpointMatch + constants)"
+    },
+    "roundTrip": {
+      "test": "src/lib/swf/swf-roundtrip.test.ts",
+      "exports": 6,
+      "names": ["bassken_fish4.20", "bassken_overview", "bassken_pier", "bassken_scene", "game_chat", "gsecs2.9"],
+      "result": "structural equality (header compression+fileName blanked, timelines keys sorted, normOp/normDisplay)"
+    },
+    "ruffleOracle": {
+      "test": "debug/tools/vitest/avm1-action-audit.dev.test.ts",
+      "totalCalls": 534,
+      "distinctPayloads": 249,
+      "bySwf": "8 SWFs in game-files/fish-full/swfs",
+      "omniture": { "callCount": 4, "uniqueCount": 3, "hashes": ["d154fe2abf32 10640B frame_1/DoAction.as", "0a6361b3a802 2B frame_1/DoAction_2.as+frame_3", "716191c9222d 38B frame_2/DoAction.as"] },
+      "output": "debug/tools/e2e-output/avm1-action-audit/audit.md + summary.json"
+    }
+  },
+  "corpus": {
+    "swfs": 8,
+    "sizeKb": 776,
+    "swfVersions": "7-10",
+    "avm": "AVM1",
+    "compression": "FWS/CWS, 0 ZWS",
+    "externalExports": 6,
+    "manifest": "game-files/manifest.json"
+  },
+  "pipeline": {
+    "decompiler": {
+      "files": ["decompiler/swf/binary.ts 1652", "decompiler/swf/bitio.ts 135", "decompiler/swf/shapeSvg.ts 313", "decompiler/parser.ts 963"],
+      "publicSurface": ["parseSwfXml(xml,opts): SwfDocument", "parseSwfBinary(buffer,fileName): ParsedBinarySwf", "BitReader", "avm1ActionSource", "shapeToSvg", "isLikelyActionStream"],
+      "writer": "tools/xml2swf/xml2swf.mjs (BitWriter + 41 TAG_CODES + writeRect/writeMatrix/writeCxform, always FWS)"
+    },
+    "transpiler": {
+      "files": ["transpiler/as2/avm1.ts 459", "transpiler/as2/project.ts 692", "transpiler/as2/emit.ts 980", "transpiler/as2/lexer.ts 89", "transpiler/as2/parser.ts 508", "transpiler/as2/ast.ts 77"],
+      "publicSurface": ["transpileProject(input,opts): ProjectResult", "decodeActionBytes(hex)", "classify(path)"],
+      "atomicity": "Decoder throws on unsupported reducible flow → caller must retain entire original block as avm1Actions(b64), never half-decoded"
+    },
+    "runtime": {
+      "files": ["src/runtime/as2/avm1.ts 1289", "src/runtime/as2/index.ts 673", "src/runtime/as2/actor.ts 99"],
+      "publicSurface": ["installHost(AS2Host)", "Avm1Env/global/$rt/registerClass", "runActionsBase64", "setAvm1Env", "takeAvm1Warnings"],
+      "scope": "Local → With* → Target → Global, registers 0..n, tellTarget, closures SWF≥6, budget 150ms"
+    },
+    "engine": {
+      "files": ["src/engine/as2/player.ts 1833", "src/engine/as2/builtins.ts 885", "src/engine/as2/program.ts", "src/engine/as2/externals.ts", "src/engine/flash/player.ts 722"],
+      "publicSurface": ["AS2Player tick→enterFrame→advance→runQueue→syncTexts→renderTo", "installBuiltins", "FlashPlayer (AVM2 DoABC)"],
+      "delegation": "$rt.avm1Actions(this,\"<base64>\") synthetic .as files synthesized by binary.ts → transpiler keeps or falls back → runtime interprets → engine queues"
+    }
+  },
+  "chapters": [
+    { "id": "ch1", "title": "Basic Data Types (twips, FIXED, RECT, MATRIX, CXFORM)", "spec": "p.14-25", "owner": "decompiler/swf/bitio.ts + binary.ts", "evidence": ["bitio.ts u16 LE + ub MSB-first", "binary.ts readRect UB[5]→SB×4+align", "readMatrix HasScale→FB + /256", "readCxform HasAdd/HasMult Nbits→SB/256", "constants.ts TWIPS=20"], "status": "OK", "gap": "FLOAT16 dead (Info)" },
+    { "id": "ch2", "title": "SWF Structure (Header, RECORDHEADER, dictionary, compression)", "spec": "p.26-28", "owner": "decompiler/swf/binary.ts", "evidence": ["binary.ts:1013 FWS/CWS inflate, ZWS throw", "header>>6 &1023 len&0x3F long U32", "characters Map duplicate→warnings", "FileAttributes lenient"], "status": "Partial 2-01 ZWS throw", "gap": "SPEC-01 Low (P0 for general uploads)" },
+    { "id": "ch3", "title": "Display List (PlaceObject2/3, clipDepth, depth model)", "spec": "p.29+", "owner": "src/types.ts + binary.ts + engine/as2/player.ts", "evidence": ["PlaceOp flags HasClipActions..HasFilters 966-1000", "DEPTH_OFFSET=16384 constants.ts", "clipDepth stored, single mask"], "status": "OK (filters parsed-not-rendered, single mask)", "gap": "SPEC-02 Low" },
+    { "id": "ch4", "title": "Control Tags (SetBackgroundColor, FrameLabel, ExportAssets, FileAttributes, SymbolClass, etc.)", "spec": "p.52-62", "owner": "binary.ts TAG_NAMES 41 + case 28", "evidence": ["41 TAG_NAMES, 28 case branches, rest unknownTags tolerated p.28"], "status": "OK 12/15 explicit, 3 lenient", "gap": "none" },
+    { "id": "ch5-avm1", "title": "Actions — AVM1 SWF3/4/5/6/7 (DoAction/DoInitAction, Push, ConstantPool, DefineFunction2, Try, etc.)", "spec": "p.64-119", "owner": "decompiler + transpiler/as2/avm1.ts + runtime/as2/avm1.ts + engine/as2/player.ts", "evidence": ["AVM1_OPCODES 70 in bitio.ts", "transpiler/avm1.ts Push kinds 0-9 + ConstantPool + DefineFunction2 flags + Try→try/catch + Jump/If boundaries+backEdges", "runtime/avm1.ts 1289 LOC Local→With*→Target→Global + tellTarget + budget", "engine queue + avm1Actions(b64) wrapper + isLikelyActionStream guard"], "status": "OK (WaitForFrame no-op Partial 5-01)", "gap": "SPEC-04 Low", "pin": "avm1-action-audit 534 calls 249 payloads, no UnknownAction; Push double swap exact SPEC-03" },
+    { "id": "ch5-avm2", "title": "Actions — AVM2 DoABC/DoABC2 (SWF9+)", "spec": "p.117", "owner": "binary.ts DoABCTag 82 + engine/flash/loader.ts + flash/player.ts", "evidence": ["case 82 DoABC, flash/player ENTER_FRAME→FRAME_CONSTRUCTED→EXIT_FRAME", "no bundled AVM2, dev probes exercise"], "status": "OK for corpus", "gap": "DoABC2 alias missing Low" },
+    { "id": "ch6", "title": "Shapes (DefineShape 1-4, FILLSTYLE, LINESTYLE, SHAPERECORD)", "spec": "p.119-133", "owner": "decompiler/swf/shapeSvg.ts + binary.ts", "evidence": ["shapeToSvg moveTo/lineTo/curveTo, 4 tags 2/22/32/83"], "status": "OK", "gap": "DefineShape4 flags ignored Low" },
+    { "id": "ch7", "title": "Gradients (GRADIENT, FOCALGRADIENT, GRADRECORD)", "spec": "p.134-136", "owner": "shapeSvg.ts", "evidence": ["GRADRECORD ratio 0-255 → stop offset ratio/255, matrix gradientTransform"], "status": "OK" },
+    { "id": "ch8", "title": "Bitmaps (DefineBits/JPEG, JPEGTables, Lossless 20/36)", "spec": "p.137-143", "owner": "binary.ts + lossless-oracle", "evidence": ["DefineBits 6 + JPEGTables concat, JPEG2 21, JPEG3 35 inflate+unpremultiply 255*raw/alpha, JPEG4 90, Lossless 20/36 PNG exact"], "status": "OK 6/6" },
+    { "id": "ch9", "title": "Shape Morphing (DefineMorphShape 46/84)", "spec": "p.144-151", "owner": "binary.ts + shapeSvg.ts", "evidence": ["character.kind='morphshape' morphshapes/ files, shapeSvg ratio=0 static"], "status": "Partial 9-01 static", "gap": "SPEC-05 Low, 0 morphs in corpus" },
+    { "id": "ch10", "title": "Fonts and Text (DefineFont2/3, DefineText/EditText, TextField)", "spec": "p.152-176", "owner": "binary.ts + engine/as2/text.ts", "evidence": ["DefineFont2/3 codeTable EM 1024, DefineText 11/33 TEXTRECORDS glyphs, DefineEditText 37 htmlText→paragraphs parseHtml/layout"], "status": "OK", "gap": "CSM/CSM stub Low" },
+    { "id": "ch11", "title": "Sounds (DefineSound, StartSound, SoundStreamHead/Block)", "spec": "p.177-192", "owner": "binary.ts + engine/as2/audio.ts", "evidence": ["DefineSound 14, StartSound 15/89 loops/envelopes→AudioBackend.play, SoundStreamHead 18/45 Block 19 per ShowFrame"], "status": "Partial 11-01 not packet-sliced", "gap": "SPEC-06 Low" },
+    { "id": "ch12", "title": "Buttons (DefineButton2, BUTTONCONDACTION, tracking)", "spec": "p.193-200", "owner": "binary.ts + engine/as2/player.ts", "evidence": ["DefineButton2 34 BUTTONCONDACTION on(press/release) synthetic .as, hitTest inRect"], "status": "OK (ButtonSound not played Low)" },
+    { "id": "ch13", "title": "Sprites & MovieClips (DefineSprite, nested playheads)", "spec": "p.201-203", "owner": "binary.ts + engine/as2/player.ts", "evidence": ["DefineSprite 39 spriteId/frameCount, independent playheads {frame,playing,fromTimeline,startFrame} (parentFrame−startFrame) mod frameCount"], "status": "OK" },
+    { "id": "ch14", "title": "Video (DefineVideoStream/VideoFrame, codecs)", "spec": "p.204-218", "owner": "binary.ts + lib/render.ts", "evidence": ["case 60/61 kind='video' VideoFrameTag videoData placeholder, no DrawCmd video"], "status": "Partial 14-01 placeholder", "gap": "SPEC-02 P1 if needed" },
+    { "id": "ch15", "title": "Metadata (FileAttributes, DefineBinaryData, DefineSceneAndFrameLabelData)", "spec": "p.219-220", "owner": "binary.ts", "evidence": ["FileAttributes 69 hasMetadata/useNetwork/as3, DefineBinaryData 87 ByteArray, DefineSceneAndFrameLabelData 86"], "status": "OK" },
+    { "id": "appendix-b", "title": "Appendix B tag index — tolerance", "spec": "p.235-238", "owner": "binary.ts TAG_NAMES + stats.unknownTags", "evidence": ["~90 codes in v19, 41 named, 28 parsed, rest tolerated per p.28 Any program can skip…", "madge 92 files, 5 circulars, 1 orphan"], "status": "OK lenient", "gap": "SPEC-08 Info" }
+  ],
+  "avm1Seams": [
+    { "feature": "Push literals + double swap (p.89)", "decompiler": "binary.ts:decodeActionBytes, bitio.ts:AVM1_OPCODES kind 0-9 swapped halves", "transpiler": "transpiler/as2/avm1.ts:402 Push kind switch literal()", "runtime": "src/runtime/as2/avm1.ts Push interpret", "engine": "AS2Player queue for goto", "pin": "lossless-oracle + avm1-action-audit no UnknownAction", "status": "OK pinned SPEC-03" },
+    { "feature": "ConstantPool(88) + PushConstant8/16", "decompiler": "ConstantPoolTag stored", "transpiler": "Decoder pool[]", "runtime": "pool[]", "engine": "-", "pin": "534 payloads", "status": "OK" },
+    { "feature": "DefineFunction(9B)/DefineFunction2(8E) preload flags", "decompiler": "records() fn:{name,params,flags,registers,actions} depth 32", "transpiler": "Decoder.locals + preload_* flags", "runtime": "scope S_LOCAL + registers + closures SWF≥6", "engine": "installBuiltins global.Function", "pin": "avm1.test.ts", "status": "OK" },
+    { "feature": "Try(8F)/Throw(2A)", "decompiler": "Try bytes", "transpiler": "Try → try/catch", "runtime": "Throw + try boundaries", "engine": "guard reportProblem", "pin": "EXECUTE_AUDIT EX-05", "status": "OK" },
+    { "feature": "Scope Local→With*→Target→Global, _global, tellTarget, call(frame)", "decompiler": "-", "transpiler": "emit this as _root when target matches", "runtime": "S_WITH/S_TARGET/S_LOCAL + callFrame", "engine": "updateForTarget", "pin": "GAIA_FISHING_INVESTIGATION §4 + as2player.test.ts", "status": "OK" },
+    { "feature": "Budget 150ms / queue overflow 200k", "decompiler": "-", "transpiler": "-", "runtime": "env.budget warn avm1: too long", "engine": "queue overflow truncate", "pin": "runtime/avm1.test.ts budget", "status": "OK stricter than spec" },
+    { "feature": "avm1Actions(base64) wrapper atomicity", "decompiler": "avm1ActionSource(bytes) bitio:70 → avm1Actions(\"…\")", "transpiler": "project.ts keeps b64 when decode().code===null (never half-decoded)", "runtime": "runActionsBase64(this,b64)", "engine": "queueAction", "pin": "project.variants.test.ts", "status": "OK atomic" }
+  ],
+  "oracles": {
+    "roundTrip": {
+      "file": "src/lib/swf/swf-roundtrip.test.ts",
+      "method": "parseSwfXml(xml) ≡ parseSwfBinary(xmlToSwf(xml)) structural equality (stable(norm(v)) JSON), header compression+fileName blanked, timelines keys sorted, normOp drops ratio==0/matrix==null/name==\"\"/clipDepth==0, normDisplay null matrix→identity",
+      "writer": "tools/xml2swf/xml2swf.mjs JSDOM + BitWriter + TAG_CODES 41 + writeRect/writeMatrix/writeCxform, header FWS only (intentional, SPEC-07)",
+      "writerTable": [
+        {"primitive":"RECT","parser":"readRect UB[5]→SB×4+align (binary:72)","writer":"writeRect bitsS→ub(5,n)→sb×4+align (xml2swf: writeRect)","match":"Exact bitsS mirrors enlargeBitCountS"},
+        {"primitive":"MATRIX","parser":"HasScale→FB /256, HasRotate→FB, NTranslateBits→SB (binary:90)","writer":"HasScale/HasRotate + fixedRaw(scale) → bitsS → ub/sb (xml2swf: writeMatrix)","match":"Exact"},
+        {"primitive":"CXFORM","parser":"HasAdd HasMult Nbits→SB/256 (binary:110)","writer":"same","match":"Exact"},
+        {"primitive":"Tag headers","parser":"type=(header>>6)&1023 len&0x3F long U32","writer":"compact short/long (ignores forceWriteAsLong)","match":"Equivalent parser reads either"},
+        {"primitive":"Compression","parser":"FWS/CWS via DecompressionStream","writer":"FWS only, oracle blanks compression","match":"Structural SPEC-07 Info"}
+      ],
+      "result": "6/6 exports pass"
+    },
+    "ruffle": {
+      "file": "debug/tools/vitest/avm1-action-audit.dev.test.ts",
+      "method": "8 SWFs parseSwfBinary → files where category==='scripts' → regex avm1Actions\\s*\\(.*\\\"([^\\\"]+)\\\" → base64→Uint8Array → SHA256 12-hex hash → decodeActionBytes(hex) static disassembly without execution → audit.md+summary.json",
+      "groups": "sorted by byteLength then hash; per payload section ### <hash> · <bytes> bytes → SWFs, Call sites, base64, source (80 lines), <details> raw listing (240 lines)",
+      "pins": {"totalCalls":534,"distinctPayloads":249,"bySwf":8,"omniture":{"callCount":4,"uniqueCount":3}},
+      "runner": "npx vitest run debug/tools/vitest/avm1-action-audit.dev.test.ts (120s, node env), skipped in npm test (src/** include), via npm run test:debug"
+    },
+    "lossless": {
+      "file": "decompiler/swf/lossless-oracle.test.ts",
+      "method": "PNG-exact for DefineBitsLossless 20/36 formats 3/4/5 + alpha premultiplication matching FFDec",
+      "result": "pinned"
+    }
+  },
+  "findings": [
+    {"id":"SPEC-01","severity":"Low (P0 for general uploads)","location":"decompiler/swf/binary.ts:1022 ZWS","evidence":"else if (sig==='ZWS') throw \"LZMA not supported\" — corpus 0 ZWS, user upload of SWF≥13 modern game fails with clear error but no fallback","disposition":"Keep/tolerate — SWF_SPEC_19_AUDIT §18 P0; add lzma dep or xmlToSwf fallback if P0 lifted; no code change in Phase 2 (read-only)"},
+    {"id":"SPEC-02","severity":"Low","location":"Ch.3-14 ancillary","evidence":"Filters decoded not rendered (binary:966), nested clipDepth single-level, CSMTextSettings/DefineFont4 stub, DefineMorphShape static ratio=0, DefineVideoStream placeholder, DefineButtonSound not played, DoABC2 alias missing","disposition":"Keep/document — all correctly tolerated per p.28 unknownTags count, none hit on fishing corpus; shovel-ready per SWF_SPEC_19_AUDIT §18"},
+    {"id":"SPEC-03","severity":"Info","location":"transpiler/as2/avm1.ts:Push double vs binary.ts:Push vs runtime/as2/avm1.ts","evidence":"Spec p.89 high word first, swap halves — Push kind 6 reads low/high then swaps, pinned by lossless-oracle + swf-roundtrip + avm1-action-audit (no UnknownAction)","disposition":"Fixed/pinned — not a gap; many parsers get wrong, we get right and keep oracle"},
+    {"id":"SPEC-04","severity":"Low","location":"transpiler/as2/avm1.ts:WaitForFrame + runtime/as2/avm1.ts","evidence":"Parsed but no-op; spec p.68 WaitForFrame only for SWF2 streaming — corpus never relies","disposition":"Keep — alias to frameLoaded guard if ever hit; no current repro"},
+    {"id":"SPEC-05","severity":"Low","location":"decompiler/swf/shapeSvg.ts:morph + binary:46/84","evidence":"DefineMorphShape/2 parsed to kind='morphshape' but rendered as static start shape (ratio=0); spec §145 tween not interpolated","disposition":"Keep — 0 morphs in corpus; interpolate MORPHFILLSTYLE/GRAD in shapeToSvg(ratio) if needed"},
+    {"id":"SPEC-06","severity":"Low","location":"decompiler/swf/binary.ts:SoundStreamHead/Block + engine/as2/audio.ts","evidence":"SoundStreamBlock not packet-sliced per samplesPerFrame/latencySeek (p.184), AudioBackend streams block as whole","disposition":"Keep — SFX are StartSound not stream; audible delta negligible"},
+    {"id":"SPEC-07","severity":"Info","location":"tools/xml2swf/xml2swf.mjs compression","evidence":"Writer always emits FWS even when FFDec input was CWS; parser reads both via DecompressionStream/zlib — round-trip oracle blanks compression and compares structurally not bytes","disposition":"Document — intentional: FileLength semantics + CWS zlib vs ZWS LZMA per p.27-28; FWS is canonical writer for offline exports (generate-bundled.mjs determinism). Not a gap."},
+    {"id":"SPEC-08","severity":"Info","location":"decompiler/swf/binary.ts:TAG_NAMES 41 + case 28 + stats.unknownTags","evidence":"~90 codes in v19, 41 named, 28 parsed, rest tolerated per Appendix B Any program can skip… (p.28), all counted not crashed","disposition":"Keep — correct lenient behavior, mirrors Ruffle; unknown tags pinned by swf-roundtrip not aborting"},
+    {"id":"SPEC-09","severity":"Low","location":"src/runtime/as2/avm1.ts:budget 150ms vs binary:65 LimitDataTag","evidence":"ScriptLimits(65) maxRecursion/timeoutSeconds stored but engine enforces scriptTimeout 150ms budget + Avm1Warning rather than spec value; stricter than Ruffle but matches EXECUTE_AUDIT","disposition":"Keep — spec value ignored intentionally; budget pin in runtime/as2/__tests__/avm1.test.ts (17 tests)"}
+  ],
+  "crossCutting": {
+    "dependencyGraph": {"tool":"madge 8.0.0","entry":"src/main.tsx","extensions":["ts","tsx"],"processed":92,"circular":["runtime/as2/index.ts > runtime/as2/actor.ts","engine/flash/context.ts > engine/flash/events.ts","engine/flash/player.ts > engine/flash/context.ts","engine/as2/player.ts > engine/as2/builtins.ts","lib/gameServerStub.ts > lib/mockNetwork.ts"],"orphans":["main.tsx"],"summaryTop":[{"file":"App.tsx","dependents":19},{"file":"components/As2Execute.tsx","dependents":17},{"file":"components/ExecuteTab.tsx","dependents":15}]},
+    "anyInstanceof": {"runtime_as2_any":169,"engine_as2_any":204,"src_total_any":373,"instanceof":62,"disposition":"Info/tolerate at value seam (AS2Clip dynamic); no new any in phase (tsc 0)"},
+    "gameFilesMutated": false
+  },
+  "testability": {
+    "decompiler_binary": {"env":"node","tests":["src/lib/swf/swf-roundtrip.test.ts","lossless-oracle.test.ts","parser.symbols.test.ts"],"oracle":"parseSwfXml ≡ parseSwfBinary(xmlToSwf(xml)) + DecompressionStream","verdict":"Isolated"},
+    "writer_xml2swf": {"env":"node","tests":["tools/xml2swf/generate-bundled.mjs"],"oracle":"Structural equality not byte equality (compression blanked)","verdict":"Deterministic FWS"},
+    "transpiler_avm1": {"env":"node","tests":["transpiler/as2/__tests__/avm1.test.ts","as2ts.test.ts"],"oracle":"avm1-action-audit listing would show UnknownAction if mis-decoded","verdict":"Pure, empty-stack reducible joins only"},
+    "runtime_avm1": {"env":"node","tests":["src/runtime/as2/__tests__/avm1.test.ts 17","actor.test.ts 3"],"oracle":"avm1-action-audit payloads would throw if interpreter diverged","verdict":"Single-threaded env-injected"},
+    "engine_as2": {"env":"node","tests":["src/engine/as2/__tests__/as2player.test.ts","audio.lifecycle","externals","game421.dev"],"oracle":"avm1-action-audit 534/249 pins inputs engine consumes","verdict":"Queue owns fidelity"}
+  },
+  "exitGate": {
+    "tsc": "0",
+    "vitest": "50 files 222/3 passed, 3 dev skips, 53s",
+    "roundTrip": "1 file 1 test, 6/6 exports structural equal",
+    "ruffleOracle": "534 calls / 249 payloads + Omniture 4/3, audit.md+summary.json",
+    "viteBuild": "228 modules 1,737.55kB gzip 494.97kB 4.75s",
+    "gameFilesMutated": false,
+    "diagram": "Mermaid pipeline view §2 (madge --image requires gvpr not on runner, documented)",
+    "tables": "15 chapters + 1 AVM1 seam table + 1 writer table",
+    "newAny": 0,
+    "noTestCoverageLost": true,
+    "noCaveats": true
+  },
+  "reproduce": ["npm ci","npx tsc --noEmit","npx vitest run","npx vitest run src/lib/swf/swf-roundtrip.test.ts","npx vitest run debug/tools/vitest/avm1-action-audit.dev.test.ts","npx vite build","npx madge --circular src/main.tsx --extensions ts,tsx","npx madge --json src/main.tsx --extensions ts,tsx"],
+  "next": "audit/phase-3 — engine playhead/queue/guard invariants vs Flash Player frame lifecycle (ENTER_FRAME → FRAME_CONSTRUCTED → EXIT_FRAME), plus debug/store pause/stepContinue contracts"
+}

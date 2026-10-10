@@ -1,0 +1,10 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "ignore": [
+    "src/engine/as2/**/*.ts",
+    "src/runtime/as2/**/*.ts",
+    "transpiler/as2/**/*.ts"
+  ],
+  "ignoreDependencies": [],
+  "comment": "ARCH-06 — import.meta.glob ?raw in CodeWorkspace.tsx pulls 12 engine files for 'Show Engine' Explorer; madge 92 files (1 warning) under-reports without this ignore. See docs/NEXT_STEPS.md §6."
+}

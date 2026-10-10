@@ -10,16 +10,27 @@ import { ExecutionConsole } from './ExecutionConsole';
 import { RunningTimelinesSidebar } from './RunningTimelinesSidebar';
 import { useExecutionDiagnostics } from './useExecutionDiagnostics';
 import type { LogEntry } from '../engine/flash/player';
-import { AS2Player, type Movie, type RunningTimelineSnapshot } from '../engine/as2/player';
+import { AS2Player, type ActiveDisplaySnapshot, type Movie, type RunningTimelineSnapshot } from '../engine/as2/player';
 import { createExternalResolver, swfNameOf, type ExternalSwf } from '../engine/as2/externals';
 import { readAS2Text, useAS2Build } from '../engine/as2/useAS2Build';
 import { buildWorkbenchTimelineMetadata } from '../engine/as2/workbenchMetadata';
 import { _global as as2Global } from '../runtime/as2';
 import { AS2AudioBackend, embeddedFontFamily, registerFonts, soundFilesOf } from '../engine/as2/audio';
 import { createMockServer, type MockServer } from '../lib/gameServerStub';
+import { useDebugger, useDebuggerState } from '../debug/store';
+import { DebugPanel } from '../debug/DebugPanel';
+import { usePopout } from '../debug/Popout';
 
 const MAX_LOG = 500;
 const BOOT_KEY = 'swf-studio.as2.boot';
+
+function flattenDisplayIds(root: ActiveDisplaySnapshot | null): number[] {
+  if (!root) return [];
+  const ids: number[] = [];
+  const visit = (n: ActiveDisplaySnapshot) => { ids.push(n.id); for (const c of n.children) visit(c); };
+  visit(root);
+  return ids;
+}
 
 function sameRunningTimelines(a: readonly RunningTimelineSnapshot[], b: readonly RunningTimelineSnapshot[]): boolean {
   return a.length === b.length && a.every((timeline, index) => {
@@ -42,7 +53,7 @@ const BOOT_PRESETS: { id: string; label: string; code: string; hint: string }[] 
     id: 'gaia-guest',
     label: 'Gaia: play as guest',
     code: '_root.playAsGuest = true;\n_root.startGameSingle();',
-    hint: "Uses the game's own guest mode to skip the GSECS login server (gsecs2.9.swf), which cannot be reached offline.", 
+    hint: "Uses the game's own guest mode to skip the GSECS login server (gsecs2.9.swf), which cannot be reached offline.",
   },
 ];
 
@@ -68,14 +79,16 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [runtimeTimelines, setRuntimeTimelines] = useState<RunningTimelineSnapshot[]>([]);
+  const [displayTree, setDisplayTree] = useState<ActiveDisplaySnapshot | null>(null);
+  const [highlightedIds, setHighlightedIds] = useState<Set<number> | null>(null);
   const [panel, setPanel] = useState<'console' | 'program' | null>('console');
+  const [showDebugger, setShowDebugger] = useState(false);
   const [hud, setHud] = useState({ frame: 1, total: 1, label: null as string | null, time: 0 });
   const [tree, setTree] = useState<string[]>([]);
   const [missing, setMissing] = useState<string[]>([]);
   const [size, setSize] = useState({ w: 800, h: 500 });
   const [boot, setBoot] = useState<string>(() => { try { return localStorage.getItem(BOOT_KEY) ?? ''; } catch { return ''; } });
   const [fontIds, setFontIds] = useState<Set<number>>(new Set());
-  /** registered embedded fonts of the external SWFs, per key */
   const [extFontIds, setExtFontIds] = useState<Map<string, Set<number>>>(new Map());
   const [loadedExternals, setLoadedExternals] = useState<{ name: string; ms: number; errors: number }[]>([]);
   const extEntries = useMemo<ExternalEntry[]>(() => externals.map((pkg, i) => {
@@ -85,13 +98,43 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
   const [viewFile, setViewFile] = useState<string | null>(null);
   const pendingLogs = useRef<LogEntry[]>([]);
   const runtimeTimelinesRef = useRef<RunningTimelineSnapshot[]>([]);
+  const displayTreeRef = useRef<ActiveDisplaySnapshot | null>(null);
+  // highlight overlay: sync to player and force a frame when paused
+  useEffect(() => {
+    const p = playerRef.current;
+    if (!p) return;
+    p.setHighlightedIds(highlightedIds);
+    // ensure highlight appears even while paused (render loop skips tick)
+    try { p.render(); } catch {}
+  }, [highlightedIds]);
   const executionFaultRef = useRef(false);
+  const dbg = useDebugger();
+  const dbgState = useDebuggerState();
+  const executePopout = usePopout({ title: 'Execute Engine — SWF Studio', width: 900, height: 700 });
   const appendGlobalProblem = useCallback((entry: LogEntry) => {
     setLogs((previous) => [...previous, entry].slice(-MAX_LOG));
   }, []);
   useExecutionDiagnostics(appendGlobalProblem);
 
   useEffect(() => { try { localStorage.setItem(BOOT_KEY, boot); } catch { /* storage unavailable */ } }, [boot]);
+
+  useEffect(() => {
+    const unsub = dbg.subscribe(() => {
+      const s = dbg.getState();
+      if (s.paused) { playingRef.current = false; setPlaying(false); }
+    });
+    return unsub;
+  }, [dbg]);
+
+  useEffect(() => {
+    dbg.registerCallbacks('as2', {
+      onContinue: () => { playingRef.current = true; setPlaying(true); },
+      onStepOver: () => { playingRef.current = false; setPlaying(false); playerRef.current?.tick(); },
+      onStepInto: () => { playingRef.current = false; setPlaying(false); playerRef.current?.tick(); },
+      onStepOut: () => { playingRef.current = false; setPlaying(false); playerRef.current?.tick(); },
+    });
+    return () => dbg.unregisterCallbacks('as2');
+  }, [dbg]);
 
   // Embedded fonts are independent of the source project build.
   useEffect(() => {
@@ -109,8 +152,6 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
     return () => { cancelled = true; fontsController.abort(); };
   }, [extEntries]);
 
-  // Embedded fonts: by character id in the movie that uses it; by name in the calling movie,
-  // then the main movie, then any loaded SWF (text formats only carry the font name).
   const fontFamily = useCallback((f: number | string, movie?: Movie) => {
     const libs: { doc: SwfDocument; key?: string; ids: Set<number> }[] = [
       { doc, ids: fontIds },
@@ -143,10 +184,12 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
     runtimeTimelinesRef.current = [];
     setLogs([]);
     setRuntimeTimelines([]);
+    dbg.clearStack();
+    (dbg as any).clearSkip?.();
+    if (dbg.getState().paused) dbg.resume();
     const audio = new AS2AudioBackend(cache, soundFilesOf(assets?.files ?? []));
     audio.muted = muted;
     audioRef.current = audio;
-    // SWFs the game loads at run time: each export in the folder besides the main movie
     const extAudio = extEntries.map((e) => { const a = new AS2AudioBackend(e.pkg.cache, soundFilesOf(e.pkg.bundle.files)); a.muted = muted; return a; });
     extAudioRef.current = extAudio;
     setLoadedExternals([]);
@@ -167,8 +210,6 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
     });
     const bootCode = boot.trim();
     if (!gameServerRef.current) {
-      // Socket logs use the logger passed per connection; do not capture an old
-      // player in the server instance because Restart intentionally reuses it.
       gameServerRef.current = createMockServer();
     }
     const mockServer = gameServerRef.current;
@@ -177,6 +218,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
       program: build.build.program,
       assets: cache,
       audio,
+      debugger: dbg,
       fontFamily,
       resolveExternal,
       missingExternal: 'empty',
@@ -184,8 +226,6 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
         pendingLogs.current.push(entry);
         if (entry.level === 'error') console.error('[game]', entry.message, entry.detail ?? '');
       },
-      // Offline MockServer: answers GSI/inventory HTTP requests and Sushi XMLSocket
-      // session/room/plugin messages locally with zero real network connections.
       fetchText: (url, method, body, onNetwork) =>
         mockServer.fetchText(
           url, method, body,
@@ -202,7 +242,6 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
     playerForLog = player;
     if (swfs.length) player.log('info', `external SWFs available: ${swfs.map((s) => s.name).join(', ')}`);
     playerRef.current = player;
-    // Dev aid: inspect the live display tree / asset states from the browser console.
     (globalThis as any).__as2player = player;
     player.start();
     canvasRef.current?.focus({ preventScroll: true });
@@ -227,7 +266,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [panel]);
+  }, [panel, showDebugger]);
 
   const view = useMemo(() => {
     const sw = (doc.header.stage.xMax - doc.header.stage.xMin) / 20 || 550;
@@ -252,7 +291,9 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
       last = now;
       if (player && !executionFaultRef.current) {
         try {
-          if (playingRef.current) player.advanceBy(dt);
+          if (dbg.getState().paused) {
+            // paused by debugger — don't advance, still render
+          } else if (playingRef.current) player.advanceBy(dt);
           const ctx = canvas?.getContext('2d');
           if (ctx && canvas) {
             const dpr = window.devicePixelRatio || 1;
@@ -273,6 +314,17 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
               runtimeTimelinesRef.current = nextTimelines;
               setRuntimeTimelines(nextTimelines);
             }
+            // Full display tree including static UI (buttons, single-frame clips) for Assets/Actors tabs
+            try {
+              const nextTree = player.activeDisplayTree();
+              // shallow diff via JSON stringify of ids / structure size to avoid spamming renders
+              const nextKey = JSON.stringify(flattenDisplayIds(nextTree));
+              const prevKey = displayTreeRef.current ? JSON.stringify(flattenDisplayIds(displayTreeRef.current)) : '';
+              if (nextKey !== prevKey) {
+                displayTreeRef.current = nextTree;
+                setDisplayTree(nextTree);
+              }
+            } catch {}
             if (panelRef.current === 'program') setTree(player.tree());
             setMissing((m) => (m.length === player.missingExternals.size ? m : [...player.missingExternals]));
             if (pendingLogs.current.length) {
@@ -298,9 +350,13 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [dbg]);
 
   // ---- input
+  const handleHighlight = useCallback((ids: Set<number> | null) => {
+    setHighlightedIds(ids && ids.size ? new Set(ids) : null);
+  }, []);
+
   const toStage = useCallback((e: { clientX: number; clientY: number }) => {
     const rect = canvasRef.current!.getBoundingClientRect();
     const v = viewRef.current;
@@ -312,13 +368,21 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
     if (down) playerRef.current?.keyDown(e.keyCode, e.key); else playerRef.current?.keyUp(e.keyCode);
   };
 
-  const togglePlay = () => { playingRef.current = !playingRef.current; setPlaying(playingRef.current); canvasRef.current?.focus(); };
-  const step = () => { playingRef.current = false; setPlaying(false); const p = playerRef.current; if (p) { p.tick(); } };
+  const togglePlay = () => {
+    if (dbgState.paused) { dbg.continue(); return; }
+    playingRef.current = !playingRef.current; setPlaying(playingRef.current); canvasRef.current?.focus();
+  };
+  const step = () => {
+    if (dbgState.paused) { dbg.stepOver(); return; }
+    playingRef.current = false; setPlaying(false); const p = playerRef.current; if (p) { p.tick(); }
+  };
   const restart = () => {
     const previous = playerRef.current;
     playerRef.current = null;
     previous?.dispose();
     gameServerRef.current?.reset();
+    dbg.resume();
+    dbg.clearStack();
     playingRef.current = true;
     setPlaying(true);
     setInstructionsOpen(false);
@@ -328,6 +392,38 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
 
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const b = build.status === 'ready' ? build.build : null;
+  const AVM1_SUMMARY = (warnings: { file: string; message: string }[]): LogEntry[] => {
+    const avm1 = warnings.filter((w) => w.message.startsWith('AVM1 interpreter fallback'));
+    const rest = warnings.filter((w) => !w.message.startsWith('AVM1 interpreter fallback'));
+    const out: LogEntry[] = rest.map((issue) => ({
+      level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const,
+      context: issue.file, message: `${issue.file}: ${issue.message}`, time: 0,
+    }));
+    if (!avm1.length) return out;
+    const byReason = new Map<string, number>();
+    for (const w of avm1) {
+      const m = /AVM1 interpreter fallback \(([^)]+)\)/.exec(w.message)?.[1] ?? w.message;
+      // normalize dynamic suffixes like "byte 4278: Unsupported ..." -> "Unsupported ..."
+      const reason = m.replace(/^byte \d+:\s*/, '').split(';')[0].trim();
+      byReason.set(reason, (byReason.get(reason) ?? 0) + 1);
+    }
+    if (avm1.length <= 4) {
+      for (const w of avm1) out.push({ level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const, context: w.file, message: `${w.file}: ${w.message} — running via AVM1 interpreter`, time: 0 });
+    } else {
+      const summary = [...byReason.entries()].map(([r,c]) => `${r} ×${c}`).join(' · ');
+      out.push({ level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const, context: 'AS2 build', message: `AVM1 interpreter fallback: ${avm1.length} blocks will run via interpreter (not transpiled) — ${summary}`, time: 0 });
+      // keep first example per reason for inspection
+      const seen = new Set<string>();
+      for (const w of avm1) {
+        const key = /AVM1 interpreter fallback \(([^)]+)\)/.exec(w.message)?.[1]?.replace(/^byte \d+:\s*/, '').split(';')[0].trim() ?? w.message;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const, context: w.file, message: `${w.file}: ${w.message} — running via AVM1 interpreter`, time: 0 });
+        if (seen.size >= 4) break;
+      }
+    }
+    return out;
+  };
   const forgeProblems: LogEntry[] = build.status === 'failed' ? [{
     level: 'error', kind: 'problem', source: 'forge', context: 'AS2 build', message: build.error, time: 0,
   }] : build.status === 'ready' ? [
@@ -335,10 +431,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
       level: 'error' as const, kind: 'problem' as const, source: 'forge' as const,
       context: issue.file, message: `${issue.file}: ${issue.message}`, time: 0,
     })),
-    ...build.build.warnings.map((issue) => ({
-      level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const,
-      context: issue.file, message: `${issue.file}: ${issue.message}`, time: 0,
-    })),
+    ...AVM1_SUMMARY(build.build.warnings),
     ...missing.map((path) => ({
       level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const,
       context: 'external SWF', message: `Missing bundled external SWF: ${path}`, time: 0,
@@ -348,11 +441,14 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
   const errorCount = consoleEntries.filter((entry) => entry.level === 'error').length;
   const preset = BOOT_PRESETS.find((p) => p.code === boot.trim()) ?? null;
 
-  return (
+  const inner = (
     <div className="flex h-full min-h-0 w-full flex-col bg-zinc-950">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2">
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-zinc-100">Execute</div>
+          <div className="flex items-center gap-2">
+            <div className="text-sm font-semibold text-zinc-100">Execute</div>
+            {dbgState.paused && <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">⏸ Paused{dbgState.pauseReason ? ` · ${dbgState.pauseReason}` : ''}</span>}
+          </div>
           <div className="truncate text-[10px] text-zinc-500">
             {build.status === 'loading' ? 'Transpiling ActionScript…' : build.status === 'failed' ? 'Could not read the scripts'
               : `AS2 engine · ${build.sources.length} script(s) · frame ${hud.frame}/${hud.total}${hud.label ? ` “${hud.label}”` : ''} · ${(hud.time / 1000).toFixed(1)}s`}
@@ -371,10 +467,23 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
               {!preset && <option value="custom">Custom script</option>}
             </select>
           </label>
-          <Button variant={playing ? 'primary' : 'default'} onClick={togglePlay} title="Play / pause the game">{playing ? '❚❚ Pause' : '▶ Play'}</Button>
-          <Button onClick={step} title="Pause and advance exactly one frame">Step</Button>
+          <Button variant={playing && !dbgState.paused ? 'primary' : 'default'} onClick={togglePlay} title={dbgState.paused ? 'Continue (F5)' : 'Play / pause the game'}>{dbgState.paused ? '▶ Continue' : playing ? '❚❚ Pause' : '▶ Play'}</Button>
+          <Button onClick={step} title={dbgState.paused ? 'Step over (F10)' : 'Pause and advance exactly one frame'}>{dbgState.paused ? 'Step Over' : 'Step'}</Button>
           <Button onClick={restart} title="Start again from frame 1">Restart</Button>
           <Button variant={muted ? 'default' : 'ghost'} onClick={() => setMuted((m) => !m)} title="Mute new sounds">{muted ? 'Muted' : 'Sound'}</Button>
+          <button
+            type="button"
+            aria-pressed={showDebugger}
+            onClick={() => setShowDebugger(v => !v)}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${showDebugger ? 'bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/30' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+          >
+            {showDebugger ? '● Debugger' : '○ Debugger'}
+          </button>
+          {executePopout.isPopped ? (
+            <Button variant="ghost" onClick={executePopout.close}>↙ Restore</Button>
+          ) : (
+            <Button variant="ghost" onClick={executePopout.open} title="Pop out Execute Engine to a separate window">↗ Pop out Execute</Button>
+          )}
           <Button variant={panel === 'program' ? 'primary' : 'ghost'} onClick={() => setPanel((p) => (p === 'program' ? null : 'program'))}>
             Program{missing.length || b?.errors.length ? ' ⚠' : ''}
           </Button>
@@ -383,6 +492,21 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
           </Button>
         </div>
       </div>
+
+      {dbgState.paused && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-amber-900/40 bg-amber-950/30 px-3 py-1.5 text-xs text-amber-200">
+          <span className="font-semibold">Paused</span>
+          {dbgState.pausedAt && <span className="font-mono text-amber-300">{dbgState.pausedAt.path}:{dbgState.pausedAt.line}</span>}
+          {dbgState.pauseReason === 'breakpoint' && <span className="rounded bg-rose-500/20 px-1.5 py-0.5 text-rose-300">breakpoint</span>}
+          {dbgState.pauseReason === 'exception' && dbgState.exception && <span className="rounded bg-rose-500/20 px-1.5 py-0.5 text-rose-300">exception: {dbgState.exception.message.slice(0,80)}</span>}
+          <span className="ml-auto flex items-center gap-1">
+            <Button variant="primary" onClick={() => dbg.continue()} className="px-2 py-1 text-xs">Continue</Button>
+            <Button onClick={() => dbg.stepOver()} className="px-2 py-1 text-xs">Over</Button>
+            <Button onClick={() => dbg.stepInto()} className="px-2 py-1 text-xs">Into</Button>
+            <Button onClick={() => dbg.stepOut()} className="px-2 py-1 text-xs">Out</Button>
+          </span>
+        </div>
+      )}
 
       {missing.length > 0 && (
         <div className="shrink-0 border-b border-amber-900/60 bg-amber-950/40 px-3 py-1.5 text-[11px] text-amber-200">
@@ -408,6 +532,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
           onPointerUp={(e) => { const [x, y] = toStage(e); playerRef.current?.pointerUp(x, y); }}
           onContextMenu={(e) => e.preventDefault()}
         />
+        {dbgState.paused && <div className="pointer-events-none absolute inset-0 border-2 border-amber-500/40 bg-amber-500/5" />}
         {instructionsOpen && (
           <div
             role="dialog"
@@ -443,15 +568,21 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
           </div>
         )}
       </div>
-      <RunningTimelinesSidebar doc={doc} timelines={runtimeTimelines} timelineNames={timelineMetadata} playing={playing} />
+      <RunningTimelinesSidebar doc={doc} timelines={runtimeTimelines} timelineNames={timelineMetadata} playing={playing && !dbgState.paused} project={project} displayTree={displayTree} onHighlight={handleHighlight} />
       </div>
 
-      {panel === 'console' && <ExecutionConsole entries={consoleEntries} onClear={() => {
+      {showDebugger && (
+        <div className="h-64 shrink-0 border-t border-zinc-800 lg:h-72">
+          <DebugPanel />
+        </div>
+      )}
+
+      {panel === 'console' && !showDebugger && <ExecutionConsole entries={consoleEntries} onClear={() => {
         setLogs([]);
         pendingLogs.current = [];
       }} />}
 
-      {panel === 'program' && (
+      {panel === 'program' && !showDebugger && (
         <div className="h-72 shrink-0 overflow-y-auto border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-300">
           {build.status === 'loading' && <div className="text-zinc-500">Transpiling…</div>}
           {build.status === 'failed' && <div className="text-rose-300">{build.error}</div>}
@@ -513,6 +644,33 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
           )}
         </div>
       )}
+      {panel === 'console' && showDebugger && (
+        <div className="h-40 shrink-0 overflow-hidden border-t border-zinc-800">
+          <ExecutionConsole entries={consoleEntries} onClear={() => { setLogs([]); pendingLogs.current = []; }} />
+        </div>
+      )}
+      {panel === 'program' && showDebugger && (
+        <div className="h-48 shrink-0 overflow-y-auto border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-300">
+          <div className="text-zinc-500">Program panel is hidden while Debugger is open — close Debugger or check Console.</div>
+        </div>
+      )}
     </div>
   );
+
+  if (executePopout.isPopped) {
+    return (
+      <>
+        <div className="flex h-full min-h-0 w-full flex-col items-center justify-center bg-zinc-950 p-8 text-center">
+          <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 px-6 py-8">
+            <div className="text-sm font-semibold text-sky-200">Execute Engine is popped out</div>
+            <p className="mt-2 max-w-sm text-xs leading-relaxed text-zinc-500">The stage is now in a separate window so you can place it side by side with the Code Inspector.</p>
+            <Button variant="primary" onClick={executePopout.close} className="mt-4">↙ Restore Execute</Button>
+          </div>
+        </div>
+        {executePopout.portal(inner)}
+      </>
+    );
+  }
+
+  return inner;
 }

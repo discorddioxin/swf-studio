@@ -5,7 +5,8 @@
 import * as RT from '../../runtime/as2';
 import type { ColorTransform, Rect } from '../../types';
 import { identity, invert, apply as applyM, transformRect } from './geom';
-import { DEPTH_OFFSET, NODE, TWIPS, nodeOf, type AS2Player, type DisplayNode, type DrawCmd, type Movie } from './player';
+import { DEPTH_OFFSET, NODE, TWIPS, nodeOf } from './constants';
+import type { AS2Player, DisplayNode, DrawCmd, Movie } from './player';
 
 export interface BuiltinState {
   globalVolume: number;

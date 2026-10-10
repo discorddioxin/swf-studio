@@ -1,4 +1,7 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useDebugger, useDebuggerState } from '../debug/store';
+import { DebugPanel } from '../debug/DebugPanel';
+import { usePopout } from '../debug/Popout';
 import type { AssetBundle, Project, SwfDocument } from '../types';
 import { useAS2Project } from '../engine/as2/useAS2Build';
 import { buildWorkbenchTimelineMetadata } from '../engine/as2/workbenchMetadata';
@@ -44,7 +47,7 @@ const KEYWORDS = new Set([
   'readonly', 'return', 'set', 'static', 'super', 'switch', 'this', 'throw', 'true', 'try', 'type', 'typeof',
   'undefined', 'var', 'void', 'while', 'with', 'yield', 'number', 'string', 'boolean',
 ]);
-const TOKEN = /(\/\/.*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b[A-Za-z_$][\w$]*\b|\b\d+(?:\.\d+)?\b)/g;
+const TOKEN = /(\/\/.*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b[A-Za-z_$][\w$]*\b|\b\d+(?:\.\d+)?\b)/g;
 
 function highlight(line: string) {
   const parts: ReactNode[] = [];
@@ -55,7 +58,7 @@ function highlight(line: string) {
   while ((match = TOKEN.exec(line))) {
     if (match.index > cursor) parts.push(<span key={index++}>{line.slice(cursor, match.index)}</span>);
     const token = match[0];
-    const className = token.startsWith('//')
+    const className = token.startsWith('//') || token.startsWith('/*')
       ? 'text-zinc-500 italic'
       : /^["'`]/.test(token)
         ? 'text-emerald-300'
@@ -117,7 +120,12 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [showRawActionBytes, setShowRawActionBytes] = useState(false);
+  const [showDebugger, setShowDebugger] = useState(false);
   const searchTextCache = useRef(new WeakMap<CodeFile, string>());
+  const dbg = useDebugger();
+  const dbgState = useDebuggerState();
+  const inspectorPopout = usePopout({ title: 'Code Inspector — SWF Studio', width: 1100, height: 750 });
+  const codeScrollRef = useRef<HTMLDivElement>(null);
 
   const appFiles = useMemo<CodeFile[]>(() => projectState.status === 'ready'
     ? [...projectState.project.files.entries()]
@@ -177,6 +185,22 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
     : 0;
   const projectTitle = projectName.replace(/\.(?:xml|swf)$/i, '') || 'Untitled project';
 
+  useEffect(() => {
+    if (!dbgState.pausedAt) return;
+    const paused = dbgState.pausedAt;
+    const alreadyActive = activeFile?.path === paused.path || activeFile?.path.endsWith(paused.path) || paused.path.endsWith(activeFile?.path ?? '');
+    if (!alreadyActive) {
+      const match = files.find(f => f.path === paused.path || f.path.endsWith(paused.path) || paused.path.endsWith(f.path));
+      if (match) {
+        setSelected((current) => ({ ...current, [projectKey]: match.path }));
+      }
+    }
+    requestAnimationFrame(() => {
+      const el = codeScrollRef.current?.querySelector(`[data-line="${paused.line}"]`);
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  }, [dbgState.pausedAt, activeFile?.path, files, projectKey]);
+
   const exportTypeScript = async () => {
     if (projectState.status !== 'ready' || exporting) return;
     setExporting(true); setExportError('');
@@ -188,7 +212,7 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
     } finally { setExporting(false); }
   };
 
-  return (
+  const inner = (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[#0b0d12] text-zinc-200" aria-label="Code Editor">
       <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[#252936] bg-[#10131b] px-4 py-2.5">
         <div className="flex min-w-[170px] items-center gap-2">
@@ -207,6 +231,17 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
         <div className="ml-auto flex items-center gap-2">
           {mode === 'typescript' && projectState.status === 'ready' && (
             <span className="hidden text-[10px] text-zinc-500 lg:inline">{generatedFileCount} generated files · {issueCount} transpiler diagnostics</span>
+          )}
+          <button
+            type="button"
+            aria-pressed={showDebugger}
+            onClick={() => setShowDebugger(v => !v)}
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold ring-1 transition ${showDebugger ? 'bg-amber-500/15 text-amber-200 ring-amber-400/20' : 'bg-zinc-800 text-zinc-400 ring-zinc-700 hover:bg-zinc-700'}`}
+          >{showDebugger ? '● Debugger' : '○ Debugger'}</button>
+          {inspectorPopout.isPopped ? (
+            <button type="button" onClick={inspectorPopout.close} className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-200">↙ Restore Inspector</button>
+          ) : (
+            <button type="button" onClick={inspectorPopout.open} title="Pop out Code Inspector to a separate window" className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-zinc-700">↗ Pop out Inspector</button>
           )}
           <button type="button" disabled={projectState.status !== 'ready' || exporting} onClick={exportTypeScript}
             className="rounded-md bg-violet-500/15 px-3 py-1.5 text-xs font-semibold text-violet-200 ring-1 ring-violet-400/20 disabled:opacity-40">
@@ -267,32 +302,43 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
                 {search ? 'No files match this search.' : mode === 'actionscript' ? 'No ActionScript files were found in this export.' : area === 'application' ? 'No TypeScript modules were generated for this export.' : 'No engine sources were found.'}
               </div>
             )}
-            {rows.map((row) => row.kind === 'folder' ? (
-              <div key={`folder:${row.path}`} className="flex h-7 items-center gap-1 text-[11px] text-zinc-500" style={{ paddingLeft: 8 + row.depth * 12 }}>
-                <span className="text-[9px] text-zinc-700">▾</span><span className="text-amber-300/80">▰</span><span className="truncate">{row.name}</span>
-              </div>
-            ) : (
-              <button
-                type="button"
-                key={`file:${row.path}`}
-                title={row.path}
-                aria-current={activeFile?.path === row.path ? 'page' : undefined}
-                onClick={() => {
-                  setSelected((current) => ({ ...current, [projectKey]: row.path }));
-                  setShowRawActionBytes(false);
-                }}
-                className={cn(
-                  'flex h-7 w-full items-center gap-2 rounded px-2 text-left text-[11px] transition',
-                  activeFile?.path === row.path ? 'bg-violet-500/15 text-violet-100' : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-100',
-                )}
-                style={{ paddingLeft: 8 + row.depth * 12 }}
-              >
-                <span className={cn('w-4 shrink-0 rounded-sm text-center font-mono text-[8px] font-bold', row.name.toLowerCase().endsWith('.as') ? 'text-amber-300' : 'text-sky-300')}>
-                  {row.name.toLowerCase().endsWith('.as') ? 'AS' : 'TS'}
-                </span>
-                <span className="truncate">{row.name}</span>
-              </button>
-            ))}
+            {rows.map((row) => {
+              if (row.kind === 'folder') {
+                return (
+                  <div key={`folder:${row.path}`} className="flex h-7 items-center gap-1 text-[11px] text-zinc-500" style={{ paddingLeft: 8 + row.depth * 12 }}>
+                    <span className="text-[9px] text-zinc-700">▾</span><span className="text-amber-300/80">▰</span><span className="truncate">{row.name}</span>
+                  </div>
+                );
+              }
+              const bps = dbgState.breakpoints.filter(bp => bp.path === row.path || row.path.endsWith(bp.path) || bp.path.endsWith(row.path));
+              const hasBp = bps.length > 0;
+              const isActive = activeFile?.path === row.path;
+              const isPausedFile = dbgState.pausedAt && (dbgState.pausedAt.path === row.path || row.path.endsWith(dbgState.pausedAt.path) || dbgState.pausedAt.path.endsWith(row.path));
+              return (
+                <button
+                  type="button"
+                  key={`file:${row.path}`}
+                  title={row.path}
+                  aria-current={isActive ? 'page' : undefined}
+                  onClick={() => {
+                    setSelected((current) => ({ ...current, [projectKey]: row.path }));
+                    setShowRawActionBytes(false);
+                  }}
+                  className={cn(
+                    'flex h-7 w-full items-center gap-2 rounded px-2 text-left text-[11px] transition',
+                    isActive ? 'bg-violet-500/15 text-violet-100' : isPausedFile ? 'bg-amber-500/10 text-amber-200' : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-100',
+                  )}
+                  style={{ paddingLeft: 8 + row.depth * 12 }}
+                >
+                  <span className={cn('w-4 shrink-0 rounded-sm text-center font-mono text-[8px] font-bold', row.name.toLowerCase().endsWith('.as') ? 'text-amber-300' : 'text-sky-300')}>
+                    {row.name.toLowerCase().endsWith('.as') ? 'AS' : 'TS'}
+                  </span>
+                  <span className="truncate flex-1">{row.name}</span>
+                  {hasBp && <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" title={`${bps.length} breakpoint(s)`} />}
+                  {isPausedFile && <span className="text-[10px] text-amber-400">●</span>}
+                </button>
+              );
+            })}
           </div>
           <div className="border-t border-[#252936] px-3 py-2 text-[10px] leading-relaxed text-zinc-600">
             {mode === 'typescript' && area === 'application' ? 'Generated from the ActionScript export by the same as2ts build used in Execute.' : mode === 'typescript' ? 'Engine sources: AS2 player, runtime and transpiler.' : 'Source files loaded from the selected SWF export.'}
@@ -331,14 +377,26 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
             </div>
           ) : null}
           {activeFile ? (
-            <div className="min-h-0 flex-1 overflow-auto py-3 font-mono text-[12px] leading-6" aria-label={`${activeFile.path} source`}>
+            <div ref={codeScrollRef} className="min-h-0 flex-1 overflow-auto py-3 font-mono text-[12px] leading-6" aria-label={`${activeFile.path} source`}>
               <div className="min-w-max pr-8">
-                {editorText.split(/\r?\n/).map((line, index) => (
-                  <div key={index} className="flex min-h-6 whitespace-pre">
-                    <span className="sticky left-0 w-14 shrink-0 select-none border-r border-[#20242e] bg-[#0b0d12] pr-3 text-right text-[10px] leading-6 text-zinc-700">{index + 1}</span>
-                    <code className="pl-4 text-zinc-300">{highlight(line)}</code>
+                {editorText.split(/\r?\n/).map((line, index) => {
+                  const lineNo = index + 1;
+                  const hasBp = dbgState.breakpoints.some(b => b.path === activeFile.path && b.line === lineNo);
+                  const isPaused = dbgState.pausedAt?.path === activeFile.path && dbgState.pausedAt?.line === lineNo;
+                  return (
+                  <div key={index} data-line={lineNo} className={`flex min-h-6 whitespace-pre`}>
+                    <div
+                      onClick={() => dbg.toggleBreakpoint(activeFile.path, lineNo)}
+                      title={hasBp ? "Remove breakpoint" : "Add breakpoint"}
+                      className={`sticky left-0 flex w-14 shrink-0 select-none items-center justify-end gap-1 border-r bg-[#0b0d12] pr-2 text-[10px] leading-6 ${hasBp ? 'border-violet-500/40 bg-violet-500/10 text-violet-300' : isPaused ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-[#20242e] text-zinc-700 hover:text-zinc-300'}`}
+                    >
+                      <span className={`h-2.5 w-2.5 rounded-full ${hasBp ? 'bg-red-500 ring-red-500' : isPaused ? 'bg-amber-400 ring-amber-400' : 'bg-transparent ring-zinc-700 ring-1'}`} />
+                      <span className="w-7 text-right">{lineNo}</span>
+                    </div>
+                    <code className={`pl-4 text-zinc-300`}>{highlight(line)}</code>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ) : (
@@ -355,8 +413,28 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
             <div className="flex items-center gap-3"><span>{activeAVM1?.blockCount ? (showRawActionBytes ? 'Raw AVM1 bytecode' : 'AVM1 disassembly') : mode === 'actionscript' ? 'ActionScript' : 'TypeScript'}</span><span>{activeFile?.path ?? 'No file'}</span></div>
             <div className="flex items-center gap-3"><span>Ln {activeFile ? Math.min(lineCount, 1) : 0}, Col 1</span><span>UTF-8</span><span>Read only</span></div>
           </div>
+          {showDebugger && (
+            <div className="shrink-0 border-t border-[#252936] bg-[#0d1017]" style={{ height: 280 }}>
+              <DebugPanel />
+            </div>
+          )}
         </main>
       </div>
     </section>
   );
+  if (inspectorPopout.isPopped) {
+    return (
+      <>
+        <div className="flex h-full items-center justify-center bg-[#0b0d12] p-8 text-center text-zinc-400">
+          <div>
+            <p className="text-sm text-zinc-300">Code Inspector is popped out in a separate window.</p>
+            <p className="mt-1 text-xs text-zinc-500">Use the popped window side by side with Execute.</p>
+            <button type="button" onClick={inspectorPopout.close} className="mt-4 rounded bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 ring-1 ring-amber-400/20">↙ Restore Inspector</button>
+          </div>
+        </div>
+        {inspectorPopout.portal(inner)}
+      </>
+    );
+  }
+  return inner;
 }

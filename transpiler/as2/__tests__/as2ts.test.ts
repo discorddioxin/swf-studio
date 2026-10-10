@@ -289,7 +289,7 @@ describe('project mapping', () => {
   it('generates timelines, handlers, classes and an index', () => {
     const r = transpileProject(project);
     expect([...r.files.keys()].sort()).toEqual([
-      'actors/root.ts', 'actors/sprite_5.ts', 'as2ts-report.md', 'buttons/button_7.ts', 'classes/com/game/Fish.ts', 'classes/com/game/Lobby.ts',
+      'actors/_proposal.json', 'actors/root.ts', 'actors/sprite_5.ts', 'as2ts-report.md', 'buttons/button_7.ts', 'classes/com/game/Fish.ts', 'classes/com/game/Lobby.ts',
       'index.ts', 'timelines/root.ts', 'timelines/sprite_5.ts',
     ]);
     const root = r.files.get('timelines/root.ts')!;

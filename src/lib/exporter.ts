@@ -8,6 +8,7 @@ export interface ExportOptions {
   includeKeyframes: boolean;
   pretty: boolean;
   skipIgnored: boolean;
+  mergeVariants?: boolean;
 }
 
 export const DEFAULT_EXPORT: ExportOptions = {
@@ -15,6 +16,7 @@ export const DEFAULT_EXPORT: ExportOptions = {
   includeKeyframes: true,
   pretty: true,
   skipIgnored: true,
+  mergeVariants: false,
 };
 
 const ident = (s: string) =>
