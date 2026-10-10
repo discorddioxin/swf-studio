@@ -1,0 +1,327 @@
+{
+  "phase": "5-workbench",
+  "branch": "arena/bf27040d-swf-studio",
+  "baseCheckpoint": "audit-checkpoint-4",
+  "baseCommit": "3160d97",
+  "date": "2026-10-10T02:00:00Z",
+  "charter": "FULL_PROJECT_AUDIT.md §8 (workbench CodeWorkspace + Inspector + TimelineView/SpriteTreeView + lib/project + lib/exporter + lib/typescriptExport + transpiler/as2/actorHeuristics + project.ts:mergeVariants)",
+  "companion": "CODE_INSPECTOR_AUDIT.md (23 findings, all fixed) + FLASH_TO_ACTOR_ROADMAP.md + BUNDLED_SWFS.md + SWF_SPEC_19_AUDIT.md Ch.8/10/11",
+  "question": "Does the workbench faithfully turn a SwfDocument + Project (characters/clips/markers/containers/actors/vocab) into an editable, exportable workspace — Code editor over ProjectResult TypeScript + ActionScript sources, Inspector tabs read-only over doc+cache+api, Timeline strip with display-list flattening, and portable buildBundle + createTypeScriptArchive — without writing back into SwfDocument, without global leaks, and with actorHeuristics + mergeVariants deterministic?",
+  "verdict": "Yes. src/components/CodeWorkspace.tsx 440 LOC owns explorer/editor (import.meta.glob ?raw engine sources, useAS2Project ProjectResult application sources, disassembleAVM1Source for *.as bytecode, makeTreeRows + highlight TOKEN + searchTextCache WeakMap + DebugPanel breakpoint gutter) and is read-only over ProjectResult; src/components/Inspector.tsx 72 LOC + inspector/{Label 169,Frame 131,Clips 184,Actor 506,Code 33,Export 116} are read-only views over doc+cache+api+flattenedSprites (flatten + cache.preview + api.project vocab). src/components/TimelineView.tsx 521 LOC + SpriteTreeView 299 LOC render frame strip (loopRange [start,end] inclusive + buildFramesForContainer + flatten level 0/total) and stage tree. src/lib/project.ts 154 LOC owns useProject(swfName) (localStorage:swfforge:project:* 400ms debounce, uid Math.random 36^8, allTags/categories vocab). src/lib/exporter.ts 421 LOC owns buildBundle/bundleToText/displayName/ident/decompose/rectPx + triggerDownload and src/lib/typescriptExport.ts 51 LOC owns createTypeScriptArchive (JSZip game/* + runtime + tsconfig). transpiler/as2/actorHeuristics.ts 182 LOC owns proposeActors (fanIn/linkage/labelSets/isInitClass + library veto) and transpiler/as2/project.ts 692 LOC mergeVariants owns transpileProject -> ProjectResult + actors/_proposal.json. No new any, no new circular, game-files untouched, ProjectResult read-only holds, same useAS2Project build as Execute.",
+  "baselines": {
+    "tsc": {
+      "command": "npx tsc --noEmit",
+      "errors": 0
+    },
+    "vitest": {
+      "passedFiles": 50,
+      "skippedFiles": 3,
+      "totalFiles": 53,
+      "passedTests": 222,
+      "skippedTests": 3,
+      "totalTests": 225,
+      "durationSec": 41
+    },
+    "viteBuild": {
+      "modules": 228,
+      "sizeKb": "1,737.59 kB",
+      "gzipKb": "494.97 kB",
+      "durationSec": 5.09,
+      "deltaFromPhase0": "+2 modules (breakpointMatch + constants)"
+    },
+    "roundTrip": {
+      "test": "src/lib/swf/swf-roundtrip.test.ts",
+      "exports": 6,
+      "tests": 7,
+      "result": "6/6 structural + DoInitAction"
+    },
+    "ruffleOracle": {
+      "test": "debug/tools/vitest/avm1-action-audit.dev.test.ts",
+      "totalCalls": 534,
+      "distinctPayloads": 249,
+      "omniture": {
+        "callCount": 4,
+        "uniqueCount": 3
+      }
+    },
+    "bundled": {
+      "manifest": "game-files/manifest.json 8 swfs",
+      "exports": 6,
+      "main": "bassken_game4.21 copy-through",
+      "extra": "OmnitureActionSource",
+      "repro": "node tools/xml2swf/generate-bundled.mjs manifest byte-identical, 3/6 swfs byte-identical (ASSET-10 drift)"
+    },
+    "workbench": {
+      "codeWorkspace": "440 LOC CodeWorkspace + 72 LOC Inspector + 6 panels 1154 LOC + 521+299 TimelineView",
+      "project": "154 LOC useProject",
+      "exporter": "421 LOC buildBundle + 51 LOC typescriptExport",
+      "heuristics": "182 LOC proposeActors + 692 LOC transpileProject mergeVariants"
+    }
+  },
+  "corpus": {
+    "swfs": 8,
+    "sizeKb": 776,
+    "externalExports": 6,
+    "fonts": 9,
+    "workbenchFiles": {
+      "codeWorkspace": 440,
+      "inspector": 72,
+      "panels": 1154,
+      "timelineView": 521,
+      "spriteTreeView": 299,
+      "project": 154,
+      "exporter": 421,
+      "typescriptExport": 51,
+      "actorHeuristics": 182,
+      "transpileProject": 692
+    }
+  },
+  "pipeline": {
+    "project": {
+      "file": "src/lib/project.ts 154 LOC",
+      "surface": [
+        "KEY swfforge:project:${name}",
+        "emptyProject(swfName)",
+        "loadProject(swfName) localStorage getItem JSON.parse",
+        "uid() Math.random 36 slice 8",
+        "useProject(swfName) useState(empty) + useEffect load + useEffect 400ms setItem + setLabel/addClip/updateClip/removeClip/addActor/updateActor/removeActor/assignClip/addMarker/updateMarker/removeMarker/addContainer/updateContainer/removeContainer/importProject",
+        "allTags useMemo Set sort",
+        "categories useMemo Set sort"
+      ]
+    },
+    "transpile": {
+      "file": "transpiler/as2/project.ts 692 LOC + actorHeuristics.ts 182 LOC",
+      "surface": [
+        "ProjectOptions {avm1,runtime,timelineMetadata,mergeVariants}",
+        "ProjectFile {path,content,tagOrder,targetSpriteId}",
+        "transpileProject(files,opts):ProjectResult {files Map<string,string>, report FileReport[], summary}",
+        "proposeActors(doc):ActorProposal[] fanIn/linkage/labelSets/isInitClass + library veto mx/__Packages + fanIn>3 + linkage veto + labelSets grouping + score"
+      ]
+    },
+    "codeWorkspace": {
+      "file": "src/components/CodeWorkspace.tsx 440 LOC",
+      "surface": [
+        "engineModules import.meta.glob ?raw 3 globs eager",
+        "engineProjectFiles():CodeFile[] filter __tests__ + localeCompare",
+        "makeTreeRows(files):TreeRow[] folders Set dedup",
+        "highlight(line) TOKEN regex + KEYWORDS 54",
+        "useAS2Project(assets,metadata) -> ProjectResult",
+        "mode typescript/actionscript + area engine/application + search + selected Record<string,string> + showRawActionBytes + showDebugger",
+        "searchTextCache WeakMap<CodeFile,string> + disassembleAVM1Source + dbg.toggleBreakpoint"
+      ]
+    },
+    "inspector": {
+      "file": "src/components/Inspector.tsx 72 LOC + inspector/* 1154 LOC",
+      "surface": [
+        "Inspector 6 tabs label/frame/clips/actors/code/export ErrorBoundary per tab",
+        "LabelPanel 169 cache.preview + cache.get + flattenedSprites + Related uses/usedBy",
+        "FramePanel 131 flatten(doc,timeline,frame) + notable events + f.ops place/move/remove + flat level0/total",
+        "ClipsPanel 184 containers + showAll + buildFramesForContainer + api.addContainer",
+        "ActorPanel 506 ActorProposals proposeActors + collectActorImageDependencies + capabilities movementClips + actions/sequences/keyBindings",
+        "CodePanel 33 assets list + onOpenCode",
+        "ExportPanel 116 buildBundle + bundleToText + downloadBundle .zip + opts mergeVariants as any"
+      ]
+    },
+    "timeline": {
+      "file": "src/components/TimelineView.tsx 521 LOC + SpriteTreeView.tsx 299 LOC",
+      "surface": [
+        "TimelineView cw 16 + scroller ResizeObserver + scroll/vw/stripHeight + dragStart/isDragging/menu + isNamingClip + PRIORITY + CELL_BG + buildFramesForContainer + loopRange [start,end] inclusive + fps/startFrame",
+        "SpriteTreeView tree over doc.timelines + characters + display list"
+      ]
+    },
+    "export": {
+      "file": "src/lib/exporter.ts 421 LOC + src/lib/typescriptExport.ts 51 LOC",
+      "surface": [
+        "ExportOptions {resolvedDisplayLists,includeKeyframes,pretty,skipIgnored} DEFAULT_EXPORT",
+        "ident + displayName + px/decompose/r6 + rectPx TWIPS + buildFramesForContainer",
+        "buildBundle(doc,project,assets,flattenedSprites) characters/timelines/events/clips/actors",
+        "bundleToText + downloadBundle JSZip + triggerDownload",
+        "createTypeScriptArchive(project:ProjectResult) JSZip game/* + runtime + tsconfig/package.json/README DEFLATE"
+      ]
+    }
+  },
+  "findings": [
+    {
+      "id": "WKS-01",
+      "severity": "Info",
+      "location": "src/components/CodeWorkspace.tsx:engineModules",
+      "evidence": "import.meta.glob ?raw 3 globs not counted by madge (warning Processed 92 files (1 warning)); ENGINE_FILES computed once at module load via engineProjectFiles() filter !__tests__ + localeCompare sort — deterministic, not runtime fetch",
+      "disposition": "Keep — documented madge blind spot since Phase 1"
+    },
+    {
+      "id": "WKS-02",
+      "severity": "Low",
+      "location": "src/components/CodeWorkspace.tsx:searchTextCache",
+      "evidence": "useRef(new WeakMap<CodeFile,string>) keyed by CodeFile {path,text,area}; CodeFile objects recreated when projectState.files changes (useMemo [...entries].map), so cache is per-build not per-render; within same build files array stable (useMemo [projectState]) so hits occur",
+      "disposition": "Keep — correct; cache additive not required"
+    },
+    {
+      "id": "WKS-03",
+      "severity": "Low",
+      "location": "src/components/CodeWorkspace.tsx:TOKEN",
+      "evidence": "TOKEN regex handles // line comments + strings/backticks + identifiers/numbers but not /* block */ comments; corpus never has block comments (FFDec emits //)",
+      "disposition": "Keep — shovel-ready to add /\\*[\\s\\S]*?\\*/ alternative"
+    },
+    {
+      "id": "WKS-04",
+      "severity": "Low",
+      "location": "src/components/TimelineView.tsx:loopRange + src/lib/exporter.ts:buildFramesForContainer",
+      "evidence": "loopRange:[start,end] inclusive (1-based UI, 0-based buildFramesForContainer for i=start..end); TimelineView onOpenTimeline(c.timelineId)+setFrame(c.startFrame)+setLoopRange([startFrame,endFrame]) matches inclusive contract; off-by-one would drop last frame",
+      "disposition": "Keep — pinned by project.variants.test + inspectorExecutor.synergy"
+    },
+    {
+      "id": "WKS-05",
+      "severity": "Low",
+      "location": "src/lib/project.ts:uid",
+      "evidence": "Math.random().toString(36).slice(2,10) 36^8 ~2.8T space; corpus clips <200, collision <<1e-6; not crypto.randomUUID() — fine for localStorage ids",
+      "disposition": "Keep — shovel-ready to crypto.randomUUID().slice(0,8) if stricter"
+    },
+    {
+      "id": "WKS-06",
+      "severity": "Low",
+      "location": "src/lib/exporter.ts:ident/displayName",
+      "evidence": "ident replace(/[^A-Za-z0-9_]+/g,'_').replace(/^_+|_+$/g,'').replace(/^(\\d)/,'_$1')||'unnamed' + displayName fallback `${kind}_${id}` via ident; handles mx. etc",
+      "disposition": "Keep — pinned by synergy.test char keys"
+    },
+    {
+      "id": "WKS-07",
+      "severity": "Low",
+      "location": "transpiler/as2/actorHeuristics.ts:proposeActors + project.ts:mergeVariants",
+      "evidence": "Library veto if(/gsecs|game_chat|omniture/.test(file) || timelines>20 && sprites>15 || mxCount>8) return [] + link.includes('mx.')||'__Packages.' + fanIn>3 veto; mergeVariants clusters by visualKey/actionKey; heuristic not spec but deterministic for corpus (8 proposals bassken_*, 0 for gsecs) — pinned by project.variants.test",
+      "disposition": "Keep — heuristic seam, test-pinned"
+    },
+    {
+      "id": "WKS-08",
+      "severity": "Low",
+      "location": "src/components/inspector/ExportPanel.tsx:mergeVariants",
+      "evidence": "Checkbox checked={(opts as any).mergeVariants ?? false} onChange=>setOpts({...opts, mergeVariants:e.target.checked} as any); ExportOptions declares {resolvedDisplayLists,includeKeyframes,pretty,skipIgnored} but not mergeVariants; cast needed because mergeVariants consumed downstream via as any in buildBundle path",
+      "disposition": "Keep — shovel-ready to add mergeVariants?:boolean to ExportOptions"
+    },
+    {
+      "id": "WKS-09",
+      "severity": "Info",
+      "location": "src/components/inspector/LabelPanel.tsx:usedBy",
+      "evidence": "usedBy = [...doc.characters.values()].filter(c=>c.uses.includes(id)) O(n^2) over doc.characters (n<500 corpus, <1 ms); no index",
+      "disposition": "Keep — corpus small; shovel-ready to index Map<number,Set<number>> if needed"
+    },
+    {
+      "id": "WKS-10",
+      "severity": "Info",
+      "location": "src/lib/project.ts:allTags/categories",
+      "evidence": "allTags new Set(...characters tags + clips tags + markers tags + containers tags + actors tags) sort() recomputed on every project change via useMemo [project]; same for categories; no debounce beyond upstream 400ms",
+      "disposition": "Keep — cheap for corpus (<1k strings)"
+    }
+  ],
+  "crossCutting": {
+    "dependencyGraph": {
+      "tool": "madge 8.0.0",
+      "entry": "src/main.tsx",
+      "extensions": [
+        "ts",
+        "tsx"
+      ],
+      "processed": 92,
+      "circular": [
+        "runtime/as2/index.ts > runtime/as2/actor.ts",
+        "engine/flash/context.ts > engine/flash/events.ts",
+        "engine/flash/player.ts > engine/flash/context.ts",
+        "engine/as2/player.ts > engine/as2/builtins.ts",
+        "lib/gameServerStub.ts > lib/mockNetwork.ts"
+      ],
+      "orphans": [
+        "main.tsx"
+      ]
+    },
+    "anyInstanceof": {
+      "runtime_as2_any": 67,
+      "engine_as2_any": 29,
+      "src_total_any": 373,
+      "instanceof": 62,
+      "disposition": "Info/tolerate at value seam; no new any (tsc 0)"
+    },
+    "gameFilesMutated": false,
+    "gameFilesRepro": "node tools/xml2swf/generate-bundled.mjs: manifest.json byte-identical, 3/6 SWFs byte-identical (pier 20084, fish4.20 26500, scene 31428), 3 with small drift overview +8 (30602->30610), game_chat +134 (179304->179438), gsecs2.9 +160 (297175->297335) — ASSET-10 Low (Phase 4); workbench does not touch game-files/",
+    "workbenchReadOnly": "SwfDocument -> transpileProject -> ProjectResult -> useAS2Project -> CodeWorkspace/Inspector/TimelineView read-only; mutations via api.setLabel/addClip/etc -> localStorage:swfforge:project:* only; grep -R localStorage shows only lib/project.ts:12,19 + debug/store.tsx; ProjectResult.files keys never write back into doc"
+  },
+  "testability": {
+    "codeWorkspace": {
+      "env": "jsdom",
+      "tests": [
+        "src/components/__tests__/codeWorkspace.ui.test.tsx 7",
+        "inspectorExecutor.synergy.test.tsx 2"
+      ],
+      "verdict": "Needs DOM, but pure helpers makeTreeRows/highlight node-testable"
+    },
+    "inspector": {
+      "env": "jsdom",
+      "tests": [
+        "inspectorExecutor.synergy.test.tsx 2",
+        "loader.ui.test.tsx 3"
+      ],
+      "verdict": "Isolated via props doc/cache/api/timeline, no fetch"
+    },
+    "timeline": {
+      "env": "jsdom",
+      "tests": [
+        "loader.ui.test.tsx",
+        "render.lifecycle.test.ts 3"
+      ],
+      "verdict": "Pure range logic, jsdom ResizeObserver mock"
+    },
+    "project": {
+      "env": "node+jsdom",
+      "tests": [
+        "loader.ui.test.tsx",
+        "inspectorExecutor.synergy.test.tsx"
+      ],
+      "verdict": "Hook testable with localStorage stub"
+    },
+    "exporter": {
+      "env": "node",
+      "tests": [
+        "src/lib/typescriptExport.test.ts 1",
+        "project.variants.test.ts 1"
+      ],
+      "verdict": "Pure, node-only, deterministic r6"
+    },
+    "actorHeuristics": {
+      "env": "node",
+      "tests": [
+        "transpiler/as2/__tests__/project.variants.test.ts 1",
+        "as2ts.test.ts"
+      ],
+      "verdict": "Pure, deterministic, <10 ms"
+    },
+    "transpile": {
+      "env": "node",
+      "tests": [
+        "transpiler/as2/__tests__/as2ts.test.ts",
+        "swf-roundtrip.test.ts 7"
+      ],
+      "verdict": "Ideal seam, diffable ProjectResult"
+    }
+  },
+  "exitGate": {
+    "tsc": "0",
+    "vitest": "50 files 222/3 passed, 3 dev skips, 41s",
+    "viteBuild": "228 modules 1,737.59kB gzip 494.97kB",
+    "workbenchTests": "codeWorkspace 7 + synergy 2 + variants 1 + typescriptExport 1 all pass",
+    "gameFilesMutated": false,
+    "diagram": "Mermaid workbench view §2",
+    "tables": "6 workbench seams + 1 graph + 1 reproducibility + 1 read-only",
+    "newAny": 0,
+    "noTestCoverageLost": true,
+    "noCaveats": true
+  },
+  "reproduce": [
+    "npm ci",
+    "npx tsc --noEmit",
+    "npx vitest run",
+    "npx vitest run transpiler/as2/__tests__/project.variants.test.ts",
+    "npx vitest run src/lib/typescriptExport.test.ts",
+    "npx vite build",
+    "npx madge --circular src/main.tsx --extensions ts,tsx",
+    "grep -R \"useProject\\|buildBundle\\|createTypeScriptArchive\\|proposeActors\\|mergeVariants\" src/lib src/components transpiler/as2"
+  ],
+  "next": "audit/phase-6 — Final sweep: App + GameEngine + As2Execute/ExecuteTab + debug/store + EngineFlash + lib/network live stitching — full product read-only over 8 SWFs"
+}
