@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useDebugger, useDebuggerState } from '../debug/store';
 import { DebugPanel } from '../debug/DebugPanel';
 import { usePopout } from '../debug/Popout';
@@ -47,9 +47,28 @@ const KEYWORDS = new Set([
   'readonly', 'return', 'set', 'static', 'super', 'switch', 'this', 'throw', 'true', 'try', 'type', 'typeof',
   'undefined', 'var', 'void', 'while', 'with', 'yield', 'number', 'string', 'boolean',
 ]);
+
+function goToDeclaration(token: string, files: CodeFile[], openTab: (path: string) => void, codeScrollRef: React.RefObject<HTMLDivElement | null>) {
+  const declRe = new RegExp(`\\b(?:function|class|const|let|var|get|set|abstract|method)\\s+\\b` + token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  for (const file of files) {
+    const fLines = file.text.split(/\r?\n/);
+    for (let i = 0; i < fLines.length; i++) {
+      const line = fLines[i];
+      if (declRe.test(line)) {
+        openTab(file.path);
+        setTimeout(() => {
+          const el = codeScrollRef.current?.querySelector(`[data-line="${i + 1}"]`);
+          el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 80);
+        return;
+      }
+    }
+  }
+}
+
 const TOKEN = /(\/\/.*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b[A-Za-z_$][\w$]*\b|\b\d+(?:\.\d+)?\b)/g;
 
-function highlight(line: string) {
+function highlight(line: string, onCtrlClick?: (token: string) => void) {
   const parts: ReactNode[] = [];
   let cursor = 0;
   let match: RegExpExecArray | null;
@@ -58,6 +77,7 @@ function highlight(line: string) {
   while ((match = TOKEN.exec(line))) {
     if (match.index > cursor) parts.push(<span key={index++}>{line.slice(cursor, match.index)}</span>);
     const token = match[0];
+    const isIdent = /^[A-Za-z_$][\w$]*$/.test(token);
     const className = token.startsWith('//') || token.startsWith('/*')
       ? 'text-zinc-500 italic'
       : /^["'`]/.test(token)
@@ -67,7 +87,23 @@ function highlight(line: string) {
           : KEYWORDS.has(token)
             ? 'text-violet-300'
             : undefined;
-    parts.push(className ? <span key={index++} className={className}>{token}</span> : <span key={index++}>{token}</span>);
+    if (isIdent && onCtrlClick) {
+      parts.push(
+        <span
+          key={index++}
+          className={cn('cursor-pointer hover:underline hover:text-amber-300', className)}
+          onMouseDown={(e) => {
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault();
+              onCtrlClick(token);
+            }
+          }}
+          title="Ctrl+click to jump to declaration"
+        >{token}</span>
+      );
+    } else {
+      parts.push(className ? <span key={index++} className={className}>{token}</span> : <span key={index++}>{token}</span>);
+    }
     cursor = TOKEN.lastIndex;
   }
   if (cursor < line.length) parts.push(<span key={index}>{line.slice(cursor)}</span>);
@@ -118,14 +154,41 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
   const [mode, setMode] = useState<ProjectMode>('typescript');
   const [area, setArea] = useState<TypeScriptArea>('application');
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<Record<string, string>>({});
+  const [tabs, setTabs] = useState<string[]>([]);
+  const [tabIndex, setTabIndex] = useState(0);
   const [showRawActionBytes, setShowRawActionBytes] = useState(false);
   const [showDebugger, setShowDebugger] = useState(false);
+  const [collapsedImports, setCollapsedImports] = useState(true);
+  const [collapsedMethods, setCollapsedMethods] = useState<Record<number, boolean>>({});
   const searchTextCache = useRef(new WeakMap<CodeFile, string>());
   const dbg = useDebugger();
   const dbgState = useDebuggerState();
   const inspectorPopout = usePopout({ title: 'Code Inspector — SWF Studio', width: 1100, height: 750 });
   const codeScrollRef = useRef<HTMLDivElement>(null);
+  const openTab = useCallback((path: string) => {
+    setTabs((prev) => {
+      const idx = prev.indexOf(path);
+      if (idx >= 0) {
+        setTabIndex(idx);
+        return prev;
+      }
+      const next = [...prev, path];
+      setTabIndex(next.length - 1);
+      return next;
+    });
+  }, []);
+  const closeTab = useCallback((i: number) => {
+    setTabs((prev) => {
+      const next = prev.filter((_, idx) => idx !== i);
+      setTabIndex((current) => {
+        if (next.length === 0) return 0;
+        if (current === i) return Math.min(i, next.length - 1);
+        if (current > i) return current - 1;
+        return current;
+      });
+      return next;
+    });
+  }, []);
 
   const appFiles = useMemo<CodeFile[]>(() => projectState.status === 'ready'
     ? [...projectState.project.files.entries()]
@@ -147,8 +210,18 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
     : projectKey === 'engine'
       ? (files.some((file) => file.path === 'src/engine/as2/player.ts') ? 'src/engine/as2/player.ts' : files[0]?.path)
       : files[0]?.path;
-  const activePath = selected[projectKey] ?? preferredPath ?? '';
+  useEffect(() => {
+    if (tabs.length === 0 && preferredPath) {
+      setTabs([preferredPath]);
+      setTabIndex(0);
+    }
+  }, [preferredPath, tabs.length]);
+  const activePath = tabs[tabIndex] ?? preferredPath ?? '';
   const activeFile = files.find((file) => file.path === activePath) ?? files[0] ?? null;
+  useEffect(() => {
+    setCollapsedImports(true);
+    setCollapsedMethods({});
+  }, [activePath]);
   const activeAVM1 = useMemo(() => mode === 'actionscript' && activeFile?.language === 'actionscript'
     ? disassembleAVM1Source(activeFile.text)
     : null, [mode, activeFile]);
@@ -192,14 +265,14 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
     if (!alreadyActive) {
       const match = files.find(f => f.path === paused.path || f.path.endsWith(paused.path) || paused.path.endsWith(f.path));
       if (match) {
-        setSelected((current) => ({ ...current, [projectKey]: match.path }));
+        openTab(match.path);
       }
     }
     requestAnimationFrame(() => {
       const el = codeScrollRef.current?.querySelector(`[data-line="${paused.line}"]`);
       el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     });
-  }, [dbgState.pausedAt, activeFile?.path, files, projectKey]);
+  }, [dbgState.pausedAt, activeFile?.path, files, projectKey, openTab]);
 
   const exportTypeScript = async () => {
     if (projectState.status !== 'ready' || exporting) return;
@@ -321,7 +394,7 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
                   title={row.path}
                   aria-current={isActive ? 'page' : undefined}
                   onClick={() => {
-                    setSelected((current) => ({ ...current, [projectKey]: row.path }));
+                    openTab(row.path);
                     setShowRawActionBytes(false);
                   }}
                   className={cn(
@@ -346,15 +419,32 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
         </aside>
 
         <main className="flex min-w-0 flex-1 flex-col bg-[#0b0d12]" aria-label="Code editor">
-          <div className="flex h-10 shrink-0 items-center border-b border-[#252936] bg-[#10131b]">
-            {activeFile ? (
-              <div className="flex h-full items-center gap-2 border-r border-[#252936] border-t-2 border-t-violet-400 bg-[#0b0d12] px-4 text-xs">
-                <span className={activeFile.language === 'actionscript' ? 'text-amber-300' : 'text-sky-300'}>{activeFile.language === 'actionscript' ? 'AS' : 'TS'}</span>
-                <span className="max-w-64 truncate text-zinc-200">{activeFile.path.split('/').slice(-1)[0]}</span>
-                <span className="ml-1 text-zinc-700">×</span>
-              </div>
-            ) : <div className="px-4 text-xs text-zinc-600">No file open</div>}
-            {activeFile && <span className="ml-auto truncate px-3 font-mono text-[10px] text-zinc-600">{activeFile.path}</span>}
+          <div className="flex h-10 shrink-0 items-center gap-0.5 border-b border-[#252936] bg-[#10131b] px-2 overflow-x-auto">
+            {tabs.map((path, i) => {
+              const file = files.find(f => f.path === path);
+              const isActive = i === tabIndex;
+              return (
+                <button
+                  key={path}
+                  onClick={() => setTabIndex(i)}
+                  className={cn(
+                    'flex h-8 shrink-0 items-center gap-2 rounded-t-md border-t border-r px-2 text-xs transition',
+                    isActive ? 'border-t-violet-400 bg-[#0b0d12] text-zinc-200' : 'border-t-transparent border-r-transparent text-zinc-500 hover:bg-white/5 hover:text-zinc-300',
+                  )}
+                >
+                  <span className={file?.language === 'actionscript' ? 'text-amber-300' : 'text-sky-300'}>{file?.language === 'actionscript' ? 'AS' : 'TS'}</span>
+                  <span className="max-w-40 truncate">{path.split('/').slice(-1)[0]}</span>
+                  <span
+                    role="button"
+                    aria-label="Close tab"
+                    onClick={(e) => { e.stopPropagation(); closeTab(i); }}
+                    className="ml-0.5 rounded px-0.5 text-zinc-600 hover:text-rose-400 hover:bg-rose-400/10"
+                  >×</span>
+                </button>
+              );
+            })}
+            {tabs.length === 0 && <div className="px-2 text-xs text-zinc-600">No file open</div>}
+            <span className="ml-auto truncate px-3 font-mono text-[10px] text-zinc-600">{activeFile?.path ?? ''}</span>
           </div>
           {mode === 'actionscript' && activeAVM1?.blockCount ? (
             <div role="note" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-amber-400/15 bg-amber-400/[0.04] px-4 py-2 text-[11px] text-amber-100/80">
@@ -379,28 +469,86 @@ export function CodeWorkspace({ assets, doc, project, projectName, onRun }: {
           {activeFile ? (
             <div ref={codeScrollRef} className="min-h-0 flex-1 overflow-auto py-3 font-mono text-[12px] leading-6" aria-label={`${activeFile.path} source`}>
               <div className="min-w-max pr-8">
-                {editorText.split(/\r?\n/).map((line, index) => {
-                  const lineNo = index + 1;
-                  const hasBp = dbgState.breakpoints.some(b => b.path === activeFile.path && b.line === lineNo);
-                  const isPaused = dbgState.pausedAt?.path === activeFile.path && dbgState.pausedAt?.line === lineNo;
-                  return (
-                  <div key={index} data-line={lineNo} className={`flex min-h-6 whitespace-pre`}>
-                    <div
-                      onClick={() => dbg.toggleBreakpoint(activeFile.path, lineNo)}
-                      title={hasBp ? "Remove breakpoint" : "Add breakpoint"}
-                      className={`sticky left-0 flex w-14 shrink-0 select-none items-center justify-end gap-1 border-r bg-[#0b0d12] pr-2 text-[10px] leading-6 ${hasBp ? 'border-violet-500/40 bg-violet-500/10 text-violet-300' : isPaused ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-[#20242e] text-zinc-700 hover:text-zinc-300'}`}
-                    >
-                      <span className={`h-2.5 w-2.5 rounded-full ${hasBp ? 'bg-red-500 ring-red-500' : isPaused ? 'bg-amber-400 ring-amber-400' : 'bg-transparent ring-zinc-700 ring-1'}`} />
-                      <span className="w-7 text-right">{lineNo}</span>
-                    </div>
-                    <code className={`pl-4 text-zinc-300`}>{highlight(line)}</code>
-                  </div>
-                  );
-                })}
+                {(() => {
+                  const lines = editorText.split(/\r?\n/);
+                  // Import ranges
+                  const importRanges: [number, number][] = [];
+                  let impStart = -1;
+                  for (let i = 0; i < lines.length; i++) {
+                    if (/^\s*import\b/.test(lines[i])) { if (impStart === -1) impStart = i; }
+                    else { if (impStart !== -1) { importRanges.push([impStart, i - 1]); impStart = -1; } }
+                  }
+                  if (impStart !== -1) importRanges.push([impStart, lines.length - 1]);
+                  // Method ranges (approximate)
+                  const methodRanges: {start: number; end: number; label: string}[] = [];
+                  for (let i = 0; i < lines.length; i++) {
+                    const m = lines[i].match(/^\s*(?:public|private|protected|static|readonly|async|get|set|abstract)?\s*([A-Za-z_$][\w$]*)(?:\??)?\s*\([^)]*\)\s*(?:\{|=>\s*\{?)/);
+                    if (m && !['if','for','while','switch','catch','with','try'].includes(m[1])) {
+                      const start = i;
+                      const label = m[1];
+                      const indent = lines[i].match(/^\s*/)![0].length;
+                      let end = i;
+                      for (let j = i + 1; j < lines.length; j++) {
+                        const trimmed = lines[j].trim();
+                        if (trimmed === '}' || trimmed === '};') {
+                          const nid = lines[j].match(/^\s*/)![0].length;
+                          if (nid <= indent) { end = j; break; }
+                        }
+                      }
+                      methodRanges.push({start, end, label});
+                    }
+                  }
+                  const hiddenImports = new Set<number>();
+                  if (collapsedImports) importRanges.forEach(r => { for (let k = r[0]; k <= r[1]; k++) hiddenImports.add(k); });
+                  const hiddenMethods = new Set<number>();
+                  methodRanges.forEach(m => { if (collapsedMethods[m.start]) for (let k = m.start + 1; k <= m.end; k++) hiddenMethods.add(k); });
+                  const onCtrlClick = (token: string) => goToDeclaration(token, files, openTab, codeScrollRef);
+                  return lines.map((line, index) => {
+                    const lineNo = index + 1;
+                    // Skip hidden method lines (but render toggle at start)
+                    const inHiddenMethod = methodRanges.some(m => collapsedMethods[m.start] && index > m.start && index <= m.end);
+                    if (inHiddenMethod) return null;
+                    // Import toggle
+                    const inImport = importRanges.some(r => index >= r[0] && index <= r[1]);
+                    if (inImport && collapsedImports) {
+                      if (index === importRanges[0][0]) {
+                        const count = importRanges.reduce((sum, r) => sum + (r[1] - r[0] + 1), 0);
+                        return (
+                          <div key={index} data-line={lineNo} className="flex min-h-6 whitespace-pre">
+                            <div className="sticky left-0 flex w-14 shrink-0 select-none items-center justify-end gap-1 border-r bg-[#0b0d12] pr-2 text-[10px] leading-6 border-[#20242e] text-zinc-700" />
+                            <code className="pl-4 text-zinc-400"><button className="underline decoration-dotted hover:text-violet-300" onClick={() => setCollapsedImports(false)}>Imports ({count} lines)</button> <span className="text-zinc-600">— click to expand</span></code>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }
+                    // Method toggle at start
+                    const methodAt = methodRanges.find(m => index === m.start);
+                    if (methodAt) {
+                      const collapsed = !!collapsedMethods[methodAt.start];
+                      return (
+                        <div key={index} data-line={lineNo} className="flex min-h-6 whitespace-pre">
+                          <div onClick={() => dbg.toggleBreakpoint(activeFile.path, lineNo)} title={dbgState.breakpoints.some(b => b.path === activeFile.path && b.line === lineNo) ? "Remove breakpoint" : "Add breakpoint"} className={`sticky left-0 flex w-14 shrink-0 select-none items-center justify-end gap-1 border-r bg-[#0b0d12] pr-2 text-[10px] leading-6 ${dbgState.breakpoints.some(b => b.path === activeFile.path && b.line === lineNo) ? 'border-violet-500/40 bg-violet-500/10 text-violet-300' : dbgState.pausedAt?.path === activeFile.path && dbgState.pausedAt?.line === lineNo ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-[#20242e] text-zinc-700 hover:text-zinc-300'}`}><span className={`h-2.5 w-2.5 rounded-full ${dbgState.breakpoints.some(b => b.path === activeFile.path && b.line === lineNo) ? 'bg-red-500 ring-red-500' : dbgState.pausedAt?.path === activeFile.path && dbgState.pausedAt?.line === lineNo ? 'bg-amber-400 ring-amber-400' : 'bg-transparent ring-zinc-700 ring-1'}`} /><span className="w-7 text-right">{lineNo}</span></div>
+                          <code className="pl-4 text-zinc-300"><button onClick={() => setCollapsedMethods(c => ({ ...c, [methodAt.start]: !c[methodAt.start] }))} className="mr-1 text-amber-300 hover:text-amber-200" aria-label={collapsed ? 'Expand method' : 'Collapse method'}>{collapsed ? '▶' : '▼'}</button>{highlight(line, onCtrlClick)} {collapsed && <span className="text-zinc-600">· · ·</span>}</code>
+                        </div>
+                      );
+                    }
+                    // Normal line
+                    const hasBp = dbgState.breakpoints.some(b => b.path === activeFile.path && b.line === lineNo);
+                    const isPaused = dbgState.pausedAt?.path === activeFile.path && dbgState.pausedAt?.line === lineNo;
+                    return (
+                      <div key={index} data-line={lineNo} className="flex min-h-6 whitespace-pre">
+                        <div onClick={() => dbg.toggleBreakpoint(activeFile.path, lineNo)} title={hasBp ? "Remove breakpoint" : "Add breakpoint"} className={`sticky left-0 flex w-14 shrink-0 select-none items-center justify-end gap-1 border-r bg-[#0b0d12] pr-2 text-[10px] leading-6 ${hasBp ? 'border-violet-500/40 bg-violet-500/10 text-violet-300' : isPaused ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-[#20242e] text-zinc-700 hover:text-zinc-300'}`}><span className={`h-2.5 w-2.5 rounded-full ${hasBp ? 'bg-red-500 ring-red-500' : isPaused ? 'bg-amber-400 ring-amber-400' : 'bg-transparent ring-zinc-700 ring-1'}`} /><span className="w-7 text-right">{lineNo}</span></div>
+                        <code className="pl-4 text-zinc-300">{highlight(line, onCtrlClick)}</code>
+                      </div>
+                    );
+                  }).filter(Boolean) as React.ReactNode[];
+                })()}
               </div>
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 items-center justify-center p-8 text-center">
+
               <div className="max-w-md">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-xl text-zinc-600">⌘</div>
                 <div className="mt-4 text-sm font-medium text-zinc-300">{projectState.status === 'loading' ? 'Preparing your project…' : 'No source file selected'}</div>

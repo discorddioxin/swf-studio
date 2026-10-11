@@ -405,7 +405,7 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
           />
           {dbgState.paused && <div className="pointer-events-none absolute inset-0 border-2 border-amber-500/40 bg-amber-500/5" />}
         </div>
-        <RunningTimelinesSidebar doc={doc} timelines={[]} timelineNames={as3TimelineNames} playing={playing && !dbgState.paused} project={project} />
+        <RunningTimelinesSidebar doc={doc} timelines={[]} timelineNames={as3TimelineNames} playing={playing && !dbgState.paused} project={project} assets={assets} />
       </div>
 
       {showDebugger && (

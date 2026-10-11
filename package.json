@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:debug": "vitest run debug/tools/vitest",
     "test:watch": "vitest",
-    "as2ts": "node tools/as2ts/as2ts.mjs"
+    "as2ts": "node tools/as2ts/as2ts.mjs",
+    "integrity": "node tools/integrity-check.mjs"
   },
   "dependencies": {
     "clsx": "2.1.1",
