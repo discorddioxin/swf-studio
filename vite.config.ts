@@ -22,7 +22,6 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     strictPort: true,
-    // accept the Arena preview host (proxied origin) in dev
     allowedHosts: true,
   },
   test: {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Project, SwfCharacter, SwfDocument, Timeline } from '../types';
 import type { TimelineNameIndex, TimelineNameMetadata } from '../../transpiler/as2/project';
 import type { ActiveDisplaySnapshot, RunningTimelineSnapshot } from '../engine/as2/player';
@@ -27,6 +27,7 @@ export function RunningTimelinesSidebar({
   project,
   displayTree,
   onHighlight,
+  assets,
 }: {
   doc: SwfDocument;
   timelines: readonly RunningTimelineSnapshot[];
@@ -35,8 +36,10 @@ export function RunningTimelinesSidebar({
   project?: Project | null;
   displayTree?: ActiveDisplaySnapshot | null;
   onHighlight?: (ids: Set<number> | null) => void;
+  assets?: import("../types").AssetBundle | null;
 }) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('timelines');
+  const [previewCharId, setPreviewCharId] = useState<number | null>(null);
 
   // Active assets: prefer live display tree (includes static UI) else fallback to running timelines
   const activeAssets = useMemo(() => {
@@ -148,15 +151,24 @@ export function RunningTimelinesSidebar({
 
       {activeTab === 'assets' && (
         displayTree ? (
-          <DisplayTreePanel doc={doc} project={project ?? null} displayTree={displayTree} onHighlight={onHighlight} />
+          <DisplayTreePanel doc={doc} project={project ?? null} displayTree={displayTree} onHighlight={onHighlight} onSelectPreview={setPreviewCharId} />
         ) : (
-          <ActiveAssetsPanel timelines={timelines} activeAssets={activeAssets} />
+          <ActiveAssetsPanel timelines={timelines} activeAssets={activeAssets} onSelectPreview={setPreviewCharId} />
         )
       )}
 
       {activeTab === 'actors' && (
         <ActorsPanel project={project ?? null} actorStates={actorStates} displayTree={displayTree ?? null} onHighlight={onHighlight} />
       )}
+      <div className="shrink-0 border-t border-zinc-800 bg-zinc-900/40 p-2">
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Mini viewer</span>
+          {previewCharId && <button onClick={() => setPreviewCharId(null)} className="text-[10px] text-zinc-600 hover:text-zinc-300">Clear</button>}
+        </div>
+        <div className="h-32 w-full rounded border border-zinc-800 bg-[#0b0d12] overflow-hidden flex items-center justify-center">
+          {previewCharId ? <MiniViewer doc={doc} charId={previewCharId} assets={assets} /> : <span className="text-xs text-zinc-600">Select a graphic or shape to preview</span>}
+        </div>
+      </div>
     </aside>
   );
 }
@@ -208,11 +220,13 @@ function DisplayTreePanel({
   project,
   displayTree,
   onHighlight,
+  onSelectPreview,
 }: {
   doc: SwfDocument;
   project: Project | null;
   displayTree: ActiveDisplaySnapshot;
   onHighlight?: (ids: Set<number> | null) => void;
+  onSelectPreview?: (id: number) => void;
 }) {
   const total = countDisplayNodes(displayTree) - 1;
   if (total === 0) {
@@ -231,7 +245,7 @@ function DisplayTreePanel({
         {displayTree.children.length ? ` · ${displayTree.children.length} top-level` : ''}.
       </div>
       <div className="rounded-md border border-zinc-800 bg-zinc-900/40">
-        <DisplayTreeNode node={displayTree} doc={doc} project={project} depth={0} isRoot onHighlight={onHighlight} />
+        <DisplayTreeNode node={displayTree} doc={doc} project={project} depth={0} isRoot onHighlight={onHighlight} onSelectPreview={onSelectPreview} />
       </div>
       <div className="mt-2 px-1 text-[10px] leading-relaxed text-zinc-600">
         Includes <span className="text-zinc-400">buttons, single-frame sprites, shapes, text</span> — not just playing timelines. Hidden instances are dimmed.
@@ -240,7 +254,7 @@ function DisplayTreePanel({
   );
 }
 
-function DisplayTreeNode({ node, doc, project, depth, isRoot, onHighlight }: { node: ActiveDisplaySnapshot; doc: SwfDocument; project: Project | null; depth: number; isRoot?: boolean; onHighlight?: (ids: Set<number> | null) => void }) {
+function DisplayTreeNode({ node, doc, project, depth, isRoot, onHighlight, onSelectPreview }: { node: ActiveDisplaySnapshot; doc: SwfDocument; project: Project | null; depth: number; isRoot?: boolean; onHighlight?: (ids: Set<number> | null) => void; onSelectPreview?: (id: number) => void }) {
   const [expanded, setExpanded] = useState(depth < 2);
   const label = project?.characters[node.characterId]?.name;
   const kind: string = node.kind;
@@ -256,7 +270,7 @@ function DisplayTreeNode({ node, doc, project, depth, isRoot, onHighlight }: { n
         </div>
         <div>
           {node.children.map((child) => (
-            <DisplayTreeNode key={child.id} node={child} doc={doc} project={project} depth={depth + 1} onHighlight={onHighlight} />
+            <DisplayTreeNode key={child.id} node={child} doc={doc} project={project} depth={depth + 1} onHighlight={onHighlight} onSelectPreview={onSelectPreview} />
           ))}
         </div>
       </div>
@@ -267,7 +281,7 @@ function DisplayTreeNode({ node, doc, project, depth, isRoot, onHighlight }: { n
   const handleLeave = () => onHighlight?.(null);
   return (
     <div className={cn('border-l border-transparent', depth > 1 && 'ml-2 border-zinc-800/50')}>
-      <div className={cn('flex items-center gap-1.5 px-2 py-1', isHidden && 'opacity-50', hasChildren && 'cursor-pointer hover:bg-zinc-800/50')} onClick={() => hasChildren && setExpanded((v) => !v)} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+      <div className={cn('flex items-center gap-1.5 px-2 py-1', isHidden && 'opacity-50', hasChildren && 'cursor-pointer hover:bg-zinc-800/50')} onClick={() => { if (hasChildren) setExpanded((v) => !v); onSelectPreview?.(node.characterId); }} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
         {hasChildren ? (
           <span className="shrink-0 text-[10px] text-zinc-500">{expanded ? '▾' : '▸'}</span>
         ) : (
@@ -290,7 +304,7 @@ function DisplayTreeNode({ node, doc, project, depth, isRoot, onHighlight }: { n
       {hasChildren && expanded && (
         <div className="divide-y divide-zinc-800/30">
           {node.children.map((child) => (
-            <DisplayTreeNode key={child.id} node={child} doc={doc} project={project} depth={depth + 1} onHighlight={onHighlight} />
+            <DisplayTreeNode key={child.id} node={child} doc={doc} project={project} depth={depth + 1} onHighlight={onHighlight} onSelectPreview={onSelectPreview} />
           ))}
         </div>
       )}
@@ -301,9 +315,11 @@ function DisplayTreeNode({ node, doc, project, depth, isRoot, onHighlight }: { n
 function ActiveAssetsPanel({
   timelines,
   activeAssets,
+  onSelectPreview,
 }: {
   timelines: readonly RunningTimelineSnapshot[];
   activeAssets: ActiveAssetEntry[];
+  onSelectPreview?: (id: number) => void;
 }) {
   const grouped = useMemo(() => {
     const byTimeline = new Map<number, { snapshot: RunningTimelineSnapshot; items: typeof activeAssets }>();
@@ -343,7 +359,7 @@ function ActiveAssetsPanel({
             ) : (
               <ul className="divide-y divide-zinc-800/60" aria-label={`Assets in ${group.snapshot.name}`}>
                 {group.items.map((entry) => (
-                  <li key={`${group.snapshot.id}-${entry.characterId}-${entry.depth}`} className="flex items-center gap-2 px-2 py-1.5">
+                  <li key={`${group.snapshot.id}-${entry.characterId}-${entry.depth}`} className="flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-zinc-800/50" onClick={() => onSelectPreview?.(entry.characterId)}>
                     <span className={cn('shrink-0 rounded border px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider', (KIND_COLOR as Record<string, string>)[entry.kind] ?? 'border-zinc-700 bg-zinc-800 text-zinc-400')}>
                       {entry.kind}
                     </span>
@@ -675,4 +691,51 @@ function toneForRange(timeline: Timeline | undefined, first: number, last: numbe
   if (kinds.has('label')) return 'label';
   if (frames.some((frame) => frame.special)) return 'other';
   return 'plain';
+}
+
+function MiniViewer({ doc, charId, assets }: { doc: SwfDocument; charId: number | null; assets?: import('../types').AssetBundle | null }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !charId) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const ch = doc.characters.get(charId);
+    if (!ch) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    const b = ch.bounds;
+    if (b) {
+      const pw = b.xMax - b.xMin;
+      const ph = b.yMax - b.yMin;
+      const scale = Math.min(w / (pw / 20), h / (ph / 20), 4);
+      const cx = w / 2 - ((b.xMin + b.xMax) / 2) / 20 * scale;
+      const cy = h / 2 - ((b.yMin + b.yMax) / 2) / 20 * scale;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(scale / 20, scale / 20);
+      ctx.fillStyle = ch.kind === 'shape' ? '#38bdf8' : ch.kind === 'graphic' ? '#a78bfa' : '#f59e0b';
+      ctx.fillRect(b.xMin, b.yMin, pw, ph);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(b.xMin, b.yMin, pw, ph);
+      ctx.fillStyle = '#fff';
+      ctx.font = '10px ui-sans-serif';
+      ctx.fillText(`${ch.kind} #${charId}`, b.xMin + 2, b.yMin + 10);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '12px ui-sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${ch.kind} #${charId}`, w / 2, h / 2);
+    }
+  }, [doc, charId, assets]);
+  return <canvas ref={canvasRef} className="h-full w-full" />;
 }
