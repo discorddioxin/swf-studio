@@ -4,7 +4,7 @@ import { cn } from '../utils/cn';
 
 export type ConsoleView = 'logs' | 'network' | 'problems';
 
-export function ExecutionConsole({ entries, onClear }: { entries: readonly LogEntry[]; onClear: () => void }) {
+export function ExecutionConsole({ entries, onClear, servers, rooms }: { entries: readonly LogEntry[]; onClear: () => void; servers?: { ip: string; port: number; name: string }[]; rooms?: { id: number; name: string }[] }) {
   const [view, setView] = useState<ConsoleView>('logs');
   const [errorsOnly, setErrorsOnly] = useState(false);
   const logs = entries.filter((entry) => entry.kind !== 'request' && entry.kind !== 'response');
@@ -63,6 +63,18 @@ export function ExecutionConsole({ entries, onClear }: { entries: readonly LogEn
       <div id="execution-console-panel" role="tabpanel" className="h-[calc(100%-2rem)] overflow-y-auto px-3 py-1.5 font-mono text-[10px] leading-relaxed">
         {view === 'logs' && (
           <>
+            {(servers && servers.length > 0) && (
+              <div className="mb-2 rounded bg-zinc-900/60 px-2 py-1.5 text-[10px] leading-relaxed text-zinc-400">
+                <span className="font-semibold text-violet-200">Servers:</span>{' '}
+                {servers.map((s) => `${s.name} (${s.ip}:${s.port})`).join(' · ')}
+              </div>
+            )}
+            {(rooms && rooms.length > 0) && (
+              <div className="mb-2 rounded bg-zinc-900/60 px-2 py-1.5 text-[10px] leading-relaxed text-zinc-400">
+                <span className="font-semibold text-amber-200">Rooms / Channels:</span>{' '}
+                {rooms.map((r) => r.name || `#${r.id}`).join(' · ')}
+              </div>
+            )}
             {!shownLogs.length && <p className="text-zinc-600">No logs yet. trace() output and runtime messages appear here.</p>}
             {shownLogs.map((entry, index) => <LogRow key={`${entry.time}-${index}`} entry={entry} />)}
           </>

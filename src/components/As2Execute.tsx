@@ -7,6 +7,7 @@ import type { AssetCache, SwfPackage } from '../lib/assets';
 import type { AssetBundle, Project, SwfDocument } from '../types';
 import { Button } from './ui';
 import { ExecutionConsole } from './ExecutionConsole';
+import { ServerListInspect } from './ServerListInspect';
 import { RunningTimelinesSidebar } from './RunningTimelinesSidebar';
 import { useExecutionDiagnostics } from './useExecutionDiagnostics';
 import type { LogEntry } from '../engine/flash/player';
@@ -234,10 +235,30 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
         ),
       gameServer: mockServer,
       onHelp: () => setInstructionsOpen(true),
-      afterStart: bootCode ? (root, p) => {
-        p.log('info', 'running boot script');
-        new Function('_root', 'player', '_global', bootCode)(root, p, as2Global);
-      } : undefined,
+      afterStart: (root, p) => {
+        if (bootCode) {
+          p.log('info', 'running boot script');
+          new Function('_root', 'player', '_global', bootCode)(root, p, as2Global);
+        }
+        try {
+          const list = (root as any)?.gsecs?.mc_ServerChooser?.serverListing_lt;
+          const mockServers = (gameServerRef.current as any)?.servers;
+          if (list && mockServers && mockServers.length) {
+            // Clear and add items via AS2 List API
+            if (typeof (list as any).removeAll === 'function') (list as any).removeAll();
+            mockServers.forEach((s: any) => {
+              const label = s.name || (s.ip + ':' + s.port);
+              if (typeof (list as any).addItem === 'function') {
+                (list as any).addItem(label);
+              }
+            });
+            if (typeof (list as any).refresh === 'function') (list as any).refresh();
+            p.log('info', `Server list injected: ${mockServers.length} servers into mc_ServerChooser`);
+          }
+        } catch (e) {
+          // silent
+        }
+      },
     });
     playerForLog = player;
     if (swfs.length) player.log('info', `external SWFs available: ${swfs.map((s) => s.name).join(', ')}`);
@@ -484,6 +505,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
           ) : (
             <Button variant="ghost" onClick={executePopout.open} title="Pop out Execute Engine to a separate window">↗ Pop out Execute</Button>
           )}
+          <ServerListInspect canvasRef={canvasRef} />
           <Button variant={panel === 'program' ? 'primary' : 'ghost'} onClick={() => setPanel((p) => (p === 'program' ? null : 'program'))}>
             Program{missing.length || b?.errors.length ? ' ⚠' : ''}
           </Button>
@@ -577,10 +599,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
         </div>
       )}
 
-      {panel === 'console' && !showDebugger && <ExecutionConsole entries={consoleEntries} onClear={() => {
-        setLogs([]);
-        pendingLogs.current = [];
-      }} />}
+      {panel === 'console' && !showDebugger && <ExecutionConsole entries={consoleEntries} onClear={() => { setLogs([]); pendingLogs.current = []; }} servers={gameServerRef.current?.servers} rooms={gameServerRef.current?.getRooms ? gameServerRef.current.getRooms() : undefined} />}
 
       {panel === 'program' && !showDebugger && (
         <div className="h-72 shrink-0 overflow-y-auto border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-300">
@@ -646,7 +665,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
       )}
       {panel === 'console' && showDebugger && (
         <div className="h-40 shrink-0 overflow-hidden border-t border-zinc-800">
-          <ExecutionConsole entries={consoleEntries} onClear={() => { setLogs([]); pendingLogs.current = []; }} />
+          <ExecutionConsole entries={consoleEntries} onClear={() => { setLogs([]); pendingLogs.current = []; }} servers={gameServerRef.current?.servers} rooms={gameServerRef.current?.getRooms ? gameServerRef.current.getRooms() : undefined} />
         </div>
       )}
       {panel === 'program' && showDebugger && (
