@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui';
 import { cn } from '../utils/cn';
-import { fetchBundledManifest, type BundledSwf } from '../lib/bundled';
+import { fetchGameIndex, type GameSet } from '../lib/bundled';
 import { collectSwfSources, type SwfSource } from '../lib/swfSources';
 
 interface FSEntry {
@@ -31,8 +31,8 @@ const selectCls =
 export function Loader({ onFiles, onBundled, busy, error }: {
   /** `mainKey` is the SwfSource.key the user picked as the main movie (null = the default) */
   onFiles: (files: File[], mainKey: string | null) => void;
-  /** `mainName` is the manifest `name` of the bundled SWF that plays the game */
-  onBundled?: (mainName: string | null) => void;
+  /** `gameId` is the bundled game set, `mainName` the SWF of it that plays the game */
+  onBundled?: (gameId: string | null, mainName: string | null) => void;
   busy?: string | null; error?: string | null;
 }) {
   const dirRef = useRef<HTMLInputElement>(null);
@@ -42,7 +42,8 @@ export function Loader({ onFiles, onBundled, busy, error }: {
   const [sources, setSources] = useState<SwfSource[]>([]);
   const [scanning, setScanning] = useState(false);
   const [mainKey, setMainKey] = useState<string | null>(null);
-  const [bundled, setBundled] = useState<BundledSwf[]>([]);
+  const [games, setGames] = useState<GameSet[]>([]);
+  const [gameId, setGameId] = useState<string | null>(null);
   const [bundledMain, setBundledMain] = useState<string | null>(null);
 
   const addToQueue = (files: File[]) => {
@@ -78,20 +79,27 @@ export function Loader({ onFiles, onBundled, busy, error }: {
     return () => { cancelled = true; };
   }, [queuedFiles]);
 
-  // The bundled set is fixed, so its drop-down is filled as soon as the Loader
-  // shows. A manifest that cannot be fetched is reported by the button itself.
+  // The bundled game sets are fixed, so the drop-downs are filled as soon as
+  // the Loader shows. An index that cannot be fetched is reported by the button.
   useEffect(() => {
     if (!onBundled) return;
     let cancelled = false;
-    fetchBundledManifest()
-      .then((entries) => {
+    fetchGameIndex()
+      .then((loaded) => {
         if (cancelled) return;
-        setBundled(entries);
-        setBundledMain((current) => current ?? entries[0]?.name ?? null);
+        setGames(loaded);
+        setGameId((current) => current ?? loaded[0]?.id ?? null);
       })
       .catch(() => { /* the button reports the failure */ });
     return () => { cancelled = true; };
   }, [onBundled]);
+
+  const game = games.find((g) => g.id === gameId) ?? games[0] ?? null;
+  useEffect(() => {
+    if (!game) return;
+    // the main SWF defaults to the set's declared main (not merely the first entry)
+    setBundledMain((current) => (current && game.swfs.some((e) => e.name === current) ? current : game.main ?? game.swfs[0]?.name ?? null));
+  }, [game]);
 
   const chosen = sources.find((s) => s.key === mainKey);
   const dependencies = sources.filter((s) => s !== chosen);
@@ -149,21 +157,31 @@ export function Loader({ onFiles, onBundled, busy, error }: {
                 <div className="mt-5 border-t border-zinc-800 pt-4">
                   <p className="text-xs text-zinc-500">…or play the game files bundled with this repo</p>
                   <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
-                    {bundled.length > 0 && (
+                    {games.length > 1 && (
+                      <select
+                        aria-label="Bundled game"
+                        className={selectCls}
+                        value={game?.id ?? ''}
+                        onChange={(event) => { setGameId(event.target.value); setBundledMain(null); }}
+                      >
+                        {games.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+                      </select>
+                    )}
+                    {!!game && (
                       <select
                         aria-label="Bundled main SWF"
                         className={selectCls}
                         value={bundledMain ?? ''}
                         onChange={(event) => setBundledMain(event.target.value)}
                       >
-                        {bundled.map((entry) => <option key={entry.name} value={entry.name}>{entry.name}</option>)}
+                        {game.swfs.map((entry) => <option key={entry.name} value={entry.name}>{entry.name}</option>)}
                       </select>
                     )}
-                    <Button variant="ghost" onClick={() => onBundled(bundledMain)} title="Parse the raw .swf binaries shipped with this repo — no upload needed">Use bundled SWFs</Button>
+                    <Button variant="ghost" onClick={() => onBundled(game?.id ?? null, bundledMain)} title="Parse the raw .swf binaries shipped with this repo — no upload needed">Use bundled SWFs</Button>
                   </div>
-                  {bundled.length > 0 && (
+                  {game && (
                     <p className="mt-1 text-[11px] text-zinc-600">
-                      The selected SWF plays the game; the other {bundled.length - 1} load as dependencies.
+                      {game.label}: the selected SWF plays the game; the other {game.swfs.length - 1} load as dependencies.
                     </p>
                   )}
                 </div>

@@ -3,14 +3,15 @@
 import { readFileSync } from 'node:fs';
 import { it } from 'vitest';
 import { parseSwfBinary } from '@/lib/swf/binary';
+import { SAMPLE_SWF_NAMES, sampleSwfPath } from '@/adapters/gaiaFishing/sample';
 
-const DIR = 'game-files/fish-full/swfs';
-const NAMES = ['bassken_game4.21', 'gsecs2.9', 'game_chat', 'bassken_overview', 'bassken_pier', 'bassken_scene', 'bassken_fish4.20'];
+// SWF names come from the game-set data (via the adapter sample module)
+const NAMES: readonly string[] = SAMPLE_SWF_NAMES;
 const NEEDLE = process.env.NEEDLE ?? 'serverListing_lt';
 
 it('finds a string in the action constant pools', async () => {
   for (const n of NAMES) {
-    const buf = readFileSync(`${DIR}/${n}.swf`);
+    const buf = readFileSync(sampleSwfPath(n));
     const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
     const { files } = await parseSwfBinary(ab, `${n}.swf`);
     const srcs = files.filter((f) => /\.as$/i.test(f.path));

@@ -12,7 +12,7 @@ import { GameEngine } from './components/GameEngine';
 import { Button } from './components/ui';
 import type { AssetCache, SwfPackage } from './lib/assets';
 import { buildPackage as buildPackageIn, loadUploadedPackages } from './lib/swfLoading';
-import { fetchBundledManifest, fetchBundledSwf } from './lib/bundled';
+import { fetchBundledSwf, fetchGameIndex, type GameSet } from './lib/bundled';
 import { useProject } from './lib/project';
 import type { AssetBundle, FlattenedSprite, SwfDocument } from './types';
 import { flattenSpriteToPng } from './lib/render';
@@ -92,6 +92,10 @@ export default function App() {
   const [audio, setAudio] = useState(false);
   const [startFrame, setStartFrame] = useState(1);
   const [workspace, setWorkspace] = useState<Workspace>('workbench');
+  /** bundled game set this session came from (null = a user upload) */
+  const [gameSetId, setGameSetId] = useState<string | null>(null);
+  /** game adapter for the Execute tab: 'auto' = detect from the loaded SWFs */
+  const [adapterId, setAdapterId] = useState<string>('auto');
   const [showLibrary, setShowLibrary] = useState(true);
   const [leftDockView, setLeftDockView] = useState<'library' | 'sprite-tree'>('library');
   const [showInspector, setShowInspector] = useState(false);
@@ -152,26 +156,45 @@ export default function App() {
       .toLowerCase()),
   ), []);
 
-  /** Fill in any of the bundled SWFs the current load does not already contain
-   *  (the game's externals). Fails soft: no manifest / offline dev server ⇒
-   *  the upload alone is used unchanged. */
-  const mergeBundledExternals = useCallback(async (loaded: SwfPackage[]): Promise<SwfPackage[]> => {
+  /** The bundled game set a load belongs to, if any: a set qualifies when it
+   *  shares at least one SWF name with what was loaded, so an unrelated game's
+   *  upload never inherits another game's bundled movies. */
+  const matchingGameSet = useCallback((loaded: SwfPackage[], games: GameSet[]): GameSet | null => {
+    const have = packageLabels(loaded);
+    let best: GameSet | null = null;
+    let bestHits = 0;
+    for (const game of games) {
+      const hits = game.swfs.filter((entry) => have.has(entry.name.toLowerCase())).length;
+      if (hits > bestHits) { best = game; bestHits = hits; }
+    }
+    return best;
+  }, [packageLabels]);
+
+  /**
+   * Fill in the SWFs of the *matching* game set that the current load does not
+   * already contain (an upload that carries the game's main movie but not all
+   * of its externals). Fails soft: no index / offline dev server ⇒ the upload
+   * alone is used unchanged. Never adds another game's movies.
+   */
+  const mergeBundledExternals = useCallback(async (loaded: SwfPackage[]): Promise<{ packages: SwfPackage[]; gameSetId: string | null }> => {
     const merged = [...loaded];
     try {
-      const entries = await fetchBundledManifest();
+      const games = await fetchGameIndex();
+      const game = matchingGameSet(loaded, games);
+      if (!game) return { packages: loaded, gameSetId: null };
       const have = packageLabels(loaded);
-      for (const entry of entries) {
+      for (const entry of game.swfs) {
         if (have.has(entry.name.toLowerCase())) continue;
         const { doc, files } = await fetchBundledSwf(entry);
         merged.push(await buildPackage(files, doc));
       }
-      return merged;
+      return { packages: merged, gameSetId: game.id };
     } catch (e) {
       merged.slice(loaded.length).forEach((p) => p.cache.dispose());
       console.warn('bundled externals unavailable:', e);
-      return loaded;
+      return { packages: loaded, gameSetId: null };
     }
-  }, [buildPackage, packageLabels]);
+  }, [buildPackage, matchingGameSet, packageLabels]);
 
   /**
    * Load an upload. Every `.swf` (raw binary) and every `.xml` (FFDec export)
@@ -189,7 +212,9 @@ export default function App() {
         onChange: () => setTick((t) => t + 1),
       });
       setBusy('Merging bundled externals…');
-      installPackages(await mergeBundledExternals(loaded));
+      const { packages: complete, gameSetId: setId } = await mergeBundledExternals(loaded);
+      setGameSetId(setId);
+      installPackages(complete);
     } catch (e) {
       setBusy(null);
       setError(e instanceof Error ? e.message : String(e));
@@ -197,23 +222,28 @@ export default function App() {
   }, [installPackages, mergeBundledExternals]);
 
   /** The Loader's "Use bundled SWFs" button: parse the raw .swf binaries that
-   *  ship with the repo. `mainName` picks which of them plays the game (the
-   *  others become dependencies); the default is the first manifest entry. */
-  const loadBundled = useCallback(async (mainName?: string | null) => {
+   *  ship with the repo. `gameId` picks the bundled game set, `mainName` which
+   *  of its SWFs plays the game (the others become dependencies). */
+  const loadBundled = useCallback(async (gameId: string | null, mainName?: string | null) => {
     setError(null);
-    setBusy('Fetching bundled SWF manifest…');
+    setBusy('Fetching bundled games…');
     const loaded: SwfPackage[] = [];
     try {
-      const entries = await fetchBundledManifest();
-      const ordered = mainName
-        ? [...entries].sort((a, b) => (a.name === mainName ? -1 : b.name === mainName ? 1 : 0))
+      const games = await fetchGameIndex();
+      const game = games.find((g) => g.id === gameId) ?? games[0];
+      if (!game) throw new Error('No bundled game sets are available.');
+      const entries = game.swfs;
+      const preferred = mainName ?? game.main ?? null;
+      const ordered = preferred
+        ? [...entries].sort((a, b) => (a.name === preferred ? -1 : b.name === preferred ? 1 : 0))
         : entries;
       for (let i = 0; i < ordered.length; i++) {
         const entry = ordered[i];
-        setBusy(`Loading bundled SWF ${i + 1}/${ordered.length}: ${entry.name}${entry.name === mainName ? ' (main)' : ''}…`);
+        setBusy(`Loading bundled SWF ${i + 1}/${ordered.length}: ${entry.name}${entry.name === preferred ? ' (main)' : ''}…`);
         const { doc, files } = await fetchBundledSwf(entry);
         loaded.push(await buildPackage(files, doc));
       }
+      setGameSetId(game.id);
       installPackages(loaded);
     } catch (e) {
       loaded.forEach((p) => p.cache.dispose());
@@ -469,7 +499,16 @@ export default function App() {
 
       <ErrorBoundary label={WORKSPACE_LABEL[workspace]} resetKeys={[doc, workspace]} className="flex min-h-0 flex-1 items-center justify-center p-4">
       {workspace === 'execute' ? (
-        <ExecuteTab doc={doc} cache={cache} assets={assets} project={api.project} externals={externalPackages} />
+        <ExecuteTab
+          doc={doc}
+          cache={cache}
+          assets={assets}
+          project={api.project}
+          externals={externalPackages}
+          gameSetId={gameSetId}
+          adapterId={adapterId}
+          onAdapterChange={setAdapterId}
+        />
       ) : workspace === 'engine' ? (
         <GameEngine
           doc={doc}

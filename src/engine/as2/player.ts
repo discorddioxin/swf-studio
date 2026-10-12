@@ -132,6 +132,16 @@ export class DisplayNode {
   comps: Components | null = null;
   ct: ColorTransform | undefined;
   visible = true;
+  /**
+   * Who last wrote `visible`. `'swf'` means the value is still the one the
+   * instance was created with — Flash cannot hide a placement in the SWF
+   * itself, so an invisible `'swf'` node means the *engine* hid it (a bug), not
+   * the movie. `'script'` means the movie's own ActionScript assigned
+   * `_visible`, which is a deliberate state (a loading bar that is done, a
+   * hover skin, a `setMask()` mask): the troubleshooter reports those as state
+   * instead of as problems.
+   */
+  visibleSource: 'swf' | 'script' = 'swf';
   clipDepth = 0;
   ratio = 0;
   timeline: Timeline | null = null;
@@ -206,8 +216,19 @@ export interface AS2PlayerOptions {
   /** Scripts to run on _root right after the first frame (e.g. automation / guest login). */
   afterStart?: (root: any, player: AS2Player) => void;
   /** Show built-in offline help when a SWF requests its online help page. */
-  onHelp?: () => void;
-  /** In-process stand-in for the game's XMLSocket server. See `gameServerStub.ts`. */
+  /**
+   * Called for every external URL the movie opens (`getURL`). Return `true`
+   * when the app handled it (e.g. an adapter's offline help panel); returning
+   * `false`/omitting it falls back to the engine's default log + block.
+   */
+  onExternalUrl?: (url: string) => boolean;
+  /**
+   * Asset URLs the current adapter expects to be absent offline (dynamic CDN
+   * avatars, live photo strips). They are skipped without a missing-external
+   * warning; everything else is reported as before.
+   */
+  isOptionalExternal?: (url: string) => boolean;
+  /** In-process stand-in for the game's XMLSocket server. Supplied by an adapter. */
   gameServer?: GameServerBackend | null;
 }
 
@@ -223,7 +244,11 @@ export interface GameSocket {
   dispose?(): void;
 }
 
-/** Offline game server (the Gaia "Sushi" protocol). */
+/**
+ * Offline stand-in for a game's persistent socket server (`XMLSocket`).
+ * A game adapter supplies one (see src/adapters); the engine only speaks the
+ * generic connect/send/close contract and knows no protocol.
+ */
 export interface GameServerBackend {
   connect(host: string, port: number, socket: GameSocket, log: (level: LogLevel, message: string) => void, onNetwork?: NetworkObserver): void;
   send(socket: GameSocket, data: string): void;
@@ -297,7 +322,7 @@ export class AS2Player {
     this._host = this.host();
     RT.installHost(this._host);
     this.builtins = installBuiltins(this);
-    // AS2 classes live on _global (e.g. _global.com.rawfishsoftware.sushi.SushiAPI)
+    // AS2 classes live on _global (e.g. _global.com.example.api.Client)
     for (const [name, cls] of Object.entries(opts.program?.classes ?? {})) RT.$rt.registerClass(name, cls);
 
     // _level0
@@ -1161,7 +1186,11 @@ export class AS2Player {
   mouseTarget(x: number, y: number): DisplayNode | null {
     const visit = (n: DisplayNode): DisplayNode | null => {
       if (n.removed || !n.visible) return null;
-      if (n !== this.root && this.isMouseTarget(n)) return this.hitTestPoint(n, x, y, true, true) ? n : null;
+      // Ruffle's `mouse_pick_avm1`: a clip in button mode first tests its own
+      // shape, and only then descends into its children front-to-back, so a
+      // click on a child button still lands when the parent's own shape misses
+      // that pixel (an interactive container must not swallow its children).
+      if (n !== this.root && this.isMouseTarget(n) && this.hitTestPoint(n, x, y, true, true)) return n;
       if (n.kind === 'text' && n.text?.input && this.hitTestPoint(n, x, y, false)) return n;
       for (let i = n.children.length - 1; i >= 0; i--) {
         const c = n.children[i];
@@ -1333,13 +1362,10 @@ export class AS2Player {
       clearInterval: (id) => p.clearTimer(id),
       getURL: (url, win) => {
         if (/^javascript:/i.test(url)) { p.log('info', `getURL(${url}) ignored`); return; }
-        // The bundled game's Instructions action points to an online help page.
-        // Keep it usable offline without opening external tabs or making requests.
-        if (/\/info\/help\.php(?:\?|$)/i.test(url)) {
-          p.log('info', 'opened built-in offline fishing instructions');
-          p.opts.onHelp?.();
-          return;
-        }
+        // The app decides what to do with URLs it knows (adapter-supplied help
+        // panels, offline docs). Everything else stays blocked: no external
+        // navigation from the offline player.
+        if (p.opts.onExternalUrl?.(url)) return;
         if (/^(?:https?:)?\/\//i.test(url)) {
           p.log('warn', `blocked external navigation in offline mode: ${url}`);
           return;

@@ -2,11 +2,12 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { it } from 'vitest';
 import { parseSwfBinary } from '@/lib/swf/binary';
+import { SAMPLE_MAIN, sampleSwfPath } from '@/adapters/gaiaFishing/sample';
 
 it('dumps shape assets', async () => {
-  const buf = readFileSync('game-files/fish-full/swfs/bassken_game4.21.swf');
+  const buf = readFileSync(sampleSwfPath(SAMPLE_MAIN));
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
-  const { files, doc } = await parseSwfBinary(ab, 'bassken_game4.21.swf');
+  const { files, doc } = await parseSwfBinary(ab, `${SAMPLE_MAIN}.swf`);
   const byCat: Record<string, number> = {};
   for (const f of files) byCat[f.category] = (byCat[f.category] ?? 0) + 1;
   console.log('files by category:', JSON.stringify(byCat));

@@ -2,8 +2,8 @@
 //
 // An upload can mix two shapes of the same thing:
 //
-//   game/bassken_game4.21.swf           a raw SWF binary (parseSwfBinary)
-//   game/bassken_game4.21.xml           a JPEXS/FFDec XML export (parseSwfXml)
+//   game/main.swf                      a raw SWF binary (parseSwfBinary)
+//   game/main.xml                      a JPEXS/FFDec XML export (parseSwfXml)
 //   game/external/scene/scene.swf       a SWF the game loads at run time
 //
 // Every `.swf` / `.xml` in the selection becomes a SwfSource. The user then
@@ -24,9 +24,9 @@ export type SwfSourceKind = 'binary' | 'xml';
 export interface SwfSource {
   /** identity inside the selection: the file's path ("folder/name.ext") */
   key: string;
-  /** basename without extension, e.g. "bassken_scene" */
+  /** basename without extension, e.g. "scene" */
   stem: string;
-  /** basename with extension, e.g. "bassken_scene.swf" */
+  /** basename with extension, e.g. "scene.swf" */
   fileName: string;
   kind: SwfSourceKind;
   /** folder of the file inside the selection ("" = selection root) */

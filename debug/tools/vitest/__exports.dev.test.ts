@@ -3,10 +3,11 @@
 import { readFileSync } from 'node:fs';
 import { it } from 'vitest';
 import { parseSwfBinary } from '@/lib/swf/binary';
+import { SAMPLE_SERVICE, sampleSwfPath } from '@/adapters/gaiaFishing/sample';
 
 it('lists exports', async () => {
-  const name = process.env.SWF ?? 'gsecs2.9';
-  const buf = readFileSync(`game-files/fish-full/swfs/${name}.swf`);
+  const name = process.env.SWF ?? SAMPLE_SERVICE;
+  const buf = readFileSync(sampleSwfPath(name));
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   const { doc } = await parseSwfBinary(ab, `${name}.swf`);
   const ex = [...doc.characters.values()].filter((c) => c.exportName);

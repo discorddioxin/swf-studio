@@ -9,8 +9,9 @@ import { inflateSync } from 'node:zlib';
 import { parseSwfXml } from '../parser';
 import { parseSwfBinary } from './binary';
 import { xmlToSwf } from '../../../tools/xml2swf/xml2swf.mjs';
+import { bundledExportedNames, bundledExternalDir } from '../__tests__/bundledSet';
 
-const EXTERNAL = resolve(__dirname, '../../../game-files/fish-full/external');
+const EXTERNAL = bundledExternalDir();
 
 interface Decoded { w: number; h: number; rgba: Uint8Array }
 
@@ -95,14 +96,17 @@ function oraclePng(dir: string, id: number): Buffer | null {
 }
 
 describe('lossless images vs FFDec oracle', () => {
-  for (const name of ['bassken_fish4.20', 'gsecs2.9']) {
+  /** movies that actually carry lossless bitmaps (asserted below) */
+  const verified: string[] = [];
+  for (const name of bundledExportedNames()) {
     it(`${name}: decoded PNGs match the committed exports pixel-for-pixel`, async () => {
       const xml = readFileSync(resolve(EXTERNAL, name, `${name}.xml`), 'utf8');
       const xmlDoc = parseSwfXml(xml, { fileName: `${name}.xml` });
       const losslessIds = [...xmlDoc.characters.values()]
         .filter((c: any) => /DefineBitsLossless2?Tag/.test(c.tagType ?? ''))
         .map((c: any) => c.id);
-      expect(losslessIds.length).toBeGreaterThan(0);
+      if (!losslessIds.length) return; // this movie has no lossless bitmaps
+      verified.push(name);
 
       const bytes = xmlToSwf(xml);
       const { files } = await parseSwfBinary(bytes.slice().buffer as ArrayBuffer, `${name}.xml`);
@@ -130,4 +134,8 @@ describe('lossless images vs FFDec oracle', () => {
       }
     }, 30000);
   }
+
+  it('checked at least one movie with lossless bitmaps', () => {
+    expect(verified.length).toBeGreaterThan(0);
+  });
 });

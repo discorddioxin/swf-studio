@@ -82,6 +82,7 @@ export function installBuiltins(p: AS2Player): BuiltinState {
       matrix: node.matrix, ct: node.ct, handlers: node.handlers.filter((h) => h.kind === 'onClipEvent' || h.kind === 'on'), initObject: init ?? null,
     });
     dup.visible = node.visible;
+    dup.visibleSource = node.visibleSource;
     if (node.drawing) dup.drawing = [...node.drawing];
     p.runQueue();
     return dup;
@@ -142,13 +143,11 @@ export function installBuiltins(p: AS2Player): BuiltinState {
           p.runQueue();
           return;
         }
-        // Optional Gaia dynamic member avatar strips (`a2.cdn.gaiaonline.com/gaia/members/*.swf`)
-        // and moderator report-abuse overlays (`avatar_reporting*.swf`) are not bundled SWFs;
-        // keep the built-in avatar silhouette clip intact without reporting a missing external SWF.
-        if (
-          /gaiaonline\.com\/gaia\/members\//i.test(u) ||
-          /(^|[\\/])avatar(_reporting(_low)?)?\.swf(\?|$)/i.test(u)
-        ) {
+        // URLs the active adapter expects to be absent offline (dynamic CDN
+        // avatars and similar live assets) keep the clip's built-in artwork
+        // without reporting a missing external SWF. Everything else is real.
+        if (p.opts.isOptionalExternal?.(u)) {
+          p.log('info', `loadMovie("${u}"): optional asset, not bundled`);
           return;
         }
         if ((p.opts.missingExternal ?? 'empty') === 'error') {
@@ -192,6 +191,22 @@ export function installBuiltins(p: AS2Player): BuiltinState {
       // Object.registerClass in its init actions registers into the loaded SWF's own library
       const prev = RT.setLinkageScope(p.linkageScope(movie));
       try {
+        // The SWF's DoInitAction tags run when the movie is loaded (same as `start()`
+        // does for the main movie). They are what binds library symbols to their
+        // classes — e.g. `Object.registerClass("RectBorder", mx.skins.halo.RectBorder)`
+        // in an MX component movie. Skipping them leaves every skin/subelement a
+        // plain MovieClip, which collapses MX layouts (a List then keeps its white
+        // border and never creates a single row).
+        if (prog.initActions?.length) {
+          for (const action of [...prog.initActions].sort((a, b) => a.order - b.order)) {
+            const label = action.targetSpriteId != null
+              ? `init action of sprite ${action.targetSpriteId} (${url})`
+              : action.linkageName
+                ? `init action "${action.linkageName}" (${url})`
+                : `init action (${url})`;
+            p.guard(label, () => action.run.call(node.obj));
+          }
+        }
         for (const [n, fn] of Object.entries(prog.initByName ?? {})) p.guard(`init action "${n}" (${url})`, () => fn.call(node.obj));
         for (const [id, mod] of Object.entries(prog.timelines)) if (mod.init) p.guard(`init action ${id} (${url})`, () => mod.init!.call(node.obj));
       } finally {
@@ -282,7 +297,17 @@ export function installBuiltins(p: AS2Player): BuiltinState {
       get(this: any) { const n = N(this); return n?.ct ? n.ct.am * 100 : 100; },
       set(this: any, v: any) { const n = N(this); if (!n || !Number.isFinite(+v)) return; n.ct = { ...(n.ct ?? { rm: 1, gm: 1, bm: 1, am: 1, ra: 0, ga: 0, ba: 0, aa: 0 }), am: +v / 100 }; n.scriptMoved = true; },
     },
-    _visible: { get(this: any) { return N(this)?.visible ?? true; }, set(this: any, v: any) { const n = N(this); if (n) n.visible = !!v && v !== 'false' && v !== 0; } },
+    _visible: {
+      get(this: any) { return N(this)?.visible ?? true; },
+      set(this: any, v: any) {
+        const n = N(this);
+        if (!n) return;
+        n.visible = !!v && v !== 'false' && v !== 0;
+        // The movie's own script decided this; the troubleshooter uses it to
+        // tell "the game is in another state" apart from "the engine hid it".
+        n.visibleSource = 'script';
+      },
+    },
     _width: {
       get(this: any) { const n = N(this); const b = n ? p.boundsIn(n, n.parent) : null; return b ? px(b.xMax - b.xMin) : 0; },
       set(this: any, v: any) {

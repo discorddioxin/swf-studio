@@ -75,14 +75,37 @@ function actionKey(frames: { events: { kind: string }[] }[]): string {
   return frames.map(f => f.events.filter(e => e.kind === 'action').length).join(',');
 }
 
-export function proposeActors(doc: SwfDocument): ActorProposal[] {
-  // library SWFs: no actors (mx kit / omniture service)
-  const file = doc.header.fileName || '';
-  if (/gsecs|game_chat|omniture/i.test(file) || (doc.timelines.size > 20 && [...doc.timelines.values()].filter(t=>t.kind==='sprite').length > 15)) {
-    // also veto if >60% of sprites are 1-frame with mx exportName
-    const mxCount = [...doc.characters.values()].filter(c=> (c.exportName||'').includes('mx.') || (c.exportName||'').includes('__Packages.mx')).length;
-    if (mxCount > 8 || /gsecs|game_chat/i.test(file)) return [];
+/**
+ * Linked MX / `__Packages` symbols — the mark of a component kit rather than
+ * game art. Counted from `exportName`, the linkage a component kit's symbols
+ * carry in the SWF (class names alone are not a signal: a game movie can embed
+ * MX skins without being a kit).
+ */
+function linkedMxSymbols(doc: SwfDocument): number {
+  let count = 0;
+  for (const c of doc.characters.values()) {
+    const link = c.exportName || '';
+    if (link.includes('mx.') || link.includes('__Packages.mx')) count++;
   }
+  return count;
+}
+
+/**
+ * A library/service movie: a component kit or tracking helper that carries no
+ * game art, so no actors are proposed for it. Decided from the document itself
+ * — a big, sprite-heavy timeline set whose symbols are mostly linked MX classes
+ * — so no game's file names need to be known. In the bundled sample this picks
+ * out the two component/service movies (147 and 107 sprites, 46 and 39 linked
+ * MX symbols); the game movies carry none and keep their actor proposals.
+ */
+export function isLibraryMovie(doc: SwfDocument): boolean {
+  if (doc.timelines.size <= 20 || spriteTimelines(doc).length <= 15) return false;
+  return linkedMxSymbols(doc) > 8;
+}
+
+export function proposeActors(doc: SwfDocument): ActorProposal[] {
+  // library/service SWFs (component kit, tracking helper): no actors
+  if (isLibraryMovie(doc)) return [];
   const fanIn = computeFanIn(doc);
   const linkage = computeLinkage(doc);
   const labelSets = computeLabelSets(doc);

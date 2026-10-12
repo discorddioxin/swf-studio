@@ -230,22 +230,28 @@ describe('AS2 player', () => {
     expect(root.startButton).toBeUndefined();
   });
 
-  it('routes online help to the offline guide and blocks external navigation', () => {
-    const onHelp = vi.fn();
+  it('hands known URLs to the app and blocks every other external navigation', () => {
+    const handled: string[] = [];
     const logs: string[] = [];
     const player = new AS2Player({
       doc: parseSwfXml(XML, { fileName: 'fixture.xml' }),
       program: null,
-      onHelp,
+      // the app (not the engine) owns the URL policy — here an adapter's help page
+      onExternalUrl: (url) => {
+        if (!/\/info\/help\.php(?:[?&]|$)/i.test(url)) return false;
+        logs.push('info: opened the offline guide');
+        handled.push(url);
+        return true;
+      },
       onLog: (entry) => logs.push(`${entry.level}: ${entry.message}`),
     });
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
 
     currentHost()?.getURL('http://example.invalid/info/help.php?view=category&id=23', '_blank');
-    expect(onHelp).toHaveBeenCalledOnce();
+    expect(handled).toHaveLength(1);
     currentHost()?.getURL('https://example.invalid/external', '_blank');
     expect(open).not.toHaveBeenCalled();
-    expect(logs).toContain('info: opened built-in offline fishing instructions');
+    expect(logs).toContain('info: opened the offline guide');
     expect(logs).toContain('warn: blocked external navigation in offline mode: https://example.invalid/external');
 
     open.mockRestore();

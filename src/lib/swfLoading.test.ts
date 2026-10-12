@@ -8,8 +8,8 @@ import { resolve } from 'node:path';
 import JSZip from 'jszip';
 import { loadUploadedPackages } from './swfLoading';
 import { isAs2Bundle } from '../components/As2Execute';
+import { bundledExportDir, bundledExportedNames, bundledMainName, bundledSwfFile, bundledSwfNames } from './__tests__/bundledSet';
 
-const ROOT = resolve(__dirname, '../../game-files');
 
 // jsdom's Blob has no text()/arrayBuffer(); browsers do.
 beforeAll(() => {
@@ -31,7 +31,7 @@ beforeAll(() => {
 });
 
 function binarySwf(name: string, path = name): File {
-  const bytes = readFileSync(resolve(ROOT, 'fish-full/swfs', `${name}.swf`));
+  const bytes = readFileSync(bundledSwfFile(name));
   const file = new File(
     [bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer],
     `${name}.swf`,
@@ -41,7 +41,7 @@ function binarySwf(name: string, path = name): File {
 }
 
 function xmlExport(name: string, path = `${name}/${name}.xml`): File {
-  const text = readFileSync(resolve(ROOT, 'fish-full/external', name, `${name}.xml`), 'utf8');
+  const text = readFileSync(resolve(bundledExportDir(name), `${name}.xml`), 'utf8');
   const file = new File([text], `${name}.xml`);
   Object.defineProperty(file, 'webkitRelativePath', { value: path, configurable: true });
   return file;
@@ -51,8 +51,9 @@ const names = (packages: { doc: { header: { fileName: string } } }[]) => package
 
 describe('uploading SWFs', () => {
   it('parses a raw .swf into a package the workbench can open', async () => {
-    const [pkg] = await loadUploadedPackages([binarySwf('bassken_overview', 'bassken_overview.swf')]);
-    expect(pkg.doc.header.fileName).toBe('bassken_overview.swf');
+    const movie = bundledSwfNames()[1];
+    const [pkg] = await loadUploadedPackages([binarySwf(movie, `${movie}.swf`)]);
+    expect(pkg.doc.header.fileName).toBe(`${movie}.swf`);
     expect(Number(pkg.doc.header.version)).toBeGreaterThan(0);
     expect(pkg.doc.timelines.size).toBeGreaterThan(0);
     // the binary parser synthesizes the ActionScript export the Execute tab needs
@@ -63,36 +64,38 @@ describe('uploading SWFs', () => {
   }, 30000);
 
   it('uses the picked SWF as the main movie and the others as dependencies', async () => {
+    const [first, second] = bundledSwfNames().slice(1);
     const files = [
-      binarySwf('bassken_scene', 'external/bassken_scene/bassken_scene.swf'),
-      binarySwf('bassken_overview', 'bassken_overview.swf'),
+      binarySwf(second, `external/${second}/${second}.swf`),
+      binarySwf(first, `${first}.swf`),
     ];
     const byDefault = await loadUploadedPackages(files);
-    expect(names(byDefault)).toEqual(['bassken_overview.swf', 'bassken_scene.swf']);
+    expect(names(byDefault)).toEqual([`${first}.swf`, `${second}.swf`]);
 
-    const picked = await loadUploadedPackages(files, 'external/bassken_scene/bassken_scene.swf');
-    expect(names(picked)).toEqual(['bassken_scene.swf', 'bassken_overview.swf']);
+    const picked = await loadUploadedPackages(files, `external/${second}/${second}.swf`);
+    expect(names(picked)).toEqual([`${second}.swf`, `${first}.swf`]);
     picked.forEach((pkg) => pkg.cache.dispose());
     byDefault.forEach((pkg) => pkg.cache.dispose());
   }, 30000);
 
   it('reads the same movie from the XML export when both forms are uploaded', async () => {
-    const both = [xmlExport('bassken_scene', 'scene/bassken_scene.xml'), binarySwf('bassken_scene', 'scene/bassken_scene.swf')];
+    const scene = bundledExportedNames()[0];
+    const both = [xmlExport(scene, `scene/${scene}.xml`), binarySwf(scene, `scene/${scene}.swf`)];
     const preferred = await loadUploadedPackages(both);
     expect(preferred).toHaveLength(1);
-    expect(preferred[0].bundle.xmlName).toBe('bassken_scene.xml');
+    expect(preferred[0].bundle.xmlName).toBe(`${scene}.xml`);
 
-    const explicit = await loadUploadedPackages(both, 'scene/bassken_scene.swf');
+    const explicit = await loadUploadedPackages(both, `scene/${scene}.swf`);
     expect(explicit).toHaveLength(1);
     expect(explicit[0].bundle.xmlName).toBe('');
-    expect(explicit[0].doc.header.fileName).toBe('bassken_scene.swf');
+    expect(explicit[0].doc.header.fileName).toBe(`${scene}.swf`);
     preferred.concat(explicit).forEach((pkg) => pkg.cache.dispose());
   }, 30000);
 
   it('loads SWFs out of a ZIP and finds them before unpacking', async () => {
     const zip = new JSZip();
-    zip.file('game/main.swf', readFileSync(resolve(ROOT, 'fish-full/swfs/bassken_overview.swf')));
-    zip.file('game/external/scene/scene.swf', readFileSync(resolve(ROOT, 'fish-full/swfs/bassken_scene.swf')));
+    zip.file('game/main.swf', readFileSync(bundledSwfFile(bundledMainName())));
+    zip.file('game/external/scene/scene.swf', readFileSync(bundledSwfFile(bundledSwfNames()[1])));
     zip.file('game/readme.txt', 'not a swf');
     const archive = new File([await zip.generateAsync({ type: 'blob' })], 'game.zip');
 

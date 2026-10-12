@@ -2,27 +2,36 @@
 
 Everything in here is **developer-only**: it never ships with the app (Vite only
 builds `src/` + `game-files/`, and the Vitest include reaches into `debug/` on
-purpose). It exists to answer "why does the Execute tab not look like the real
+purpose). Tooling that is specific to one bundled game lives with that game's
+adapter (`src/adapters/<game>/tools/`); what stays in `debug/` is game-agnostic
+or takes the SWF to inspect as an argument. It exists to answer "why does the Execute tab not look like the real
 game?" — comparing our AS2 player against the SWF bytecode, against the FFDec
 export, and against a real reference player.
 
 Run every command from the **repository root**.
 
-## `tools/ruffle-oracle/` — puppeteer harness (the main tool)
+## `src/adapters/<game>/tools/ruffle-oracle/` — puppeteer harness (the main tool)
 
 Drives the real app in headless Chromium so the live AS2 player can be inspected
 and screenshotted. Needs Chromium + its shared libraries (see "Booting the
-browser" below), plus `npm i` inside this folder for `puppeteer-core`,
+browser" below), plus `npm i` inside that folder for `puppeteer-core`,
 `swf-parser`, `@ruffle-rs/ruffle`, `@sparticuz/chromium`.
+
+The harness ships with the **sample game's adapter** (currently
+`src/adapters/gaiaFishing/tools/ruffle-oracle/`) because its probes select that
+game's bundled movies in the UI and read their display list by name. Game facts
+(the main movie, the set's SWF names, the export folders) come from the adapter's
+`sample.ts`; the generic dumpers in `tools/vitest/` below take `SWF=` and work
+for any bundled set.
 
 | script | what it does |
 | --- | --- |
 | `browser.dev.mjs` | shared `launch()` (puppeteer-core, `pipe: true`). Every other script imports it; `$CHROME` / `$CHROME_LIBS` override the binary and libs. |
 | `probe-app.dev.mjs` | boots the app, picks the start mode, dumps player state + a screenshot. |
 | `probe-chooser.dev.mjs` | inspects the server-chooser `List` subtree (sizes, `getViewMetrics`, rows, prototype chains) — the "servers do not show up" investigation. |
-| `avm1-display.dev.mjs` | Puppeteer smoke-check of the Code Editor's AVM1 disassembly/raw-bytecode toggle using the bundled `OmnitureActionSource.swf`; blocks non-local requests and screenshots both views. |
-| `execute-console.dev.mjs [outDir]` | Checks Execute Logs/Req-Res/Problems tabs and asserts the removed Actions report tab stays absent while using bundled fish SWFs; blocks non-local requests. |
-| `execute-timelines.dev.mjs [outDir]` | Visually checks live frame/playhead updates, global pause, and silent AVM1 `ActionStop` execution with a bundled fish SWF; blocks non-local requests. |
+| `avm1-display.dev.mjs` | Puppeteer smoke-check of the Code Editor's AVM1 disassembly/raw-bytecode toggle using a bundled sample SWF (the set's analytics helper); blocks non-local requests and screenshots both views. |
+| `execute-console.dev.mjs [outDir]` | Checks Execute Logs/Req-Res/Problems tabs and asserts the removed Actions report tab stays absent while using the bundled sample SWFs; blocks non-local requests. |
+| `execute-timelines.dev.mjs [outDir]` | Visually checks live frame/playhead updates, global pause, and silent AVM1 `ActionStop` execution with a bundled sample SWF; blocks non-local requests. |
 | `probe-shapes.dev.mjs` / `shapes-dev.mjs` | shape/fill dumps as rendered by our player. |
 | `flow.dev.mjs [outDir]` | walks server select → room select → in-game, screenshotting each step (`/tmp/flow`). |
 | `join-guard.dev.mjs [outDir]` | checks that Join is disabled before a server selection, then verifies server selection, room entry and back navigation; blocks non-local requests and screenshots each state. |
@@ -42,7 +51,7 @@ Booting the browser (the sandbox has no Chrome):
 export CHROME=/tmp/chromium/chrome
 export CHROME_LIBS=/tmp/al2023/lib
 export LD_LIBRARY_PATH=$CHROME_LIBS
-node debug/tools/ruffle-oracle/probe-chooser.dev.mjs
+node src/adapters/gaiaFishing/tools/ruffle-oracle/probe-chooser.dev.mjs
 ```
 
 Notes:
@@ -57,8 +66,8 @@ Notes:
 Prints tags/action streams straight from the binary, without FFDec:
 
 ```sh
-node debug/tools/swf-dump/dump.mjs game-files/fish-full/swfs/gsecs2.9.swf all
-node debug/tools/swf-dump/dump.mjs game-files/fish-full/swfs/gsecs2.9.swf all --grep addProperty
+node debug/tools/swf-dump/dump.mjs game-files/<set>/swfs/<name>.swf all
+node debug/tools/swf-dump/dump.mjs game-files/<set>/swfs/<name>.swf all --grep addProperty
 ```
 
 ## `*.dev.mjs` — one-off binary/XML inspectors
@@ -70,7 +79,7 @@ node debug/tools/swf-dump/dump.mjs game-files/fish-full/swfs/gsecs2.9.swf all --
 | `tagcmp.dev.mjs` | diffs the tags of two SWFs (XML vs. our own writer). |
 | `txtdump.dev.mjs`, `etdump.dev.mjs` | dump `DefineText`/`DefineEditText` records by character id. |
 
-Usage for the id-based ones: `node debug/tools/txtdump.dev.mjs gsecs2.9 42`.
+Usage for the id-based ones: `node debug/tools/txtdump.dev.mjs <swf name> <character id>`.
 
 ## `tools/vitest/*.dev.test.ts` — in-process dumpers
 
@@ -80,12 +89,17 @@ as part of `npm test`).
 
 | test | what it dumps |
 | --- | --- |
-| `__exports.dev.test.ts` | exports/linkage ids of a SWF (`SWF=gsecs2.9 npm run test:debug`). |
+| `__exports.dev.test.ts` | exports/linkage ids of a SWF (`SWF=<name> npm run test:debug`). |
 | `__modules.dev.test.ts` | the generated AS2 modules for a SWF. |
 | `__listcode.dev.test.ts` | the AS2 source behind a specific clip/frame. |
 | `__place.dev.test.ts` | placement ops of a frame (depth/charId/matrix). |
 | `__findStr.dev.test.ts` | searches all bundled SWFs for a string (e.g. a URL or a linkage id). |
 | `__peek.dev.test.ts` | prints the transpiled TypeScript of one FFDec `.as` file. |
 | `__dumpShapes.dev.test.ts`, `__shapeAudit.dev.test.ts` | shape/fill inventory across the bundled SWFs. |
-| `avm1-action-audit.dev.test.ts` | extracts and hashes every bundled fish SWF `avm1Actions` payload, retains per-SWF tag paths, and writes a static bytecode report under `debug/tools/e2e-output/avm1-action-audit/`. |
+| `avm1-action-audit.dev.test.ts` | extracts and hashes every bundled sample SWF's `avm1Actions` payload, retains per-SWF tag paths, and writes a static bytecode report under `debug/tools/e2e-output/avm1-action-audit/`. |
 | `__placeframe.dev.mjs` | standalone helper for the frame-placement dump. |
+
+Scenario tests that boot the bundled game through its own adapter are **not** here —
+they live with the adapter (`src/adapters/<game>/__tests__/`), e.g. the full
+login → server → room flow and the room-chooser UI regression harness. Fixtures
+for the generic tests come from `src/lib/__tests__/bundledSet.ts`.

@@ -39,8 +39,8 @@ describe('as2LabelMatchesBreakpoint — shared matcher', () => {
     expect(as2LabelMatchesBreakpoint('init action "Fisher"', bp('init/Fisher.ts'))).toBe(true);
   });
   it('classes', () => {
-    expect(as2LabelMatchesBreakpoint('constructor of com.gaia.Fisher', bp('classes/com/gaia/Fisher.ts'))).toBe(true);
-    expect(as2LabelMatchesBreakpoint('_root frame 1', bp('classes/com/gaia/Fisher.ts'))).toBe(false);
+    expect(as2LabelMatchesBreakpoint('constructor of com.example.Fisher', bp('classes/com/example/Fisher.ts'))).toBe(true);
+    expect(as2LabelMatchesBreakpoint('_root frame 1', bp('classes/com/example/Fisher.ts'))).toBe(false);
   });
   it('no generic .ts+frame fallback', () => {
     expect(as2LabelMatchesBreakpoint('_root frame 1', bp('classes/com/foo/Random.ts'))).toBe(false);
