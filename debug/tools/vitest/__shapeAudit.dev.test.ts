@@ -2,10 +2,11 @@
 import { readFileSync } from 'node:fs';
 import { it } from 'vitest';
 import { parseSwfBinary } from '@/lib/swf/binary';
+import { SAMPLE_MAIN, SAMPLE_PIER, SAMPLE_SCENE, sampleExportDir, sampleSwfPath } from '@/adapters/gaiaFishing/sample';
 
 const CASES = [
-  ['bassken_scene', 'game-files/fish-full/external/bassken_scene/bassken_scene.xml'],
-  ['bassken_pier', 'game-files/fish-full/external/bassken_pier/bassken_pier.xml'],
+  [SAMPLE_SCENE, `${sampleExportDir(SAMPLE_SCENE)}/${SAMPLE_SCENE}.xml`],
+  [SAMPLE_PIER, `${sampleExportDir(SAMPLE_PIER)}/${SAMPLE_PIER}.xml`],
 ];
 
 it('compares shape parsing with the FFDec XML', async () => {
@@ -13,7 +14,7 @@ it('compares shape parsing with the FFDec XML', async () => {
     const xml = readFileSync(xmlPath, 'utf8');
     const xmlGrad = (xml.match(/fillStyleType="16"/g) ?? []).length + (xml.match(/fillStyleType="18"/g) ?? []).length;
     const xmlShapes = (xml.match(/type="DefineShapeTag"/g) ?? []).length;
-    const buf = readFileSync(`game-files/fish-full/swfs/${name}.swf`);
+    const buf = readFileSync(sampleSwfPath(name));
     const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
     const { files } = await parseSwfBinary(ab, `${name}.swf`);
     const svgs = files.filter((f) => /shapes\/\d+\.svg$/.test(f.path));
@@ -30,9 +31,9 @@ it('compares shape parsing with the FFDec XML', async () => {
 }, 120000);
 
 it('audits the main movie shapes', async () => {
-  const buf = readFileSync('game-files/fish-full/swfs/bassken_game4.21.swf');
+  const buf = readFileSync(sampleSwfPath(SAMPLE_MAIN));
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
-  const { files } = await parseSwfBinary(ab, 'bassken_game4.21.swf');
+  const { files } = await parseSwfBinary(ab, `${SAMPLE_MAIN}.swf`);
   const svgs = files.filter((f) => /shapes\/\d+\.svg$/.test(f.path));
   let grad = 0, none = 0, big = 0;
   const gradShapes: string[] = [];

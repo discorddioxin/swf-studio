@@ -3,10 +3,11 @@ import { readFileSync } from 'node:fs';
 import { it } from 'vitest';
 import { parseSwfBinary } from '@/lib/swf/binary';
 import { buildAS2Program, type SourceInput } from '@/engine/as2/program';
+import { SAMPLE_OVERVIEW, sampleSwfPath } from '@/adapters/gaiaFishing/sample';
 
 it('inspects generated map external init modules', async () => {
-  const bytes = readFileSync('game-files/fish-full/swfs/bassken_overview.swf');
-  const { files, doc } = await parseSwfBinary(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, 'bassken_overview.swf');
+  const bytes = readFileSync(sampleSwfPath(SAMPLE_OVERVIEW));
+  const { files, doc } = await parseSwfBinary(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, `${SAMPLE_OVERVIEW}.swf`);
   const srcs: SourceInput[] = files.filter((f) => f.path.endsWith('.as')).map((f) => ({ path: f.path, text: new TextDecoder().decode(f.bytes) }));
   const build = buildAS2Program(srcs);
   console.log('sprites', [...doc.characters.values()].filter((c) => c.kind === 'sprite').map((c) => ({id:c.id, name:c.exportName})));

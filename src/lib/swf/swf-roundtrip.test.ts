@@ -8,12 +8,10 @@ import { parseSwfXml } from '../parser';
 import { decodeDoInitAction, parseSwfBinary } from './binary';
 import { isLikelyActionStream } from './bitio';
 import { xmlToSwf } from '../../../tools/xml2swf/xml2swf.mjs';
+import { bundledExportedNames, bundledExternalDir } from '../__tests__/bundledSet';
 
-const EXTERNAL = resolve(__dirname, '../../../game-files/fish-full/external');
-const EXPORTS = [
-  'bassken_fish4.20', 'bassken_overview', 'bassken_pier',
-  'bassken_scene', 'game_chat', 'gsecs2.9',
-];
+const EXTERNAL = bundledExternalDir();
+const EXPORTS = bundledExportedNames();
 
 /** deep-normalize: drop undefined, sort keys, unify null-ish matrices */
 function norm(v: unknown): unknown {
@@ -176,13 +174,19 @@ describe.each(EXPORTS)('swf round-trip: %s', (name) => {
       `${name}.xml`,
     );
     compareDocs(xmlDoc, binDoc, name);
-    if (name === 'bassken_overview') {
-      const initTags = [...binDoc.timelines.values()].flatMap((tl) => tl.frames.flatMap((frame) => frame.events))
-        .filter((event) => event.tagType === 'DoInitActionTag');
-      expect(initTags.map((event) => event.targetSpriteId)).toEqual([29, 28]);
-      expect(initTags[0].tagOrder).toBeLessThan(initTags[1].tagOrder!);
-      expect(files.filter((f) => f.targetSpriteId != null).map((f) => f.targetSpriteId)).toEqual([29, 28]);
+
+    // DoInitAction tags keep the export's tag order — the player runs them in
+    // that order — and the synthesized source files carry the same order.
+    const initTags = (document: typeof binDoc) => [...document.timelines.values()]
+      .flatMap((tl) => tl.frames.flatMap((frame) => frame.events))
+      .filter((event) => event.tagType === 'DoInitActionTag');
+    const binInit = initTags(binDoc);
+    expect(binInit.map((event) => event.targetSpriteId), `${name} init order`).toEqual(initTags(xmlDoc).map((event) => event.targetSpriteId));
+    for (let i = 1; i < binInit.length; i++) {
+      expect(binInit[i].tagOrder!, `${name} init tag order`).toBeGreaterThan(binInit[i - 1].tagOrder!);
     }
+    expect(files.filter((f) => f.targetSpriteId != null).map((f) => f.targetSpriteId), `${name} init sources`)
+      .toEqual(binInit.map((event) => event.targetSpriteId));
 
     // asset file parity by category + id (ext may differ: jpeg3 → png in FFDec)
     for (const category of ['shapes', 'images', 'texts']) {

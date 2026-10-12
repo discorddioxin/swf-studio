@@ -87,7 +87,7 @@ describe('main SWF ordering', () => {
   });
 
   it('never merges different movies', () => {
-    const sources = swfSourcesFromFiles([file('a/bassken_scene.swf'), file('b/bassken_fish4.20.swf')]);
+    const sources = swfSourcesFromFiles([file('a/scene.swf'), file('b/fish4.20.swf')]);
     expect(orderSources(sources, null)).toHaveLength(2);
   });
 });

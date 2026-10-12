@@ -4,9 +4,10 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { decodeActionBytes } from '../../../decompiler/parser';
 import { parseSwfBinary } from '../../../decompiler/swf/binary';
+import { SAMPLE_SWF_DIR, SAMPLE_TRACKING } from '@/adapters/gaiaFishing/sample';
 
 const root = process.cwd();
-const swfDir = path.join(root, 'game-files/fish-full/swfs');
+const swfDir = path.join(root, SAMPLE_SWF_DIR);
 const outDir = path.join(root, 'debug/tools/e2e-output/avm1-action-audit');
 
 function actionBytes(source: string): Uint8Array[] {
@@ -57,7 +58,7 @@ describe('bundled AVM1 call audit (developer tool)', () => {
       });
     }
 
-    sections.push('# Bundled fish-full AVM1 call audit', '',
+    sections.push('# Bundled sample AVM1 call audit', '',
       `Extracted ${totalCalls} avm1Actions call sites across ${swfs.length} bundled SWFs; ${globalPayloads.size} distinct payload hashes.`,
       '', 'This is static decoding only: ActionRecords are parsed as encoded and are not executed.');
     sections.push('', '## Per-SWF counts', '', '| SWF | call sites | distinct payloads |', '|---|---:|---:|');
@@ -89,9 +90,9 @@ describe('bundled AVM1 call audit (developer tool)', () => {
     }, null, 2));
     expect(totalCalls).toBe(534);
     expect(globalPayloads.size).toBe(249);
-    const omniture = bySwf.find((entry) => entry.name === 'OmnitureActionSource.swf');
-    expect(omniture).toMatchObject({ callCount: 4, uniqueCount: 3 });
-    expect(omniture?.payloads).toEqual(expect.arrayContaining([
+    const tracking = bySwf.find((entry) => entry.name === `${SAMPLE_TRACKING}.swf`);
+    expect(tracking).toMatchObject({ callCount: 4, uniqueCount: 3 });
+    expect(tracking?.payloads).toEqual(expect.arrayContaining([
       { hash: 'd154fe2abf32', byteLength: 10640, paths: ['scripts/frame_1/DoAction.as'] },
       { hash: '0a6361b3a802', byteLength: 2, paths: ['scripts/frame_1/DoAction_2.as', 'scripts/frame_3/DoAction.as'] },
       { hash: '716191c9222d', byteLength: 38, paths: ['scripts/frame_2/DoAction.as'] },

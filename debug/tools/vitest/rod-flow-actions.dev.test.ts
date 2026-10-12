@@ -1,16 +1,18 @@
 // @vitest-environment node
-// Targeted raw ActionRecord inspection for the bundled fishing rod timeline.
+// Targeted raw ActionRecord inspection for the bundled sample's rod timeline
+// (sample-scoped probe: the rod clips live in the bundled game set).
 import { readFileSync, writeFileSync } from 'node:fs';
 import { it } from 'vitest';
 import { decodeActionBytes } from '../../../decompiler/parser';
 import { parseSwfBinary } from '../../../decompiler/swf/binary';
+import { SAMPLE_MAIN, sampleSwfPath } from '@/adapters/gaiaFishing/sample';
 
 const bytesToHex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 
-it('lists fishing-related AVM1 ActionRecords from the bundled main SWF', async () => {
-  const file = new Uint8Array(readFileSync('game-files/fish-full/swfs/bassken_game4.21.swf'));
+it('lists rod-related AVM1 ActionRecords from the bundled sample main SWF', async () => {
+  const file = new Uint8Array(readFileSync(sampleSwfPath(SAMPLE_MAIN)));
   const buffer = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer;
-  const parsed = await parseSwfBinary(buffer, 'bassken_game4.21.swf');
+  const parsed = await parseSwfBinary(buffer, `${SAMPLE_MAIN}.swf`);
   const report: string[] = [];
   const calls = /\bavm1Actions\s*\(\s*(?:[^,()]+,\s*)?(["'])([A-Za-z0-9+/=_-]*)\1/g;
   for (const script of parsed.files.filter((candidate) => candidate.category === 'scripts')) {
@@ -24,5 +26,5 @@ it('lists fishing-related AVM1 ActionRecords from the bundled main SWF', async (
     }
   }
   writeFileSync('/tmp/rod-flow-actions.txt', report.join('\n\n'));
-  console.log(`Found ${report.length} fishing-related action streams; wrote /tmp/rod-flow-actions.txt`);
+  console.log(`Found ${report.length} rod-related action streams; wrote /tmp/rod-flow-actions.txt`);
 }, 120_000);

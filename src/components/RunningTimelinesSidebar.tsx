@@ -719,7 +719,8 @@ function MiniViewer({ doc, charId, assets }: { doc: SwfDocument; charId: number 
       ctx.save();
       ctx.translate(cx, cy);
       ctx.scale(scale / 20, scale / 20);
-      ctx.fillStyle = ch.kind === 'shape' ? '#38bdf8' : ch.kind === 'graphic' ? '#a78bfa' : '#f59e0b';
+      // no 'graphic' character kind exists (that is a display-list node kind) — keep the two real tones
+      ctx.fillStyle = ch.kind === 'shape' ? '#38bdf8' : '#f59e0b';
       ctx.fillRect(b.xMin, b.yMin, pw, ph);
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 0.5;

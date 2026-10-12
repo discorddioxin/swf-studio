@@ -7,7 +7,8 @@ import type { AssetCache, SwfPackage } from '../lib/assets';
 import type { AssetBundle, Project, SwfDocument } from '../types';
 import { Button } from './ui';
 import { ExecutionConsole } from './ExecutionConsole';
-import { ServerListInspect } from './ServerListInspect';
+import { UiTroubleshooter } from './uiTroubleshooter/UiTroubleshooter';
+import { scanStage, type Finding } from './uiTroubleshooter/scan';
 import { RunningTimelinesSidebar } from './RunningTimelinesSidebar';
 import { useExecutionDiagnostics } from './useExecutionDiagnostics';
 import type { LogEntry } from '../engine/flash/player';
@@ -17,7 +18,7 @@ import { readAS2Text, useAS2Build } from '../engine/as2/useAS2Build';
 import { buildWorkbenchTimelineMetadata } from '../engine/as2/workbenchMetadata';
 import { _global as as2Global } from '../runtime/as2';
 import { AS2AudioBackend, embeddedFontFamily, registerFonts, soundFilesOf } from '../engine/as2/audio';
-import { createMockServer, type MockServer } from '../lib/gameServerStub';
+import { GAME_ADAPTERS, resolveAdapter, type AdapterSwf, type GameAdapter, type GameContext } from '../adapters';
 import { useDebugger, useDebuggerState } from '../debug/store';
 import { DebugPanel } from '../debug/DebugPanel';
 import { usePopout } from '../debug/Popout';
@@ -47,16 +48,12 @@ function sameRunningTimelines(a: readonly RunningTimelineSnapshot[], b: readonly
   });
 }
 
-/** Boot scripts run on _root after frame 1 (plain JavaScript; `_root` and `player` are in scope). */
-const BOOT_PRESETS: { id: string; label: string; code: string; hint: string }[] = [
-  { id: 'none', label: 'None', code: '', hint: 'Start exactly like the SWF does.' },
-  {
-    id: 'gaia-guest',
-    label: 'Gaia: play as guest',
-    code: '_root.playAsGuest = true;\n_root.startGameSingle();',
-    hint: "Uses the game's own guest mode to skip the GSECS login server (gsecs2.9.swf), which cannot be reached offline.",
-  },
-];
+/**
+ * Boot scripts run on _root after frame 1 (plain JavaScript; `_root`, `player`
+ * and `_global` are in scope). The list is the adapter's: SWF Studio itself
+ * only offers "None" (start exactly like the SWF does).
+ */
+const NO_BOOT = { id: 'none', label: 'None', code: '', hint: 'Start exactly like the SWF does.' } as const;
 
 export const isAs2Bundle = (doc: SwfDocument, assets: AssetBundle | null) =>
   !!assets?.files.some((f) => /\.as$/i.test(f.path)) && (Number(doc.header.version ?? 0) <= 8 || !doc.symbolClasses?.size);
@@ -64,11 +61,17 @@ export const isAs2Bundle = (doc: SwfDocument, assets: AssetBundle | null) =>
 /** An external SWF export with its key (used for its fonts). */
 interface ExternalEntry { pkg: SwfPackage; name: string; key: string }
 
-export function As2Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[] }) {
+export function As2Execute({ doc, cache, assets, project, externals = [], adapterId = null, gameSetId = null, onAdapterChange }: {
+  doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
+  /** adapter id picked by the user ("auto"/null = detect from the loaded SWFs) */
+  adapterId?: string | null;
+  /** bundled game set this load came from, if any (supplies the adapter hint) */
+  gameSetId?: string | null;
+  onAdapterChange?: (id: string) => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<AS2Player | null>(null);
-  const gameServerRef = useRef<MockServer | null>(null);
   const audioRef = useRef<AS2AudioBackend | null>(null);
   const extAudioRef = useRef<AS2AudioBackend[]>([]);
   const playingRef = useRef(true);
@@ -82,7 +85,9 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
   const [runtimeTimelines, setRuntimeTimelines] = useState<RunningTimelineSnapshot[]>([]);
   const [displayTree, setDisplayTree] = useState<ActiveDisplaySnapshot | null>(null);
   const [highlightedIds, setHighlightedIds] = useState<Set<number> | null>(null);
-  const [panel, setPanel] = useState<'console' | 'program' | null>('console');
+  const [panel, setPanel] = useState<'console' | 'program' | 'troubleshooter' | null>('console');
+  const [playerEpoch, setPlayerEpoch] = useState(0);
+  const [uiHint, setUiHint] = useState<{ errors: number; warns: number; top: string } | null>(null);
   const [showDebugger, setShowDebugger] = useState(false);
   const [hud, setHud] = useState({ frame: 1, total: 1, label: null as string | null, time: 0 });
   const [tree, setTree] = useState<string[]>([]);
@@ -97,6 +102,32 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
     return { pkg, name, key: `x${i}-${name.replace(/[^a-z0-9]+/gi, '_')}` };
   }), [externals]);
   const [viewFile, setViewFile] = useState<string | null>(null);
+  // ---- game adapter: the only place this tab is allowed to know the game
+  const adapterCtx = useMemo<GameContext>(() => {
+    const pathsOf = (pkg: SwfPackage) => pkg.bundle.files.map((f) => f.path);
+    return {
+      main: { name: swfNameOf(assets?.xmlName || doc.header.fileName || 'main'), doc, paths: pathsOf({ bundle: assets } as SwfPackage) },
+      externals: externals.map<AdapterSwf>((pkg, i) => ({
+        name: swfNameOf(pkg.bundle.xmlName || pkg.doc.header.fileName || `external${i}`),
+        doc: pkg.doc,
+        paths: pathsOf(pkg),
+      })),
+      bundled: !!gameSetId,
+      declaredId: gameSetId,
+    };
+  }, [assets, doc, externals, gameSetId]);
+  const adapter: GameAdapter = useMemo(() => resolveAdapter(adapterCtx, adapterId), [adapterCtx, adapterId]);
+  /** adapter log sink; the player's own logger takes over once it exists */
+  const adapterLog = useRef<(level: 'info' | 'warn' | 'error', message: string) => void>((level, message) => console[level === 'info' ? 'log' : level](message));
+  const network = useMemo(
+    () => adapter.createNetwork?.(adapterCtx, { log: (level, message) => adapterLog.current(level, message) }),
+    [adapter, adapterCtx],
+  );
+  const sessionInfo = network?.sessionInfo?.();
+  const bootPresets = useMemo<{ id: string; label: string; code: string; hint: string }[]>(
+    () => [NO_BOOT, ...(adapter.bootPresets ?? [])],
+    [adapter],
+  );
   const pendingLogs = useRef<LogEntry[]>([]);
   const runtimeTimelinesRef = useRef<RunningTimelineSnapshot[]>([]);
   const displayTreeRef = useRef<ActiveDisplaySnapshot | null>(null);
@@ -116,6 +147,48 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
     setLogs((previous) => [...previous, entry].slice(-MAX_LOG));
   }, []);
   useExecutionDiagnostics(appendGlobalProblem);
+
+  /** Send troubleshooter findings to the Execution console (Problems tab), deduped. */
+  const appendTroubleshooterFindings = useCallback((findings: Finding[]) => {
+    if (!findings.length) return;
+    const time = playerRef.current?.time() ?? 0;
+    const entries: LogEntry[] = findings.slice(0, 40).map((f) => ({
+      level: f.severity === 'error' ? 'error' : 'warn',
+      kind: 'problem',
+      source: 'app',
+      context: `UI troubleshooter · ${f.area}${f.path ? ` · ${f.path}` : ''}`,
+      message: `${f.title} — ${f.detail}${f.hint ? ` → ${f.hint}` : ''}`,
+      time,
+    }));
+    setLogs((previous) => {
+      const seen = new Set(previous.filter((e) => e.context?.startsWith('UI troubleshooter')).map((e) => e.message));
+      const fresh = entries.filter((e) => !seen.has(e.message));
+      return fresh.length ? [...previous, ...fresh].slice(-MAX_LOG) : previous;
+    });
+  }, []);
+
+  // Automatically check the live UI once the game has settled. Only real
+  // (non-provisional) errors raise the banner — this is what catches a server
+  // list that holds data but never laid out its rows.
+  useEffect(() => {
+    if (build.status !== 'ready') return;
+    if (typeof window === 'undefined') return;
+    const timer = window.setTimeout(() => {
+      const player = playerRef.current;
+      if (!player) return;
+      try {
+        const report = scanStage(player, { probe: false });
+        const errors = report.findings.filter((f) => f.severity === 'error');
+        const warns = report.findings.filter((f) => f.severity === 'warn');
+        setUiHint(errors.length ? { errors: errors.length, warns: warns.length, top: errors[0].title } : null);
+      } catch {
+        // the troubleshooter must never break Execute
+      }
+    }, 8000);
+    return () => window.clearTimeout(timer);
+    // one health check per loaded document
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [build.status, doc]);
 
   useEffect(() => { try { localStorage.setItem(BOOT_KEY, boot); } catch { /* storage unavailable */ } }, [boot]);
 
@@ -210,10 +283,6 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
       onError: (swf, e) => playerForLog?.log('error', `external SWF ${swf.name}: ${e.message}`, e.stack, { source: 'forge', kind: 'problem', context: `external SWF ${swf.name}` }),
     });
     const bootCode = boot.trim();
-    if (!gameServerRef.current) {
-      gameServerRef.current = createMockServer();
-    }
-    const mockServer = gameServerRef.current;
     const player = new AS2Player({
       doc,
       program: build.build.program,
@@ -227,43 +296,35 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
         pendingLogs.current.push(entry);
         if (entry.level === 'error') console.error('[game]', entry.message, entry.detail ?? '');
       },
-      fetchText: (url, method, body, onNetwork) =>
-        mockServer.fetchText(
-          url, method, body,
-          (level, message, detail) => player.log(level, message, detail, { source: 'network' }),
-          onNetwork,
-        ),
-      gameServer: mockServer,
-      onHelp: () => setInstructionsOpen(true),
+      // the adapter owns the offline network: mock gateway + socket stand-in
+      fetchText: network?.fetchText
+        ? (url, method, body, onNetwork) =>
+            network.fetchText!(url, method, body, (level, message, detail) => player.log(level, message, detail, { source: 'network' }), onNetwork)
+        : undefined,
+
+      gameServer: network?.gameServer ?? undefined,
+      isOptionalExternal: adapter.isOptionalExternal ? (url) => !!adapter.isOptionalExternal?.(url) : undefined,
+      onExternalUrl: (url) => {
+        if (!adapter.isHelpUrl?.(url)) return false;
+        if (!adapter.helpPanel) { player.log('info', `external link ignored offline: ${url}`); return true; }
+        player.log('info', `opened the offline guide (${adapter.helpPanel.title})`);
+        setInstructionsOpen(true);
+        return true;
+      },
       afterStart: (root, p) => {
+        adapterLog.current = (level, message) => p.log(level, message, undefined, { source: 'network' });
         if (bootCode) {
           p.log('info', 'running boot script');
           new Function('_root', 'player', '_global', bootCode)(root, p, as2Global);
         }
-        try {
-          const list = (root as any)?.gsecs?.mc_ServerChooser?.serverListing_lt;
-          const mockServers = (gameServerRef.current as any)?.servers;
-          if (list && mockServers && mockServers.length) {
-            // Clear and add items via AS2 List API
-            if (typeof (list as any).removeAll === 'function') (list as any).removeAll();
-            mockServers.forEach((s: any) => {
-              const label = s.name || (s.ip + ':' + s.port);
-              if (typeof (list as any).addItem === 'function') {
-                (list as any).addItem(label);
-              }
-            });
-            if (typeof (list as any).refresh === 'function') (list as any).refresh();
-            p.log('info', `Server list injected: ${mockServers.length} servers into mc_ServerChooser`);
-          }
-        } catch (e) {
-          // silent
-        }
+        adapter.onStart?.(root, p, adapterCtx, network);
       },
     });
     playerForLog = player;
     if (swfs.length) player.log('info', `external SWFs available: ${swfs.map((s) => s.name).join(', ')}`);
     playerRef.current = player;
     (globalThis as any).__as2player = player;
+    setPlayerEpoch((e) => e + 1);
     player.start();
     canvasRef.current?.focus({ preventScroll: true });
     return () => {
@@ -401,7 +462,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
     const previous = playerRef.current;
     playerRef.current = null;
     previous?.dispose();
-    gameServerRef.current?.reset();
+    network?.reset?.();
     dbg.resume();
     dbg.clearStack();
     playingRef.current = true;
@@ -460,7 +521,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
   ] : [];
   const consoleEntries = [...forgeProblems, ...logs];
   const errorCount = consoleEntries.filter((entry) => entry.level === 'error').length;
-  const preset = BOOT_PRESETS.find((p) => p.code === boot.trim()) ?? null;
+  const preset = bootPresets.find((p) => p.code === boot.trim()) ?? null;
 
   const inner = (
     <div className="flex h-full min-h-0 w-full flex-col bg-zinc-950">
@@ -476,15 +537,29 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1">
+          {onAdapterChange && (
+            <label className="flex items-center gap-1 text-[10px] text-zinc-400" title={adapter.description}>
+              Game
+              <select
+                aria-label="Game adapter"
+                className="max-w-[11rem] rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-[11px] text-zinc-200"
+                value={adapterId ?? 'auto'}
+                onChange={(e) => onAdapterChange(e.target.value)}
+              >
+                <option value="auto">Auto — {adapter.label}</option>
+                {GAME_ADAPTERS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+              </select>
+            </label>
+          )}
           <label className="flex items-center gap-1 text-[10px] text-zinc-400" title={preset?.hint ?? 'Custom boot script'}>
             Start
             <select
               aria-label="Start mode"
               className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-[11px] text-zinc-200"
               value={preset?.id ?? 'custom'}
-              onChange={(e) => { const p = BOOT_PRESETS.find((x) => x.id === e.target.value); if (p) { setBoot(p.code); restart(); } }}
+              onChange={(e) => { const p = bootPresets.find((x) => x.id === e.target.value); if (p) { setBoot(p.code); restart(); } }}
             >
-              {BOOT_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              {bootPresets.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
               {!preset && <option value="custom">Custom script</option>}
             </select>
           </label>
@@ -505,7 +580,13 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
           ) : (
             <Button variant="ghost" onClick={executePopout.open} title="Pop out Execute Engine to a separate window">↗ Pop out Execute</Button>
           )}
-          <ServerListInspect canvasRef={canvasRef} />
+          <Button
+            variant={panel === 'troubleshooter' ? 'primary' : 'ghost'}
+            onClick={() => setPanel((p) => (p === 'troubleshooter' ? null : 'troubleshooter'))}
+            title="Inspect the live UI: display list, component layout, hit-testing and pixels"
+          >
+            🔎 Troubleshoot
+          </Button>
           <Button variant={panel === 'program' ? 'primary' : 'ghost'} onClick={() => setPanel((p) => (p === 'program' ? null : 'program'))}>
             Program{missing.length || b?.errors.length ? ' ⚠' : ''}
           </Button>
@@ -514,6 +595,16 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
           </Button>
         </div>
       </div>
+
+      {uiHint && panel !== 'troubleshooter' && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-rose-900/60 bg-rose-950/40 px-3 py-1.5 text-[11px] text-rose-200">
+          <span className="font-semibold">UI troubleshooter found {uiHint.errors} problem{uiHint.errors === 1 ? '' : 's'}</span>
+          {uiHint.warns > 0 && <span className="text-rose-300/80">(+{uiHint.warns} warning{uiHint.warns === 1 ? '' : 's'})</span>}
+          <span className="min-w-0 flex-1 truncate text-rose-100/90" title={uiHint.top}>{uiHint.top}</span>
+          <Button variant="default" className="px-2 py-0.5 text-[11px]" onClick={() => setPanel('troubleshooter')}>Investigate</Button>
+          <button type="button" className="rounded px-1 text-rose-300/70 hover:text-rose-100" onClick={() => setUiHint(null)} title="Dismiss">×</button>
+        </div>
+      )}
 
       {dbgState.paused && (
         <div className="flex shrink-0 items-center gap-2 border-b border-amber-900/40 bg-amber-950/30 px-3 py-1.5 text-xs text-amber-200">
@@ -555,22 +646,22 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
           onContextMenu={(e) => e.preventDefault()}
         />
         {dbgState.paused && <div className="pointer-events-none absolute inset-0 border-2 border-amber-500/40 bg-amber-500/5" />}
-        {instructionsOpen && (
+        {instructionsOpen && adapter.helpPanel && (
           <div
             role="dialog"
             aria-modal="true"
-            aria-labelledby="offline-fishing-instructions-title"
+            aria-label={adapter.helpPanel.title}
             className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 p-4"
           >
             <section className="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 p-5 text-zinc-100 shadow-2xl">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 id="offline-fishing-instructions-title" className="text-lg font-semibold">Fishing instructions</h2>
-                  <p className="mt-1 text-xs text-zinc-400">Offline guide for the bundled game.</p>
+                  <h2 className="text-lg font-semibold">{adapter.helpPanel.title}</h2>
+                  {adapter.helpPanel.subtitle && <p className="mt-1 text-xs text-zinc-400">{adapter.helpPanel.subtitle}</p>}
                 </div>
                 <button
                   type="button"
-                  aria-label="Close fishing instructions"
+                  aria-label={`Close ${adapter.helpPanel.title}`}
                   className="rounded px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
                   onClick={() => setInstructionsOpen(false)}
                 >
@@ -578,13 +669,10 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
                 </button>
               </div>
               <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-zinc-200">
-                <li>Choose a location and select bait before fishing.</li>
-                <li>Click the water once to build casting power, then click again to cast.</li>
-                <li>When a fish bites, move the mouse side to side to keep the fish between the guide lines.</li>
-                <li>Click a spot on the overview map to move your player along the coast.</li>
+                {adapter.helpPanel.steps.map((step, i) => <li key={i}>{step}</li>)}
               </ol>
               <div className="mt-5 flex justify-end">
-                <Button variant="primary" onClick={() => setInstructionsOpen(false)}>Got it</Button>
+                <Button variant="primary" onClick={() => setInstructionsOpen(false)}>{adapter.helpPanel.dismiss ?? 'Got it'}</Button>
               </div>
             </section>
           </div>
@@ -599,7 +687,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
         </div>
       )}
 
-      {panel === 'console' && !showDebugger && <ExecutionConsole entries={consoleEntries} onClear={() => { setLogs([]); pendingLogs.current = []; }} servers={gameServerRef.current?.servers} rooms={gameServerRef.current?.getRooms ? gameServerRef.current.getRooms() : undefined} />}
+      {panel === 'console' && !showDebugger && <ExecutionConsole entries={consoleEntries} onClear={() => { setLogs([]); pendingLogs.current = []; }} servers={sessionInfo?.servers} rooms={sessionInfo?.rooms} />}
 
       {panel === 'program' && !showDebugger && (
         <div className="h-72 shrink-0 overflow-y-auto border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-300">
@@ -665,12 +753,25 @@ export function As2Execute({ doc, cache, assets, project, externals = [] }: { do
       )}
       {panel === 'console' && showDebugger && (
         <div className="h-40 shrink-0 overflow-hidden border-t border-zinc-800">
-          <ExecutionConsole entries={consoleEntries} onClear={() => { setLogs([]); pendingLogs.current = []; }} servers={gameServerRef.current?.servers} rooms={gameServerRef.current?.getRooms ? gameServerRef.current.getRooms() : undefined} />
+          <ExecutionConsole entries={consoleEntries} onClear={() => { setLogs([]); pendingLogs.current = []; }} servers={sessionInfo?.servers} rooms={sessionInfo?.rooms} />
         </div>
       )}
       {panel === 'program' && showDebugger && (
         <div className="h-48 shrink-0 overflow-y-auto border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-300">
           <div className="text-zinc-500">Program panel is hidden while Debugger is open — close Debugger or check Console.</div>
+        </div>
+      )}
+      {panel === 'troubleshooter' && (
+        <div className={showDebugger ? 'h-72 shrink-0 border-t border-zinc-800' : 'h-80 shrink-0 border-t border-zinc-800'}>
+          <UiTroubleshooter
+            getPlayer={() => playerRef.current}
+            canvasRef={canvasRef}
+            fontIds={fontIds}
+            epoch={playerEpoch}
+            onSendToConsole={appendTroubleshooterFindings}
+            onFocus={handleHighlight}
+            onClose={() => setPanel(null)}
+          />
         </div>
       )}
     </div>

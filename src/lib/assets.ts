@@ -116,8 +116,8 @@ export interface PackageFiles {
  * Split an upload into one package per FFDec export. A game made of several
  * SWFs is loaded as a folder holding one export per SWF, e.g.
  *
- *   fish-full/bassken_game4.21.xml, shapes/, scripts/, …      ← main movie (shallowest .xml)
- *   fish-full/external/bassken_scene/bassken_scene.xml, …     ← loaded by the game at run time
+ *   mygame/main.xml, shapes/, scripts/, …                     ← main movie (shallowest .xml)
+ *   mygame/external/chat/chat.xml, …                          ← loaded by the game at run time
  *
  * Every file belongs to the deepest export folder containing it, so the
  * exports' shapes/1.svg etc. never collide. The main movie comes first.

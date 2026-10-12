@@ -654,8 +654,8 @@ function parseDefineText(tag: RawTag, is2: boolean): {
   // DefineText: bounds + matrix are bit-packed; the glyph/advance counts
   // are UI8s, so the writer pads to the next byte before writing them.
   // RECT is padded to the next byte boundary before the MATRIX that follows it
-  // (verified against the genuine bassken_game4.21 build: 18 of 21 DefineText
-  // tags only parse exactly when the rectangle is aligned).
+  // (verified against a genuine Flash-built SWF: 18 of 21 DefineText tags only
+  // parse exactly when the rectangle is aligned).
   const bounds = readRect(br);
   const matrix = readMatrix(br);
   const glyphBits = br.u8(); // spec: two separate UI8s (not nibble-packed)

@@ -97,10 +97,13 @@ class Decoder {
   private flowDepth = 0;
   private boundaries: Map<number, number>;
   private backEdges = new Map<number, number>();
+  /** Opt-in action trace (set the global __AVM1_DBG flag to record one). */
+  private trace: [number, number, number][] | null = null;
 
   constructor(private actions: Action[], private options: Required<ActionDecodeOptions>, pool: string[] = [],
     private fn?: Action['fn'], private namespace = '', private ids = { next: 0 }, private parent?: Decoder) {
     this.pool = [...pool];
+    if ((globalThis as { __AVM1_DBG?: boolean }).__AVM1_DBG) this.trace = [];
     this.boundaries = new Map(actions.map((a, i) => [a.offset, i]));
     if (actions.length) this.boundaries.set(actions[actions.length - 1].end, actions.length);
     for (let i = 0; i < actions.length; i++) {
@@ -168,10 +171,13 @@ class Decoder {
     }
     return target;
   }
-  private name(v: Value): string {
-    if (typeof v.literal !== 'string') this.fail('Dynamic variable name requires interpreter');
-    return v.literal;
+  /** A literal name that maps onto one statically-known variable. Paths/dots and computed
+   *  names are resolved at runtime instead (`_root.mc.x`, `"mc.fish" + n`). */
+  private plain(v: Value): v is Value & { literal: string } {
+    return typeof v.literal === 'string' && ident.test(v.literal);
   }
+  /** Resolution root for runtime name lookup in lifted code: `this`, else the timeline. */
+  private scopeOf(): string { return `(this ?? ${this.options.target})`; }
   private count(): number {
     const n = this.pop().literal;
     if (typeof n !== 'number' || !Number.isInteger(n) || n < 0 || n > this.stack.length) this.fail('Nonconstant or invalid argument count');
@@ -187,7 +193,15 @@ class Decoder {
     const dest = a.end + (n & 0x8000 ? n - 0x10000 : n);
     return this.boundaries.get(dest) ?? this.fail(`Branch target ${dest} is not an instruction boundary`);
   }
-  private empty() { if (this.stack.length) this.fail('Nonempty stack at control-flow join'); }
+  private empty() {
+    if (this.stack.length) {
+      if (this.trace) {
+        console.error('NONEMPTY', this.offset, 'depth', this.stack.length, this.stack.map((v) => v.code).slice(0, 6),
+          'trace:', this.trace.slice(-25).map(([o, op, d]) => `${o}:${op.toString(16)}:${d}`).join(' '));
+      }
+      this.fail('Nonempty stack at control-flow join');
+    }
+  }
   private region(start: number, end: number): string[] {
     const previous = this.lines; this.lines = []; this.flowDepth++;
     if (this.flowDepth > 64) this.fail('Control-flow nesting exceeds decoder limit');
@@ -249,6 +263,7 @@ class Decoder {
   }
   private action(a: Action) {
     this.offset = a.offset;
+    if (this.trace) { if (this.trace.length > 200) this.trace.shift(); this.trace.push([a.offset, a.op, this.stack.length]); }
     const p = new Reader(a.data, a.offset + 3);
     const binary: Record<number, string> = { 0x47: '+', 0x48: '<', 0x49: '==', 0x60: '&', 0x61: '|', 0x62: '^', 0x63: '<<', 0x64: '>>', 0x65: '>>>', 0x66: '===', 0x67: '>' };
     if (binary[a.op]) {
@@ -281,12 +296,33 @@ class Decoder {
         this.push(`($rt.avm1.string(${left.code}) ${op} $rt.avm1.string(${right.code}))`); break;
       }
       case 0x14: case 0x31: this.push(`$rt.avm1.string(${this.pop().code}).length`); break;
-      case 0x17: { const value = this.pop(); if (!value.stable) this.emit(`${value.code};`); break; }
+      case 0x17: {
+        // Flash's AVM1 pops an empty operand stack as `undefined` (Ruffle only logs a
+        // warning), and real compilers emit such a lone Pop — e.g. a bare `Pop` at the
+        // join after `if (_global.GSItools == undefined) _global.GSItools = new Object();`
+        // where the address is also a branch target.
+        const value = this.stack.length ? this.pop() : null;
+        if (value && !value.stable) this.emit(`${value.code};`);
+        break;
+      }
       case 0x18: this.push(`($rt.avm1.number(${this.pop().code}) | 0)`); break;
-      case 0x1c: this.push(this.readName(this.name(this.pop()))); break;
+      case 0x1c: {
+        // Flash resolves the name as a *path* at runtime, so names with dots/slashes
+        // (`_root.mc.x`) and computed names go through the interpreter's resolver.
+        const name = this.pop();
+        this.push(this.plain(name) ? this.readName(name.literal) : `$rt.avm1.getVariable(${this.scopeOf()}, ${name.code})`);
+        break;
+      }
       case 0x1d: case 0x3c: case 0x41: {
         const value = a.op === 0x41 ? { code: 'undefined', stable: true } : this.pop();
-        const name = this.name(this.pop()); this.flush();
+        const nameValue = this.pop(); this.flush();
+        if (!this.plain(nameValue)) {
+          const assign = a.op === 0x1d ? 'setVariable' : a.op === 0x3c ? 'defineLocal' : 'defineLocalIfAbsent';
+          const args = a.op === 0x1d || a.op === 0x3c ? `${this.scopeOf()}, ${nameValue.code}, ${value.code}` : `${this.scopeOf()}, ${nameValue.code}`;
+          this.emit(`$rt.avm1.${assign}(${args});`);
+          break;
+        }
+        const name = nameValue.literal;
         if (name === 'this' || name === 'arguments') this.fail('Assignment to special scope name');
         if (a.op !== 0x1d && this.fn && !this.locals.has(name)) {
           if (this.flowDepth) this.fail('Conditional local declaration requires interpreter');
@@ -312,7 +348,13 @@ class Decoder {
       case 0x30: this.push(`${this.options.identifier('random')}(($rt.avm1.number(${this.pop().code}) | 0))`); break;
       case 0x34: this.push(`${this.options.identifier('getTimer')}()`); break;
       case 0x3d: case 0x40: {
-        const name = this.name(this.pop()), args = this.args(); this.flush();
+        const nameValue = this.pop(), args = this.args(); this.flush();
+        if (!this.plain(nameValue)) {
+          const verb = a.op === 0x40 ? 'constructVariable' : 'callVariable';
+          this.push(`$rt.avm1.${verb}(${this.scopeOf()}, ${nameValue.code}, [${args.join(', ')}])`);
+          break;
+        }
+        const name = nameValue.literal;
         if (CONTEXT_CALLS.has(name)) this.fail(`Context-dependent call ${name} requires interpreter`);
         const callee = this.readName(name);
         this.push(a.op === 0x40 ? `$rt.avm1.construct(${callee}, [${args.join(', ')}])` : `$rt.avm1.call(${callee}, ${this.options.target}, [${args.join(', ')}])`); break;
@@ -360,6 +402,12 @@ class Decoder {
         break;
       }
       case 0x81: this.flush(); this.emit(`${this.options.target}.gotoAndStop(${p.u16() + 1});`); break;
+      case 0x83: {
+        // GetURL(url, window): a navigation action, not an expression.
+        const url = p.string(), win = p.at < p.bytes.length ? p.string() : ''; this.flush();
+        this.emit(`$rt.getURL(${JSON.stringify(url)}, ${JSON.stringify(win || '_self')});`);
+        break;
+      }
       case 0x87: {
         const r = p.u8(); this.registers.add(r); this.flush();
         const value = this.pop(); this.emit(`$register${this.namespace}${r} = ${value.code};`);
@@ -372,7 +420,11 @@ class Decoder {
       case 0x8c: this.flush(); this.emit(`${this.options.target}.gotoAndStop(${JSON.stringify(p.string())});`); break;
       case 0x8e: case 0x9b: {
         const fn = a.fn!;
-        if (fn.flags & ~ (1 | 8 | 32 | 64 | 256) || fn.params.some((x) => x.register > 0 && x.register >= fn.registers)) this.fail('Unsupported function register/preload configuration');
+        if (fn.flags & ~F_ALL_FLAGS) this.fail('Unsupported function register/preload configuration');
+        // A preloaded `super` object is a scope object the lifted code cannot build;
+        // Flash itself stores `undefined` when the value is suppressed as well.
+        if ((fn.flags & F_PRELOAD_SUPER) && !(fn.flags & F_SUPPRESS_SUPER)) this.fail('Preloaded super register requires interpreter');
+        if (fn.params.some((x) => x.register > 0 && x.register >= fn.registers)) this.fail('Unsupported function register/preload configuration');
         const child = new Decoder(fn.actions, { ...this.options, identifier: (n) => this.readName(n) }, this.pool, fn, `fn${++this.ids.next}_`, this.ids, this);
         const body = child.decode();
         const params = [...child.locals.values()].slice(0, fn.params.length).map((n) => `${n}?: any`);
@@ -403,6 +455,20 @@ class Decoder {
         }
         break;
       }
+      case 0x9a: {
+        // GetURL2: url, target [, vars] plus a method/mode flag byte.
+        const flags = p.u8();
+        if (flags & ~7) this.fail('Invalid GetURL2 flags');
+        const target = this.pop(), url = this.pop();
+        if (flags & 3) this.pop(); // send-vars payload: navigation is offline, so it is discarded
+        const method = (flags & 3) === 1 ? 'GET' : (flags & 3) === 2 ? 'POST' : undefined;
+        const methodArg = method ? `, ${JSON.stringify(method)}` : '';
+        this.flush();
+        if (flags & 8) this.emit(`$rt.loadVariables(${this.options.target}, ${url.code}, ${target.code}${methodArg});`);
+        else if (flags & 4) this.emit(`$rt.loadMovie(${this.options.target}, ${url.code}, ${target.code}${methodArg});`);
+        else this.emit(`$rt.getURL(${url.code}, ${target.code} === undefined ? '_self' : ${target.code}${methodArg});`);
+        break;
+      }
       case 0x9f: {
         const flags = p.u8(); if (flags & ~3) this.fail('Invalid GotoFrame2 flags');
         const bias = flags & 2 ? p.u16() : 0;
@@ -423,11 +489,18 @@ class Decoder {
     this.range(0, this.actions.length); this.flush();
     const initial = new Map<number, string>();
     if (this.fn) {
+      // Registers 1..n hold the values selected by the Preload* flags, in the fixed
+      // order this / arguments / super / _root / _parent / _global. Registers are only
+      // allocated for values that are actually preloaded (Ruffle's `preload_r`), then
+      // each parameter register is filled from the matching argument.
       let reg = 1;
       const preloads: [number, () => string][] = [
-        [1, () => `(this ?? ${this.options.target})`],
-        [64, () => this.options.identifier('_root')],
-        [256, () => this.options.identifier('_global')],
+        [F_PRELOAD_THIS, () => `(this ?? ${this.options.target})`],
+        [F_PRELOAD_ARGUMENTS, () => 'arguments'],
+        [F_PRELOAD_SUPER, () => 'undefined'],
+        [F_PRELOAD_ROOT, () => this.options.identifier('_root')],
+        [F_PRELOAD_PARENT, () => `((this ?? ${this.options.target})?._parent)`],
+        [F_PRELOAD_GLOBAL, () => this.options.identifier('_global')],
       ];
       for (const [flag, expr] of preloads) if (this.fn.flags & flag) initial.set(reg++, expr());
       for (const param of this.fn.params) if (param.register) initial.set(param.register, this.locals.get(param.name)!);
@@ -442,6 +515,18 @@ class Decoder {
   }
 }
 const CONTEXT_CALLS = new Set('eval set getProperty setProperty duplicateMovieClip removeMovieClip startDrag loadMovie loadVariables unloadMovie call print printAsBitmap'.split(' '));
+const F_PRELOAD_THIS = 1 << 0;
+const F_SUPPRESS_THIS = 1 << 1;
+const F_PRELOAD_ARGUMENTS = 1 << 2;
+const F_SUPPRESS_ARGUMENTS = 1 << 3;
+const F_PRELOAD_SUPER = 1 << 4;
+const F_SUPPRESS_SUPER = 1 << 5;
+const F_PRELOAD_ROOT = 1 << 6;
+const F_PRELOAD_PARENT = 1 << 7;
+const F_PRELOAD_GLOBAL = 1 << 8;
+const F_SUPPRESS_FLAGS = F_SUPPRESS_THIS | F_SUPPRESS_ARGUMENTS | F_SUPPRESS_SUPER;
+const F_ALL_FLAGS = F_PRELOAD_THIS | F_PRELOAD_ARGUMENTS | F_PRELOAD_SUPER | F_PRELOAD_ROOT
+  | F_PRELOAD_PARENT | F_PRELOAD_GLOBAL | F_SUPPRESS_FLAGS;
 const RESERVED = new Set('this arguments super class function var let const return new delete default if else while do for in instanceof switch case break continue throw try catch finally with import export extends implements interface private public protected static yield await enum null true false undefined'.split(' '));
 
 /** Decode one Base64 action block. `code === null` means retain original bytes. */

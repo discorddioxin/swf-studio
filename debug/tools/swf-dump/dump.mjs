@@ -6,7 +6,7 @@
 // --grep keeps only tags whose payload contains the text.
 //
 // This exists because the FFDec exports in game-files/**/external are not
-// available for every SWF (bassken_game4.21 has none), so the only way to read
+// available for every SWF (the bundled sample's main movie has none), so the only way to read
 // a game's logic is to disassemble its action tags directly.
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';

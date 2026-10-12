@@ -224,7 +224,7 @@ export function installObjectStatics(): void {
  *
  * The Flash IDE compiles `function get width() { … }` into a plain `__get__width`
  * method plus an `addProperty("width", __get__width, null)` call in the class body
- * (see the DoInitAction of mx.core.UIObject in gsecs2.9.swf). Without this method
+ * (MX components do this in their DoInitAction). Without this method
  * the call is dropped, so every component getter/setter — `width`, `height`,
  * `minWidth`, `minHeight`, `rowHeight`, `dataProvider`, … — reads `undefined`
  * and MX (v2) layouts collapse to NaN. Flash puts it on `Object.prototype`, and
@@ -359,6 +359,9 @@ export const $rt = {
   loadMovie(from: AS2Clip, url: string, target: unknown, method?: string) {
     const t = typeof target === 'string' ? resolvePath(from, target) : (target as AS2Clip);
     if (t) need().loadMovie(url, t, method);
+  },
+  getURL(url: unknown, window?: unknown, method?: string) {
+    need().getURL(String(url), window === undefined || window === null ? undefined : String(window), method);
   },
   loadVariables(from: AS2Clip, url: string, target: unknown, method?: string) {
     const t = typeof target === 'string' ? resolvePath(from, target) : (target as AS2Clip);

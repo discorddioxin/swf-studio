@@ -3,7 +3,7 @@
 #   <out>/<name>/<name>.xml  + scripts/ shapes/ images/ morphshapes/ fonts/ sounds/ texts/
 #
 # Usage:  tools/ffdec-export/export.sh <out-dir> file1.swf [file2.swf …]
-# e.g.    tools/ffdec-export/export.sh game-files/fish-full/external game-files/swfs/bassken_scene.swf
+# e.g.    tools/ffdec-export/export.sh <out-dir> <movie.swf>   # one export per SWF under <out-dir>/<name>/
 #
 # Needs Java and FFDec. Point FFDEC_JAR at ffdec.jar (default: ./ffdec/ffdec.jar) and
 # JAVA at a java binary (default: java on PATH). Without an installed JDK, a portable

@@ -39,14 +39,18 @@ SwfDocument (symbols, timelines)   TypeScript modules ──sucrase──▶ AS2
 A game made of several SWFs is loaded as one folder with an FFDec export per SWF. The shallowest `.xml` is the main movie. Each other export sits in its own sub-folder, conventionally `external/<swf name>/`. `tools/ffdec-export/export.sh` produces that layout from `.swf` files.
 
 ```
-fish-full/bassken_game4.21.xml, scripts/, shapes/, …        main movie
-fish-full/external/bassken_scene/bassken_scene.xml, …       loadClip("bassken_scene.swf", _root.view)
-fish-full/external/game_chat/game_chat.xml, …               loadMovie("../sharedsource/game_chat/game_chat.swf")
+mygame/main.xml, scripts/, shapes/, …            main movie
+mygame/external/scene/scene.xml, …               loadClip("scene.swf", _root.view)
+mygame/external/chat/chat.xml, …                 loadMovie("../sharedsource/chat/chat.swf")
 ```
+
+The bundled sample is a game set under `game-files/games/`; anything specific to
+it (offline network, boot scripts, URL policy) lives in its adapter in
+`src/adapters/`, never here.
 
 - `createExternalResolver()` matches the file name of the requested URL (path and query ignored) to an export.
 - The export's scripts are transpiled with as2ts and linked the first time the game asks for them, after the player's runtime reset. Class bodies run then, like a SWF's class DoInitActions when it loads.
-- The resulting `Movie` is shared by every clip the SWF is loaded into. Gaia Fishing loads its fish SWF into 19 clips.
+- The resulting `Movie` is shared by every clip the SWF is loaded into (a game can load one SWF into many clips at once).
 - **Loading into a clip:**
   - The loaded SWF replaces the clip's children and keeps the clip's name and transform. The loaded root timeline then plays in it (`this` = the clip, `_root` = `_level0`).
   - The SWF's classes join `_global` unless a class of that name exists already (first definition wins).
@@ -60,7 +64,7 @@ fish-full/external/game_chat/game_chat.xml, …               loadMovie("../shar
 - Masks clip to the mask's bounding box.
 - Gradient fills in the drawing API use their first colour.
 - Filters and blend modes are ignored.
-- All game traffic stays offline. The bundled Execute tab injects a mock GSI/Sushi backend; custom `fetchText` and server implementations remain supported. Unhandled URL/socket requests are blocked, and request/response payloads (including blocked responses) are recorded in Req/Res.
+- All game traffic stays offline. A game adapter (src/adapters) supplies the mock HTTP backend and socket server a game needs — the engine itself only knows the `fetchText` / `gameServer` seams. Unhandled URL/socket requests are blocked, and request/response payloads (including blocked responses) are recorded in Req/Res.
 - Only `_level0` exists. `_lockroot` is not supported.
 
-Screenshots of Gaia Fishing running on this player are in `audits/as2-player/`.
+Screenshots of the bundled sample game running on this player are in `audits/as2-player/`.

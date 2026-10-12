@@ -6,8 +6,8 @@
 // scripts/), and this module turns such a package into a player `Movie` when
 // the game asks for its URL:
 //
-//   loadMovie("../sharedsource/game_chat/game_chat.swf?v=3")
-//        └─ swfNameOf → "game_chat" ─▶ package "game_chat" ─as2ts─▶ Movie
+//   loadMovie("../shared/chat/chat.swf?v=3")
+//        └─ swfNameOf → "chat" ─▶ package "chat" ─as2ts─▶ Movie
 //
 // Scripts are transpiled and linked lazily, the first time the game requests
 // the SWF (AS2 class bodies run while linking, exactly like the class
@@ -21,7 +21,7 @@ import { buildAS2Program, type AS2Build, type SourceInput } from './program';
 import type { Movie } from './player';
 
 export interface ExternalSwf {
-  /** SWF name, e.g. "bassken_fish4.20" (the export's .xml / .swf file name; extension optional) */
+  /** SWF name, e.g. "scene" (the export's .xml / .swf file name; extension optional) */
   name: string;
   doc: SwfDocument;
   assets: AssetSource | null;
@@ -32,7 +32,7 @@ export interface ExternalSwf {
   sources: () => Promise<SourceInput[]> | SourceInput[];
 }
 
-/** "../sharedsource/GSECS/gsecs2.9.swf?x=1" → "gsecs2.9" (also accepts .xml export names) */
+/** "../shared/CHAT/chat.swf?x=1" → "chat" (also accepts .xml export names) */
 export function swfNameOf(urlOrName: string): string {
   const path = String(urlOrName).split(/[?#]/)[0].replace(/\\/g, '/');
   let base = path.slice(path.lastIndexOf('/') + 1);

@@ -1,11 +1,11 @@
 // AVM1 (ActionScript 1/2) bytecode interpreter.
 //
-// A Flash 7 game like Gaia Fishing is *not* AS3: its logic lives in AVM1
+// A Flash 7-era game is *not* AS3: its logic lives in AVM1
 // ActionRecord streams (DoAction / DoInitAction tags, button condition actions
 // and clip action records).  There is no source for it, and a source-level
 // decompiler is both huge and lossy, so the studio executes the bytecode
-// directly, exactly as the Flash Player would (see
-// audits/GAIA_FISHING_INVESTIGATION.md §4).  The object model underneath is the
+// directly, exactly as the Flash Player would (the bytecode path is described
+// in src/engine/as2/README.md).  The object model underneath is the
 // one the engine installs into this runtime (src/engine/as2/builtins.ts):
 // clips are JS objects with `_x`/`_parent`/… and MovieClip methods, and
 // `_global` holds the AS2 built-ins.
@@ -400,8 +400,9 @@ function resolvePathFrom(start: any, path: string): any {
   for (const seg of p.split(/[./]/)) {
     if (!cur) return undefined;
     if (seg === '' || seg === 'this') continue;
-    if (seg === '..' || seg === '_parent') cur = cur._parent;
+    if (seg === '..' || seg === '_parent') cur = cur?._parent;
     else if (seg === '_root') cur = rootOf(cur);
+    else if (seg === '_global') cur = env.global;
     else if (/^_level\d+$/.test(seg)) cur = env.level?.(Number(seg.slice(6)));
     else cur = getProp(cur, seg);
   }
@@ -1268,6 +1269,16 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return host.Buffer.from(bin, 'binary').toString('base64');
 }
 
+/** Synthetic activation for lifted (transpiled) code: AVM1 name resolution for a
+ *  computed/path name starts at the clip the code runs on. */
+function dynamicFrame(clip: any): Frame {
+  return {
+    thisVal: clip, baseClip: clip, target: clip,
+    scope: { cls: S_LOCAL, obj: clip, parent: null },
+    registers: [], stack: [], constants: [], code: new Uint8Array(0),
+  };
+}
+
 /** Small semantic helpers for decoded TypeScript; these do not run bytecode. */
 export const avm1Semantics = {
   typeOf,
@@ -1286,4 +1297,22 @@ export const avm1Semantics = {
   construct: constructValue,
   instanceOf: isInstance,
   raise(value: any): never { throw new Avm1Thrown(value); },
+
+  // --- GetVariable/SetVariable with a name Flash resolves as a path ("mc.fish" + n,
+  // "_root.mc.x", …). These reuse the interpreter's own resolution rules.
+  getVariable(clip: any, name: any): any { return getVariable(dynamicFrame(clip), stringValue(name)).value; },
+  setVariable(clip: any, name: any, value: any): void { setVariable(dynamicFrame(clip), stringValue(name), value); },
+  defineLocal(clip: any, name: any, value: any): void { defineLocalName(dynamicFrame(clip), stringValue(name), value); },
+  defineLocalIfAbsent(clip: any, name: any): void {
+    const frame = dynamicFrame(clip), key = stringValue(name);
+    if (!hasProp(frame.scope.obj, key)) defineLocalName(frame, key, undefined);
+  },
+  callVariable(clip: any, name: any, args: any[]): any {
+    const frame = dynamicFrame(clip);
+    const found = getVariable(frame, stringValue(name));
+    return callFunctionValue(found.value, found.obj ?? targetClipOrRoot(frame), args);
+  },
+  constructVariable(clip: any, name: any, args: any[]): any {
+    return constructValue(resolveName(dynamicFrame(clip), stringValue(name)).value, args);
+  },
 };

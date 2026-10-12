@@ -159,7 +159,7 @@ export function expectedClasses(doc: { symbolClasses?: Map<number, string>; char
 
 /** A dependency SWF's code files (the transpiled sources of one loaded package). */
 export interface DependencySources {
-  /** the SWF the code came from, e.g. "game_chat.swf" */
+  /** the SWF the code came from, e.g. "chat.swf" */
   name: string;
   files: SourceFile[];
 }

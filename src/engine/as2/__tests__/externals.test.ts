@@ -47,9 +47,9 @@ const until = async (player: AS2Player, done: () => boolean) => {
 
 describe('external SWFs', () => {
   it('maps loadMovie URLs to SWF names', () => {
-    expect(swfNameOf('../sharedsource/GSECS/gsecs2.9.swf?x=1')).toBe('gsecs2.9');
-    expect(swfNameOf('bassken_fish4.20.swf')).toBe('bassken_fish4.20');
-    expect(swfNameOf('C:\\game\\Bassken_Scene.XML')).toBe('bassken_scene');
+    expect(swfNameOf('../sharedsource/CHAT/chat.swf?x=1')).toBe('chat');
+    expect(swfNameOf('fish4.20.swf')).toBe('fish4.20');
+    expect(swfNameOf('C:\\game\\My_Scene.XML')).toBe('my_scene');
   });
 
   it('loads an external SWF into a clip with its own classes and library', async () => {

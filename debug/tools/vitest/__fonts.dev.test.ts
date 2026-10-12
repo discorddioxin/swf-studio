@@ -1,15 +1,16 @@
 // Dump font code tables and the static-text / EditText characters of a bundled
 // SWF, to explain "static text renders nothing" (missing codeTable entries).
 //
-//   SWF=gsecs2.9 npx vitest run debug/tools/vitest/__fonts.dev.test.ts
+//   SWF=<name> npx vitest run debug/tools/vitest/__fonts.dev.test.ts
 // @vitest-environment node
 import { it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { parseSwfBinary } from '@/lib/swf/binary';
+import { SAMPLE_SERVICE, sampleSwfPath } from '@/adapters/gaiaFishing/sample';
 
 it('dumps font code tables and text characters', async () => {
-  const name = process.env.SWF ?? 'gsecs2.9';
-  const bytes = readFileSync(`game-files/fish-full/swfs/${name}.swf`);
+  const name = process.env.SWF ?? SAMPLE_SERVICE;
+  const bytes = readFileSync(sampleSwfPath(name));
   const { doc } = await parseSwfBinary(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, `${name}.swf`);
   console.log('parse warnings:', doc.warnings.length);
   for (const w of doc.warnings.slice(0, 12)) console.log('  !', w.slice(0, 160));

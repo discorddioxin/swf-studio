@@ -15,9 +15,9 @@ import { decodeAVM1Actions } from './avm1';
 import type { ClassDecl, Expr, Param, Stmt, TypeRef } from './ast';
 
 export interface KnownClass {
-  /** fully-qualified name, e.g. com.gaia.fishing.Fish */
+  /** fully-qualified name, e.g. com.example.game.Fish */
   name: string;
-  /** output module path relative to the project root, no extension, e.g. classes/com/gaia/fishing/Fish */
+  /** output module path relative to the project root, no extension, e.g. classes/com/example/game/Fish */
   module: string;
   /** declared members (for unqualified member resolution in subclasses) */
   members?: { name: string; isStatic: boolean; field?: boolean }[];

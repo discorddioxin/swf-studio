@@ -1,5 +1,11 @@
-// Bundled raw .swf loading: game-files/manifest.json lists the .swf files
-// shipped in the repo (regenerate them with tools/xml2swf/generate-bundled.mjs).
+// Bundled raw .swf loading.
+//
+// The public root holds an index (`manifest.json`) listing *game sets* — one
+// JSON file per bundled game under `games/`, each naming the .swf files that
+// belong to it and (optionally) the adapter that knows how to run it offline
+// (see src/adapters). Keeping the sets apart is what stops one game's SWFs,
+// fonts and script overrides leaking into an unrelated game's session.
+//
 // Everything is fetched relative to the page so it works behind any dev-server
 // or preview origin without hard-coded hosts.
 
@@ -7,47 +13,126 @@ import { parseSwfBinary, type SwfFile } from './swf/binary';
 import type { SwfDocument } from '../types';
 
 export interface BundledSwf {
-  /** package name without extension, e.g. "bassken_overview" */
+  /** package name without extension, e.g. "overview" */
   name: string;
-  /** path relative to the public root, e.g. "fish-full/swfs/bassken_overview.swf" */
+  /** path relative to the public root, e.g. "mygame/swfs/overview.swf" */
   path: string;
+  /**
+   * Sub-folder inside the set that this entry's extra files (fonts) are
+   * relative to, e.g. "mygame/external/chat". Paths already containing
+   * `/<name>/` are normalised to it without this field.
+   */
+  fileBase?: string;
   /** committed FFDec font exports (ttf cannot be synthesized from binary) */
   fonts?: string[];
   /** Optional source files which replace the matching synthetic AVM1 script. */
   scriptOverrides?: { path: string; target: string }[];
 }
 
-/** Fetch game-files/manifest.json from the public root. */
-export async function fetchBundledManifest(): Promise<BundledSwf[]> {
-  const res = await fetch('manifest.json', { cache: 'no-cache' });
-  if (!res.ok) throw new Error(`bundled manifest.json: HTTP ${res.status}`);
-  const data = await res.json();
-  const list: unknown = Array.isArray(data) ? data : data?.swfs;
-  if (!Array.isArray(list)) throw new Error('bundled manifest.json has no "swfs" array');
+/** One bundled game: the SWFs that make it up plus how to run it offline. */
+export interface GameSet {
+  /** stable id, also used as the adapter's `declaredId` (e.g. "mygame") */
+  id: string;
+  label: string;
+  /** adapter id that should run this set (see src/adapters) */
+  adapter?: string;
+  /** manifest `name` of the SWF that plays the game; defaults to the first entry */
+  main?: string;
+  swfs: BundledSwf[];
+}
+
+/** Legacy shape (a single flat list) still loads as one anonymous set. */
+const LEGACY_SET: Omit<GameSet, 'swfs'> = { id: 'bundled', label: 'Bundled SWFs' };
+
+function parseSwfEntries(list: unknown[]): BundledSwf[] {
   const out: BundledSwf[] = [];
   for (const raw of list) {
     if (typeof raw === 'string') {
       const base = raw.split('/').pop() ?? raw;
       out.push({ name: base.replace(/\.swf$/i, ''), path: raw });
-    } else if (raw && typeof raw.path === 'string') {
-      const base = raw.path.split('/').pop() ?? raw.path;
-      const fonts = Array.isArray(raw.fonts) ? raw.fonts.filter((f: unknown): f is string => typeof f === 'string') : undefined;
-      const scriptOverrides = Array.isArray(raw.scriptOverrides)
-        ? raw.scriptOverrides.filter((override: unknown): override is { path: string; target: string } =>
+    } else if (raw && typeof raw === 'object' && typeof (raw as { path?: unknown }).path === 'string') {
+      const obj = raw as Record<string, unknown>;
+      const rawPath = (raw as { path: string }).path;
+      const base = rawPath.split('/').pop() ?? rawPath;
+      const fonts = Array.isArray(obj.fonts) ? obj.fonts.filter((f: unknown): f is string => typeof f === 'string') : undefined;
+      const scriptOverrides = Array.isArray(obj.scriptOverrides)
+        ? obj.scriptOverrides.filter((override: unknown): override is { path: string; target: string } =>
             !!override && typeof override === 'object'
             && typeof (override as { path?: unknown }).path === 'string'
             && typeof (override as { target?: unknown }).target === 'string')
         : undefined;
       out.push({
-        name: typeof raw.name === 'string' && raw.name ? raw.name : base.replace(/\.swf$/i, ''),
-        path: raw.path,
+        name: typeof obj.name === 'string' && obj.name ? obj.name : base.replace(/\.swf$/i, ''),
+        path: rawPath,
+        ...(typeof obj.fileBase === 'string' && obj.fileBase ? { fileBase: obj.fileBase } : {}),
         ...(fonts?.length ? { fonts } : {}),
         ...(scriptOverrides?.length ? { scriptOverrides } : {}),
       });
     }
   }
-  if (!out.length) throw new Error('bundled manifest.json lists no swfs');
   return out;
+}
+
+function parseGame(raw: unknown, fallbackId: string): GameSet | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  const swfs = parseSwfEntries(Array.isArray(obj.swfs) ? obj.swfs : []);
+  if (!swfs.length) return null;
+  const id = typeof obj.id === 'string' && obj.id ? obj.id : fallbackId;
+  return {
+    id,
+    label: typeof obj.label === 'string' && obj.label ? obj.label : id,
+    ...(typeof obj.adapter === 'string' && obj.adapter ? { adapter: obj.adapter } : {}),
+    ...(typeof obj.main === 'string' && obj.main ? { main: obj.main } : {}),
+    swfs,
+  };
+}
+
+const fetchJson = async (path: string): Promise<unknown> => {
+  const res = await fetch(path, { cache: 'no-cache' });
+  if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
+  return res.json();
+};
+
+/**
+ * The game sets available in the public root.
+ *
+ * `manifest.json` is either an index (`{ "default": "mygame",
+ * "games": ["games/mygame.json"] }`) or — as before a game set existed — a
+ * single flat list (`{ "swfs": [...] }`), which loads as one anonymous set.
+ * A game file that cannot be read is skipped so one broken set does not hide
+ * the others; only a completely unreadable index throws.
+ */
+export async function fetchGameIndex(): Promise<GameSet[]> {
+  const data = await fetchJson('manifest.json');
+  const source = data as { games?: unknown; swfs?: unknown; default?: unknown };
+  if (Array.isArray(source.games)) {
+    const games: GameSet[] = [];
+    for (let i = 0; i < source.games.length; i++) {
+      const ref = source.games[i];
+      try {
+        const raw = typeof ref === 'string' ? await fetchJson(ref) : ref;
+        const set = parseGame(raw, `game-${i + 1}`);
+        if (set) games.push(set);
+      } catch (e) {
+        console.warn(`bundled game set ${typeof ref === 'string' ? ref : i + 1} unavailable:`, e);
+      }
+    }
+    if (!games.length) throw new Error('bundled manifest.json lists no readable game sets');
+    return games;
+  }
+  if (Array.isArray(source.swfs)) {
+    const swfs = parseSwfEntries(source.swfs);
+    if (!swfs.length) throw new Error('bundled manifest.json lists no swfs');
+    return [{ ...LEGACY_SET, swfs }];
+  }
+  throw new Error('bundled manifest.json has neither "games" nor "swfs"');
+}
+
+/** The first bundled set (kept for callers that only know about one game). */
+export async function fetchBundledManifest(): Promise<BundledSwf[]> {
+  const [set] = await fetchGameIndex();
+  return set?.swfs ?? [];
 }
 
 export interface BundledPackage {
@@ -73,6 +158,20 @@ export function swfFilesToFiles(files: SwfFile[], prefix: string): File[] {
     if (f.targetSpriteId != null) Object.defineProperty(file, '__swfTargetSpriteId', { value: f.targetSpriteId, configurable: true });
     return file;
   });
+}
+
+/**
+ * Where inside the package an entry's extra file lives: the manifest's
+ * `fileBase` when declared, otherwise the path after `…/<name>/`, otherwise the
+ * bare file name. No game-specific path needs to be known.
+ */
+export function bundledFilePath(entry: BundledSwf, fullPath: string): string {
+  const base = entry.fileBase?.replace(/\/+$/, '');
+  if (base && fullPath.startsWith(`${base}/`)) return fullPath.slice(base.length + 1);
+  const marker = `/${entry.name}/`;
+  const index = fullPath.indexOf(marker);
+  if (index >= 0) return fullPath.slice(index + marker.length);
+  return fullPath.split('/').pop() ?? fullPath;
 }
 
 /** Fetch one bundled .swf and parse it with the binary SWF parser. */
@@ -117,7 +216,7 @@ export async function fetchBundledSwf(
       const copy = new Uint8Array(await res.arrayBuffer());
       const file = new File([copy.buffer as ArrayBuffer], fontPath.split('/').pop() ?? 'font.ttf');
       Object.defineProperty(file, 'webkitRelativePath', {
-        value: `${entry.name}/${fontPath.replace(/^fish-full\/external\//, '')}`,
+        value: `${entry.name}/${bundledFilePath(entry, fontPath)}`,
         configurable: true,
       });
       asFiles.push(file);

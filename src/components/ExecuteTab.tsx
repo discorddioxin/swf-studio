@@ -35,9 +35,16 @@ type CodeState =
 
 const MAX_LOG = 500;
 
-export function ExecuteTab({ externals, project, ...props }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[] }) {
+export function ExecuteTab({ externals, project, gameSetId, adapterId, onAdapterChange, ...props }: {
+  doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
+  /** bundled game set the session came from, if any (the adapter hint) */
+  gameSetId?: string | null;
+  /** game adapter pick: 'auto' (detect) or an id from src/adapters */
+  adapterId?: string | null;
+  onAdapterChange?: (id: string) => void;
+}) {
   return isAs2Bundle(props.doc, props.assets)
-    ? <As2Execute {...props} project={project} externals={externals} />
+    ? <As2Execute {...props} project={project} externals={externals} gameSetId={gameSetId} adapterId={adapterId} onAdapterChange={onAdapterChange} />
     : <As3Execute {...props} project={project} externals={externals} />;
 }
 

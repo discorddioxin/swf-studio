@@ -86,7 +86,7 @@ language.
 
 ## 6. Capture tool
 
-`tools/gaia-capture/` is a Puppeteer script to run locally while logged in to
+`src/adapters/gaiaFishing/tools/gaia-capture/` is a Puppeteer script to run locally while logged in to
 Gaia. It opens a visible Chrome window; you log in yourself, and no credentials
 pass through the script. It records the live game:
 
@@ -100,7 +100,7 @@ pass through the script. It records the live game:
   so on).
 
 ```
-cd tools/gaia-capture && npm install
+cd src/adapters/gaiaFishing/tools/gaia-capture && npm install
 node capture.mjs --seconds 90 --interval 250
 ```
 

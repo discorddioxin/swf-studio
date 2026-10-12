@@ -16,10 +16,10 @@ cd swf-studio
 npm install
 
 # 1. decompile the SWF's scripts with FFDec (Windows: ffdec.bat, macOS/Linux: ffdec.sh)
-ffdec -export script ./ffdec-out bassken_game4.20.swf
+ffdec -export script ./ffdec-out mygame.swf
 
 # 2. transpile the whole export
-npm run as2ts -- ./ffdec-out -o src/games/gaia-fishing
+npm run as2ts -- ./ffdec-out -o src/games/mygame
 
 # a single file is printed to stdout
 npm run as2ts -- ./ffdec-out/scripts/frame_1/DoAction.as
@@ -36,12 +36,12 @@ The input can be an FFDec export folder, a `.zip` of one, or a single `.as` file
 ## What it produces
 
 ```
-src/games/gaia-fishing/
+src/games/mygame/
   index.ts                  export const program: AS2Program  (registry of everything below)
   timelines/root.ts         main timeline: frames{1: fn, 2: fn…}, placements{"frame:depth": handlers}
   timelines/sprite_30.ts    one module per DefineSprite that has code (+ `init` for DoInitAction)
   buttons/button_12.ts      on(release)/on(rollOver)… handlers of DefineButton2 #12
-  classes/gaia/fishing/FishingGame.ts   AS2 classes from __Packages, as real TS classes
+  classes/com/example/Game.ts           AS2 classes from __Packages, as real TS classes
   as2ts-report.md           what went where, plus every warning/error with its line number
 ```
 

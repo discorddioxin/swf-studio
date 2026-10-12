@@ -1,6 +1,10 @@
+// Dumps the DefineButton2 records of one bundled FFDec export.
+//
+//   node debug/tools/btnxml.dev.mjs
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
-const xml = readFileSync('game-files/fish-full/external/gsecs2.9/gsecs2.9.xml', 'utf8');
+import { SAMPLE_SERVICE, sampleExportDir } from '../../src/adapters/gaiaFishing/sample.ts';
+const xml = readFileSync(`${sampleExportDir(SAMPLE_SERVICE)}/${SAMPLE_SERVICE}.xml`, 'utf8');
 const dom = new JSDOM(xml, { contentType: 'text/xml' });
 const doc = dom.window.document;
 const all = [...doc.querySelectorAll('item[type="DefineButton2Tag"]')];

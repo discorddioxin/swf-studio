@@ -35,13 +35,32 @@ function queue(files: File[]) {
   fireEvent.change(input);
 }
 
-const BUNDLED_MANIFEST = {
-  swfs: [
-    { name: 'bassken_overview', path: 'fish-full/swfs/bassken_overview.swf' },
-    { name: 'bassken_pier', path: 'fish-full/swfs/bassken_pier.swf' },
-    { name: 'gsecs2.9', path: 'fish-full/swfs/gsecs2.9.swf' },
-  ],
+// Two bundled sets, so the drop-downs are shown to keep them apart: a game's
+// list contains its own SWFs only.
+const GAME_INDEX = { default: 'alpha', games: ['games/alpha.json', 'games/beta.json'] };
+const GAME_SETS: Record<string, unknown> = {
+  'games/alpha.json': {
+    id: 'alpha', label: 'Alpha Game', main: 'alpha_main',
+    swfs: [
+      { name: 'alpha_main', path: 'alpha/swfs/alpha_main.swf' },
+      { name: 'alpha_ext', path: 'alpha/swfs/alpha_ext.swf' },
+    ],
+  },
+  'games/beta.json': {
+    id: 'beta', label: 'Beta Game', main: 'beta_main',
+    swfs: [{ name: 'beta_main', path: 'beta/swfs/beta_main.swf' }],
+  },
 };
+
+function serveGameIndex() {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input).replace(/[?#].*$/, '');
+    const body = url === 'manifest.json' ? GAME_INDEX : GAME_SETS[url];
+    return body ? new Response(JSON.stringify(body), { status: 200 }) : new Response('not found', { status: 404 });
+  }) as unknown as typeof fetch;
+  return () => { globalThis.fetch = realFetch; };
+}
 
 describe('Loader', () => {
   it('lists the SWFs in the queued upload and loads the picked main one first', async () => {
@@ -77,23 +96,45 @@ describe('Loader', () => {
     await waitFor(() => expect([...select.options].map((o) => o.value)).toEqual(['game/main.swf', 'game/external/chat.swf']));
   });
 
-  it('offers the bundled SWFs with a main-SWF drop-down', async () => {
-    const realFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(BUNDLED_MANIFEST), { status: 200 })) as unknown as typeof fetch;
+  it('offers each bundled game with its own main-SWF drop-down', async () => {
+    const restore = serveGameIndex();
     try {
       const onBundled = vi.fn();
       render(<Loader onFiles={vi.fn()} onBundled={onBundled} />);
 
-      const select = await waitFor(() => screen.getByLabelText('Bundled main SWF') as HTMLSelectElement);
-      expect([...select.options].map((o) => o.value)).toEqual(['bassken_overview', 'bassken_pier', 'gsecs2.9']);
-      expect(select.value).toBe('bassken_overview');
-      expect(screen.getByText(/the other 2 load as dependencies/)).toBeTruthy();
+      const gameSelect = await waitFor(() => screen.getByLabelText('Bundled game') as HTMLSelectElement);
+      expect([...gameSelect.options].map((o) => o.value)).toEqual(['alpha', 'beta']);
 
-      fireEvent.change(select, { target: { value: 'gsecs2.9' } });
+      // Alpha's list holds Alpha's SWFs only — the other set never leaks in.
+      const select = screen.getByLabelText('Bundled main SWF') as HTMLSelectElement;
+      expect([...select.options].map((o) => o.value)).toEqual(['alpha_main', 'alpha_ext']);
+      expect(select.value).toBe('alpha_main');
+      expect(screen.getByText(/Alpha Game: the selected SWF plays the game; the other 1 load as dependencies/)).toBeTruthy();
+
+      // Switching the game swaps the SWF list (and its default main movie).
+      fireEvent.change(gameSelect, { target: { value: 'beta' } });
+      await waitFor(() => expect([...(screen.getByLabelText('Bundled main SWF') as HTMLSelectElement).options].map((o) => o.value)).toEqual(['beta_main']));
+
+      fireEvent.change(screen.getByLabelText('Bundled main SWF'), { target: { value: 'beta_main' } });
       fireEvent.click(screen.getByText('Use bundled SWFs'));
-      expect(onBundled).toHaveBeenCalledWith('gsecs2.9');
+      expect(onBundled).toHaveBeenCalledWith('beta', 'beta_main');
     } finally {
-      globalThis.fetch = realFetch;
+      restore();
+    }
+  });
+
+  it('falls back to a legacy flat manifest as one anonymous set', async () => {
+    const restore = serveGameIndex();
+    const legacy = { swfs: [{ name: 'alpha_main', path: 'alpha/swfs/alpha_main.swf' }] };
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(legacy), { status: 200 })) as unknown as typeof fetch;
+    try {
+      render(<Loader onFiles={vi.fn()} onBundled={vi.fn()} />);
+      const select = await waitFor(() => screen.getByLabelText('Bundled main SWF') as HTMLSelectElement);
+      expect([...select.options].map((o) => o.value)).toEqual(['alpha_main']);
+      // a single set means no game picker
+      expect(screen.queryByLabelText('Bundled game')).toBeNull();
+    } finally {
+      restore();
     }
   });
 

@@ -2,9 +2,10 @@
 import { it } from 'vitest';
 import { buildAS2Program } from '@/engine/as2/program';
 import { readFileSync } from 'node:fs';
+import { SAMPLE_SERVICE, sampleExportDir } from '@/adapters/gaiaFishing/sample';
 
 it('peek generated UIObject ts', () => {
-  const xmlDir = 'game-files/fish-full/external/gsecs2.9/scripts';
+  const xmlDir = `${sampleExportDir(SAMPLE_SERVICE)}/scripts`;
   const src = readFileSync(`${xmlDir}/__Packages/mx/core/UIObject.as`, 'utf8');
   const build = buildAS2Program([{ path: '__Packages/mx/core/UIObject.as', text: src }]);
   console.log('keys:', [...build.files.keys()].join(', '));
