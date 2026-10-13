@@ -190,6 +190,55 @@ interpreter-parity suite `transpiler/as2/__tests__/avm1.test.ts` as the safety n
    machine over a `$stack` array instead of deferring to the interpreter. Effort **L**, risk
    **M**; the last resort and the only shape that covers arbitrary bytecode.
 
+## 7. Verified against the uploaded corpus (6 game sets, 43 SWFs)
+
+The failing set and five more were uploaded to
+[`discorddioxin/swf-forge`](https://github.com/discorddioxin/swf-forge) — branch
+`swf-uploads`, `games-swfs/`: blackjack, fishing, pinball, tiles, towns2, word-bump.
+43 files, 12 MB, SWF 6–24, **376 filter lists in 9 of them**.
+
+Reproduction with the pre-fix parser (`fb74bfa`):
+
+| file | pre-fix result |
+|---|---|
+| `pinball-swfs/game.swf` | **throws `unknown filter 51`** — the reported failure; a 1.8 MB movie rejected at load |
+| `towns2-swfs/towns2.swf` | throws `unknown filter 88` |
+| `word-bump-swfs/wordbump_game1.4.swf` | warning `DefineButton2Tag: unknown filter 9`; the tag (a button with four drop shadows) was dropped |
+| the other 40 | parsed |
+
+The exact record behind the rejection is `pinball-swfs/game.swf`, sprite 528, depth 9: a
+PlaceObject3 with a **Glow + Bevel** list. The pre-fix sizes over-consumed the Glow by 6 bytes
+and read the next "filter id" from inside the Bevel payload — `0x33`, i.e. **51**. It is now
+the first real-bytes test in `src/lib/swf/filterList.test.ts`, together with the towns2 record
+(`DropShadow + Glow`, which the old sizes read as `[0, 0]`: no throw, silently wrong picture)
+and the word-bump button record (`[0, 0, 0, 0]`, old sizes ended on 9).
+
+After the fix, all 43 parse with **zero warnings** — including the structural checks added in
+§2/§3, which stay silent across every place record in a v6–v24 corpus. Driving the real upload
+path (`loadUploadedPackages`, i.e. what the Loader does) loads all six sets as 4–11 packages.
+
+**What each set needs next.** The corpus splits cleanly:
+
+| sets | SWF | actions | runnable by |
+|---|---|---|---|
+| fishing (v7), blackjack (v8), word-bump (v8) | AVM1 — `DoAction`/`DoInitAction` present, no `DoABC` | the AS2 engine (`src/engine/as2`) executes them directly |
+| pinball (v9), tiles (v9), towns2 (v17/18/24) | one `DoABC` tag, **no AVM1 actions at all** | parse/inspect only |
+
+The AS3 sets' stage content is created by code, so they will load and show little motion: the
+SWF dump supplies symbols and timelines, but `src/engine/flash` runs *transpiled* TypeScript
+classes and nothing in this repository turns ABC into source. Running those three sets is an
+ABC→source milestone, not a display-list one.
+
+Re-runnable at any time:
+
+* `src/lib/swf/filterList.test.ts` — three real records, verbatim, with the ids the pre-fix
+  sizes landed on.
+* `debug/tools/vitest/uploadedCorpus.dev.test.ts` — parses the whole corpus and requires no
+  structural report; skips cleanly when the corpus is not present
+  (`SWF_CORPUS=/path/to/games-swfs`, or clone to `/tmp/swf-forge`).
+* Button records now carry `hasFilters` too (real case: word-bump `DefineButton2 #541`), so the
+  inspector marks filtered button states.
+
 ## 6. Follow-ups noted, not fixed
 
 * `PlaceOp`/`DisplayItem` still hard-code `hasFilters: false` for button records and do not

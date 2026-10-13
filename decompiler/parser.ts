@@ -942,6 +942,8 @@ function buildButtonTimeline(P: Parser, id: number, el: Element) {
         characterId: cid,
         matrix: P.matrixOf(r) ?? { ...IDENTITY },
         colorTransform: P.colorOf(r),
+        // same filter detection the place records use: a FILTER child element
+        hasFilters: !!findData(r, (e) => /Filter$/i.test(e.getAttribute('type') ?? e.tagName)),
         ratio: 0, startFrame: i,
       });
     }

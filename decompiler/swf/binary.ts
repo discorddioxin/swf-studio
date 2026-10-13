@@ -916,6 +916,7 @@ function parsePlace2(
 interface ButtonRec {
   up: boolean; over: boolean; down: boolean; hit: boolean;
   characterId: number; placeDepth: number; matrix: Matrix; ct?: ColorTransform;
+  hasFilters: boolean;
 }
 
 interface ButtonCondAction {
@@ -951,7 +952,7 @@ function parseButton2(
     const ct = normalizeCt(readCxform(br, true));
     if (hasFilters) skipFilterList(br, `DefineButton2 #${id}`);
     if (hasBlend) br.u8();
-    records.push({ up, over, down, hit, characterId, placeDepth, matrix, ct });
+    records.push({ up, over, down, hit, characterId, placeDepth, matrix, ct, hasFilters });
     void recReserved;
   }
   br.align();
@@ -1553,7 +1554,7 @@ export async function parseSwfBinary(
         if (r.characterId < 0) continue;
         display.push({
           depth: r.placeDepth, characterId: r.characterId, matrix: r.matrix,
-          colorTransform: r.ct, ratio: 0, startFrame: i,
+          colorTransform: r.ct, ratio: 0, hasFilters: r.hasFilters, startFrame: i,
         });
       }
       display.sort((a, b) => a.depth - b.depth);

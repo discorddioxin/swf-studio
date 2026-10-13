@@ -181,6 +181,24 @@ function swf(opts: { button?: number[]; place?: number[]; placeClipDepthFirst?: 
 
 const CLIP_ACTION_SCRIPT = 'scripts/frame_1/PlaceObject2_17_3/CLIPACTIONRECORD onClipEvent(enterFrame).as';
 
+/** A SWF whose timeline carries the given tag bodies verbatim. */
+function swfWithRawTags(tags: { type: number; body: number[] }[]): ArrayBuffer {
+  const body = new BitWriter();
+  body.ub(0, 5).align();                  // RECT: 0 bits
+  body.u16(0x000c).u16(1);                // frame rate 12, one frame
+  for (const t of tags) body.raw(tagBytes(t.type, t.body));
+  body.raw(tagBytes(1, []));              // ShowFrame
+  body.raw(tagBytes(0, []));              // End
+
+  const header = new BitWriter();
+  const length = 8 + body.bytes.length;
+  header.u8(0x46).u8(0x57).u8(0x53).u8(8).u32(length);
+  const all = Uint8Array.from([...header.bytes, ...body.bytes]);
+  return all.buffer.slice(all.byteOffset, all.byteOffset + all.byteLength) as ArrayBuffer;
+}
+
+const bytesOf = (hex: string) => hex.trim().split(/\s+/).map((h) => parseInt(h, 16));
+
 describe('FILTERLIST decoding', () => {
   it('keeps the record aligned after a filter list on a button record', async () => {
     const { doc, files } = await parseSwfBinary(swf({ button: filterList([0]) }), 'button-filter.swf');
@@ -247,5 +265,65 @@ describe('placed-record layout', () => {
     const rec = display.find((d) => d.depth === 3) as { name?: string; clipDepth?: number } | undefined;
     expect(rec?.name).not.toBe('n1');
     expect(rec?.clipDepth).toBeGreaterThan(0x1000);
+  });
+});
+
+// Real bytes, verbatim from the game SWFs the user uploaded (branch
+// `swf-uploads` of discorddioxin/swf-forge, games-swfs/): a 376-filter-list
+// corpus across six game sets. Each record below is one the pre-fix filter
+// sizes misread — the ids they landed on are what the loader then reported.
+describe('records from the uploaded game sets', () => {
+  it('reads the record behind the reported "unknown filter 51"', async () => {
+    // pinball-swfs/game.swf, sprite 528, depth 9: a filtered Glow + Bevel.
+    // Pre-fix sizes over-consumed the Glow by 6 bytes and read the next filter
+    // id from the middle of the Bevel payload: `unknown filter 51`, which
+    // rejected the whole 1.8 MB file at load time.
+    const record = bytesOf(`
+      01 01 09 00 02 02 00 99 00 ff 00 00 01 00 00 00 01 00 00 02 e3 03
+      ff ff ff ff 66 33 00 ff 00 00 01 00 00 00 01 00 1f 92 01 00 00 00 01 00 33 01 33`);
+    const { doc } = await parseSwfBinary(swfWithRawTags([{ type: 70, body: record }]), 'pinball-game.swf');
+    expect(doc.warnings).toEqual([]);
+    const frames = doc.timelines.get('root')?.frames ?? [];
+    expect(frames[0]?.ops[0]).toMatchObject({ depth: 9, hasFilters: true });
+  });
+
+  it('reads a filtered place record that carries a name', async () => {
+    // towns2-swfs/towns2.swf, sprite 124, depth 4 (name "fText" — the file
+    // contains `19 23 7e f6 66 54 65 78 74 00`, so the matrix ends before the
+    // "f"): DropShadow + Glow. Pre-fix sizes stayed inside the tag by luck and
+    // read [0, 0] — the glow came back as a second drop shadow and every field
+    // after it drifted.
+    const record = bytesOf(`
+      26 01 04 00 6e 00 19 23 7e f6 66 54 65 78 74 00 02 00 00 00 00 cc
+      00 00 02 00 00 00 01 00 1f 92 01 00 33 33 01 00 80 01 21 02 00 00
+      00 ff 00 00 02 00 00 00 01 00 b3 00 21`);
+    const { doc } = await parseSwfBinary(swfWithRawTags([{ type: 70, body: record }]), 'towns2.swf');
+    expect(doc.warnings).toEqual([]);
+    const display = doc.timelines.get('root')?.frames[0]?.display ?? [];
+    expect(display[0]).toMatchObject({ depth: 4, characterId: 0x006e, name: 'fText', hasFilters: true });
+  });
+
+  it('reads a filtered button record', async () => {
+    // word-bump-swfs/wordbump_game1.4.swf, DefineButton2 #541: two records, the
+    // second with four DropShadow filters. Pre-fix sizes ended the list on an
+    // id of 9 and the tag was dropped with `unknown filter 9`; the records now
+    // end exactly where the conditional actions start (byte 125 of the body).
+    const record = bytesOf(`
+      1d 02 00 7a 00 0f 1b 02 01 00 00 04 1f 1c 02 02 00 c1 b3 35 b3 34
+      c4 3b 08 70 04 04 00 00 66 ff ff 00 00 00 00 00 00 00 00 5f b6 04
+      00 00 00 01 00 99 00 23 00 00 66 ff ff 00 00 00 00 00 00 00 00 3f
+      24 03 00 00 00 01 00 99 00 23 00 00 66 ff ff 00 00 00 00 00 00 00
+      00 1f 92 01 00 00 00 02 00 99 00 23 00 00 66 ff ff 00 00 01 00 00
+      00 01 00 00 00 00 00 00 00 02 00 a1 00 23 00 00 00 08 00 96 09 00
+      00 5f 70 61 72 65 6e 74 00 1c 96 10 00 00 6d 63 53 65 6e 64 54 6f
+      46 72 69 65 6e 64 00 4e 96 0c 00 00 5f 76 69 73 69 62 6c 65 00 05
+      01 4f 00`);
+    const { doc } = await parseSwfBinary(swfWithRawTags([{ type: 34, body: record }]), 'wordbump.swf');
+    expect(doc.warnings).toEqual([]);
+    expect(doc.characters.get(541)?.kind).toBe('button');
+    const display = doc.timelines.get('button:541')?.frames[0].display ?? [];
+    expect(display.length).toBeGreaterThan(0);
+    // the filtered record is the one with the four drop shadows
+    expect(display.some((d) => d.hasFilters)).toBe(true);
   });
 });
