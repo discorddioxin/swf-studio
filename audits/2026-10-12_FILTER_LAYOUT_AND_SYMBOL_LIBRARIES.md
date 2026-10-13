@@ -1,7 +1,7 @@
 # Upload failure “unknown filter 51”, record layout, and the library warns — 2026-10-12
 
 Revision: `fb74bfa` + the working tree of this session (branch `arena/8293b842-swf-studio`).
-Gates at this revision: `tsc` clean · vitest **295 passed / 3 skipped (68 files)** · `npm run build` 1,820.05 kB (gzip 522.48) · audit 6 vulns.
+Gates at this revision: `tsc` clean · vitest **300 passed / 3 skipped (68 files)** · `npm run build` 1,820.54 kB (gzip 522.81) · audit 6 vulns.
 
 ---
 
@@ -45,9 +45,14 @@ reported error — `unknown filter 80`, `unknown filter 8`, and an uncaught
 `unknown filter 9 (…)` escaping `parseSwfBinary` from `parsePlace2`. All-zero payloads (the
 previous check) hid the bug: reading zeros yields “filter 0” forever.
 
-The bundled fishing SWFs contain **no** filter list at all (verified by a spec-exact scan of
-DefineButton2/PlaceObject3 records in all 8 files), which is why this never fired before and
-why `audits/SWF_SPEC_19_AUDIT.md` “filters parsed per spec” was never tested against bytes.
+The bundled fishing SWFs contain **no** filter list at all (spec-exact scan of DefineButton2
+and PlaceObject3 records across all 8 files, walking tags from the real first tag — after the
+RECT/frame header, not from byte 8), which is why this never fired before and why
+`audits/SWF_SPEC_19_AUDIT.md` “filters parsed per spec” was never tested against bytes.
+
+The Loader now also names the file: `game.swf: unknown filter 51 (DefineButton2 #23, filter
+3/9, +35 bytes into the list)`. The message itself is unchanged in kind (a filter the format
+does not define is still an error, never silently skipped) — it just says where.
 
 ## 2. Same reader: PlaceObject3 trailing fields
 
@@ -58,27 +63,48 @@ second flag byte lost ClipActions to a 5-byte shift. Both payloads are now skipp
 filters, blend, cache, visibility and clip actions`, which asserts the produced
 `CLIPACTIONRECORD onClipEvent(enterFrame).as` script).
 
-## 3. Placed records store `ClipDepth` **before** `Name`
+## 3. Placed records store `Name` **before** `ClipDepth` — and six bundled SWFs are regenerated
 
-While fixing the above, the record field order itself was checked against real bytes:
+The field order inside a placed record came up while checking the fix above, and it is
+worth recording how it was settled, because the first attempt went wrong in an instructive
+way.
 
-* `game-files/fish-full/swfs/gsecs2.9.swf`, sprite 22, PlaceObject2 for `characterId=18`,
-  `depth=2`: after the matrix the bytes are `ratio=0000`, `06 00`, `"mask\0"`, and the record
-  ends exactly at the next tag header (`9b 06`, 27 bytes).
-* The committed FFDec export agrees: `characterId="18" clipDepth="6" name="mask"`.
-* The opposite reading yields `name="\u0006"` (not a legal identifier, not writable XML) and
-  `clipDepth=24941` (a clip depth must exceed the depth) — so the bytes are unambiguous.
+**What the bytes say.** `bassken_game4.21.swf` is one of the two bundled files still in its
+original compressed form (CWS; the writer here only ever emits FWS), and sprite 14 depth 2
+carries a record with both a name and a clip depth:
 
-The published spec and JPEXS’ *source* list `Name` before `ClipDepth`; real Flash-authored
-files store `ClipDepth` first. `decompiler/swf/binary.ts` follows the bytes (with a comment
-so nobody “fixes” it from the tag definition alone), and `tools/xml2swf/xml2swf.mjs` mirrors
-the reader.
+```
+66 02 00 0a 00 00 | "mask" | 06 00        (13-byte tag, consumed exactly)
+```
 
-**Oracle strengthening (important):** the round-trip test could not see this class of bug,
-because the writer shared the reader’s field order — both were wrong together. Added
-`original bytes ≡ xml` in `src/lib/swf/swf-roundtrip.test.ts`: `parseSwfBinary` on the
-**original** bundled SWF must equal `parseSwfXml` on the committed FFDec export. That is now
-the primary guard for record layout (and it fails if either side drifts again).
+Name first, then ClipDepth, per the spec — and per FFDec (`PlaceObject2Tag.readData`) and
+swf-parser. Reading ClipDepth first consumes `6d 61` as a clip depth of 24941 (larger than
+every layer in the movie) and a name of `sk`, and leaves two bytes behind. All 518 place
+records of gsecs2.9 and all 7359 of bassken_game4.21 now decode with **zero** leftover bytes,
+a check that did not exist before and is now permanent (`leftover` on `Place2Info`, reported
+as a `warnings[]` entry by both parser passes).
+
+**Why the first attempt concluded the opposite.** The committed
+`game-files/fish-full/swfs/{bassken_fish4.20,bassken_overview,bassken_pier,bassken_scene,game_chat,gsecs2.9}.swf`
+are byte-for-byte `xmlToSwf(<name>.xml)` — output of this repository's own `tools/xml2swf`.
+They are generated fixtures, not the bytes FFDec read, so a field order that the *writer and
+the reader get wrong together* is invisible in them: they round-trip perfectly by
+construction. Treating one of those files as "the real bytes" therefore produced a confident,
+wrong answer. Two things now guard against a repeat:
+
+* `src/lib/swf/swf-roundtrip.test.ts` states the provenance, keeps the reader↔FFDec-XML
+  comparison (`bundled bytes ≡ xml`), and adds a `bundled originals` block that asserts the
+  CWS originals decode with no structural report and that the record above comes out as
+  `name="mask"`, `clipDepth=6`.
+* `src/lib/swf/filterList.test.ts` (`placed-record layout`) builds a record in the wrong order
+  and asserts the parser reports it, so the invariant cannot rot.
+
+**Effect on the bundled game:** before this correction the original main-app file
+`bassken_game4.21.swf` was read with `name="sk"`, `clipDepth=24941` for that record — a mask
+that clips to a depth range far beyond the movie, i.e. wrong layering. It now reads
+`name="mask"`, `clipDepth=6`. The generated fixtures were regenerated with the corrected
+writer (`gsecs2.9.swf` is the only file whose bytes change; same length, 297,335 B), and all
+eight bundled SWFs decode with no structural report.
 
 ## 4. `attachMovie: no symbol exported as "FocusManager"` / `Sound.attachSound: "bgMusic"`
 
@@ -169,8 +195,11 @@ interpreter-parity suite `transpiler/as2/__tests__/avm1.test.ts` as the safety n
 * `PlaceOp`/`DisplayItem` still hard-code `hasFilters: false` for button records and do not
   carry `blendMode` for place records, while the FFDec XML path sets both
   (`decompiler/parser.ts`). Place records now carry `hasFilters` from the record; button
-  records and `blendMode` parity are still open (the round-trip oracle is blind to both while
-  the corpus has no filtered/ blended clips).
+  records and `blendMode` parity are still open — and note the corpus has no filtered or
+  blended clips at all, so no current test can see the difference.
+* The six regenerated fixtures in `game-files/fish-full/swfs/` are writer output. Byte-level
+  claims about SWF layout should be checked against the two CWS originals (or another real
+  file), never against those six; the test file says so where it matters.
 * Filters and `blendMode` are decoded/skipped but not rendered (unchanged): visible as missing
   glows/drop shadows on any SWF that uses them.
 * `docs/AVM1_ACTIONS_ENCODING.md` still lists `0x55` as unsupported and does not mention the

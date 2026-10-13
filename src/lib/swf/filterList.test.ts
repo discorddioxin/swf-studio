@@ -132,34 +132,43 @@ function buttonBody(list: number[]): number[] {
 }
 
 /** PlaceObject3 that carries every trailing field, filter list included, plus clip actions. */
-function placeBody(list: number[]): number[] {
+function placeBody(list: number[], clipDepthFirst = false, withClipActions = true): number[] {
   const w = new BitWriter();
-  w.u8(0xfe);                             // HasClipActions|ClipDepth|Name|Ratio|CXFORM|Matrix|Character
+  w.u8(withClipActions ? 0xfe : 0x7e);    // ClipDepth|Name|Ratio|CXFORM|Matrix|Character (+ClipActions)
   w.u8(0x67);                             // HasFilterList|BlendMode|CacheAsBitmap|Visible|BackgroundColour
   w.u16(3);                               // depth
   w.u16(0x0011);                          // characterId
   matrix(w, 1, 2);
   cxform(w, [0xff, 0xfe, 0xfd, 0xfc], [1, 2, 3, 4]);
   w.u16(0x0102);                          // ratio
-  w.u16(9);                               // clipDepth (placed records store it before the name)
-  w.str('n1');                            // name
+  if (clipDepthFirst) {                   // the wrong order, for the guard test below
+    w.u16(9);                             // clipDepth
+    w.str('n1');                          // name
+  } else {
+    w.str('n1');                          // name (spec: name before clipDepth)
+    w.u16(9);                             // clipDepth
+  }
   w.raw(list);
   w.u8(0x02);                             // blend mode
   w.u8(1);                                // bitmap cache
   w.u8(0);                                // visible
   w.raw([0xaa, 0xbb, 0xcc, 0xdd]);        // background colour
-  w.u16(0).u32(1 << 1);                   // clip actions: reserved, allEventFlags (enterFrame)
-  w.u32(1 << 1).u32(1).u8(0x07);          // one record: enterFrame, 1 byte of actions
-  w.u32(0);                               // end of clip actions
+  if (withClipActions) {
+    w.u16(0).u32(1 << 1);                 // clip actions: reserved, allEventFlags (enterFrame)
+    w.u32(1 << 1).u32(1).u8(0x07);        // one record: enterFrame, 1 byte of actions
+    w.u32(0);                             // end of clip actions
+  } else {
+    w.u16(0).u32(0).u32(0);               // empty clip actions
+  }
   return w.bytes;
 }
 
-function swf(opts: { button?: number[]; place?: number[] }): ArrayBuffer {
+function swf(opts: { button?: number[]; place?: number[]; placeClipDepthFirst?: boolean; placeClipActions?: boolean }): ArrayBuffer {
   const body = new BitWriter();
   body.ub(0, 5).align();                  // RECT: 0 bits, empty bounds
   body.u16(0x000c).u16(1);                // frame rate 12, one frame
   if (opts.button) body.raw(tagBytes(34, buttonBody(opts.button)));
-  if (opts.place) body.raw(tagBytes(70, placeBody(opts.place)));
+  if (opts.place) body.raw(tagBytes(70, placeBody(opts.place, opts.placeClipDepthFirst, opts.placeClipActions)));
   body.raw(tagBytes(1, []));              // ShowFrame
   body.raw(tagBytes(0, []));              // End
 
@@ -217,5 +226,26 @@ describe('FILTERLIST decoding', () => {
     // raw FILTERLIST: one filter, id 9 — not a filter kind the format defines
     const { doc } = await parseSwfBinary(swf({ button: [1, 9] }), 'button-bad-filter.swf');
     expect(doc.warnings.join('\n')).toMatch(/unknown filter 9 \(DefineButton2 #23/);
+  });
+});
+
+// A record that does not consume its tag is a misparse, not a quirk: every
+// structure inside it has a fixed size. These checks are what caught the
+// Name/ClipDepth swap — the reader and the writer had it wrong together, so the
+// re-serialising round-trip stayed green and only the raw bytes disagreed.
+describe('placed-record layout', () => {
+  it('reports place records that leave bytes behind, and nothing for correct ones', async () => {
+    const good = await parseSwfBinary(swf({ place: filterList([0]) }), 'good.swf');
+    expect(good.doc.warnings).toEqual([]);
+
+    const bad = await parseSwfBinary(
+      swf({ place: filterList([0]), placeClipDepthFirst: true, placeClipActions: false }), 'bad.swf',
+    );
+    expect(bad.doc.warnings.join('\n')).toMatch(/PlaceObject3 depth 3: \d+ byte\(s\) left after the last field/);
+    // and the values a reader would derive from the swapped layout
+    const display = bad.doc.timelines.get('root')?.frames[0].display ?? [];
+    const rec = display.find((d) => d.depth === 3) as { name?: string; clipDepth?: number } | undefined;
+    expect(rec?.name).not.toBe('n1');
+    expect(rec?.clipDepth).toBeGreaterThan(0x1000);
   });
 });

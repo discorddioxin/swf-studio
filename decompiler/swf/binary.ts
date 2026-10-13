@@ -780,6 +780,9 @@ interface Place2Info {
   depth: number; hasChar: boolean; move: boolean; characterId: number;
   matrix?: Matrix; ct?: ColorTransform; ratio?: number; name?: string;
   clipDepth?: number; hasFilters: boolean; clipActions?: ClipActionRec[];
+  /** bytes left in the tag body after every field — 0 for a well-formed record.
+   *  Anything else means a field was misread (wrong size/order/flag handling). */
+  leftover: number;
 }
 
 const SWF_SPECIAL_KEYS: Record<number, string> = {
@@ -813,7 +816,10 @@ const CLIP_EVENT_BITS: [number, string, 'clip' | 'button'][] = [
   [18, 'construct', 'clip'],
 ];
 
-function parsePlace2(data: Uint8Array, isPlace3 = false, version = 8): Place2Info {
+function parsePlace2(
+  data: Uint8Array, isPlace3 = false, version = 8,
+  warn: (message: string) => void = () => {},
+): Place2Info {
   const br = new BitReader(data);
   const f1 = br.u8();
   const f2 = isPlace3 ? br.u8() : 0;
@@ -839,17 +845,21 @@ function parsePlace2(data: Uint8Array, isPlace3 = false, version = 8): Place2Inf
   const matrix = hasMatrix ? readMatrix(br) : undefined;
   const ct = hasCt ? readCxform(br, true) : undefined;
   const ratio = hasRatio ? br.u16() : undefined;
-  // Placed records put ClipDepth before Name (verified against the bundled
-  // gsecs2.9 sprite 22 record and its FFDec export: the bytes are
-  // `ratio, clipDepth, "mask"`). The published spec lists Name first, so do
-  // not "fix" the order by reading the tag definition alone — follow the
-  // bytes and the FFDec oracle (swf-roundtrip.test.ts).
+  // Name comes before ClipDepth (spec order; FFDec `PlaceObject2Tag.readData`
+  // and swf-parser read it the same way). Checked against bytes that are known
+  // to be original: bassken_game4.21.swf (CWS) sprite 14 depth 2 is
+  // `66 02 00 0a 00 00 "mask" 06 00` — Name then ClipDepth, consuming exactly
+  // the 13-byte tag. The reverse order turns "ma" into the clip depth (24941,
+  // greater than every layer in the movie) and leaves two bytes behind, which
+  // the leftover check below reports. Note that six of the bundled `.swf` files
+  // are `xmlToSwf` output, so they can never settle a question like this on
+  // their own — see src/lib/swf/swf-roundtrip.test.ts.
+  const name = hasName ? br.str() || undefined : undefined;
   let clipDepth: number | undefined;
   if (hasClipDepth) {
     const v = br.u16();
     if (v > 0) clipDepth = v;
   }
-  const name = hasName ? br.str() || undefined : undefined;
   if (hasFilterList) skipFilterList(br, `PlaceObject${isPlace3 ? 3 : 2} depth ${depth}`);
   if (hasBlendMode) br.u8();
   if (hasCacheAsBitmap) br.u8();
@@ -887,9 +897,17 @@ function parsePlace2(data: Uint8Array, isPlace3 = false, version = 8): Place2Inf
       // ignore truncated clipActions
     }
   }
+  // CXFORMWITHALPHA ends mid-byte; the trailing bits of that byte are padding,
+  // and every byte-aligned read aligns itself first. Measure from the boundary.
+  br.align();
+  const leftover = br.remaining;
+  if (leftover > 0) {
+    warn(`PlaceObject${isPlace3 ? 3 : 2} depth ${depth}: ${leftover} byte(s) left after the last field`);
+  }
   return {
     depth, hasChar, move, characterId, matrix,
     ct: ct ? normalizeCt(ct) : undefined, ratio, name, clipDepth, hasFilters: hasFilterList, clipActions,
+    leftover,
   };
 }
 
@@ -905,7 +923,10 @@ interface ButtonCondAction {
   actionBytes: Uint8Array;
 }
 
-function parseButton2(data: Uint8Array): {
+function parseButton2(
+  data: Uint8Array,
+  warn: (message: string) => void = () => {},
+): {
   id: number; records: ButtonRec[]; condActions: ButtonCondAction[]; attrs: Record<string, string>;
 } {
   const br = new BitReader(data);
@@ -932,6 +953,10 @@ function parseButton2(data: Uint8Array): {
     if (hasBlend) br.u8();
     records.push({ up, over, down, hit, characterId, placeDepth, matrix, ct });
     void recReserved;
+  }
+  br.align();
+  if (actionOffset > 0 && br.offsetBytes !== 3 + actionOffset) {
+    warn(`DefineButton2 #${id}: records end at byte ${br.offsetBytes}, conditional actions start at ${3 + actionOffset}`);
   }
   const condActions: ButtonCondAction[] = [];
   if (actionOffset > 0) {
@@ -1043,6 +1068,15 @@ export async function parseSwfBinary(
   const rootTags = parseTags(tagBytes);
 
   const warnings: string[] = [];
+  // Structural problems are reported once per message: the same tag can be
+  // parsed in more than one pass (a button in the tag pass and again for its
+  // synthetic timeline), and a repeated identical warning adds nothing.
+  const structuralWarned = new Set<string>();
+  const warnStructural = (message: string) => {
+    if (structuralWarned.has(message)) return;
+    structuralWarned.add(message);
+    warnings.push(message);
+  };
   const files: SwfFile[] = [];
   const characters = new Map<number, SwfCharacter>();
   const timelines = new Map<string, Timeline>();
@@ -1126,7 +1160,7 @@ export async function parseSwfBinary(
             break;
           }
           case 34: { // DefineButton2
-            const btn = parseButton2(tag.data);
+            const btn = parseButton2(tag.data, warnStructural);
             addChar(btn.id, type, 'button', { attrs: btn.attrs });
             break;
           }
@@ -1335,7 +1369,8 @@ export async function parseSwfBinary(
       kinds.add(k);
 
       if (k === 'place') {
-        const info = parsePlace2(tag.data, tag.type === 70, version);
+        const info = parsePlace2(tag.data, tag.type === 70, version,
+          (m) => warnStructural(`${m} (${characterId != null ? `sprite ${characterId}` : 'root timeline'}, tag ${tag.type})`));
         if (info.depth < 0) continue;
         const prev = state.get(info.depth);
         const cid = info.characterId;
@@ -1501,7 +1536,7 @@ export async function parseSwfBinary(
     if (ch.kind !== 'button') continue;
     const btnTag = findButtonTag(rootTags, id);
     if (!btnTag) continue;
-    const { records, condActions } = parseButton2(btnTag.data);
+    const { records, condActions } = parseButton2(btnTag.data, warnStructural);
     for (const cond of condActions) {
       extraScripts.push({
         preferredPath: `scripts/DefineButton2_${id}/BUTTONCONDACTION on(${cond.events.join(', ')}).as`,

@@ -8,7 +8,7 @@ import { parseSwfXml } from '../parser';
 import { decodeDoInitAction, parseSwfBinary } from './binary';
 import { isLikelyActionStream } from './bitio';
 import { xmlToSwf } from '../../../tools/xml2swf/xml2swf.mjs';
-import { bundledExportedNames, bundledExternalDir, bundledSwfFile } from '../__tests__/bundledSet';
+import { bundledExportedNames, bundledExternalDir, bundledSwfFile, bundledSwfNames } from '../__tests__/bundledSet';
 
 const EXTERNAL = bundledExternalDir();
 const EXPORTS = bundledExportedNames();
@@ -159,15 +159,19 @@ describe('DoInitAction payload decoding', () => {
   });
 });
 
-describe.each(EXPORTS)('original bytes ≡ xml: %s', (name) => {
+// Provenance note. These six `.swf` files are byte-for-byte `xmlToSwf(<name>.xml)`
+// — they are *generated* fixtures, not the bytes FFDec read, so a field the writer
+// and the reader both get wrong stays invisible here (which is exactly how the
+// Name/ClipDepth order went unnoticed: the reader and the writer swapped it
+// together). The uncompressed originals that ship alongside them are
+// `bassken_game4.21.swf` and `OmnitureActionSource.swf`; those are checked against
+// real byte-level expectations in `bundled originals` below. Keep both kinds of
+// check: this one pins reader↔FFDec-XML agreement, the other pins raw layout.
+describe.each(EXPORTS)('bundled bytes ≡ xml: %s', (name) => {
   const xmlPath = resolve(EXTERNAL, name, `${name}.xml`);
   const xmlText = readFileSync(xmlPath, 'utf8');
 
-  // The strongest oracle: the binary reader and the FFDec XML reader must agree
-  // on the *original* game bytes. The re-serialising round-trip below cannot see
-  // mistakes that the writer shares with the reader (a swapped record field, for
-  // instance, stays invisible while both sides swap it).
-  it('parseSwfBinary(original) ≡ parseSwfXml', async () => {
+  it('parseSwfBinary(bundled) ≡ parseSwfXml', async () => {
     const xmlDoc = parseSwfXml(xmlText, { fileName: `${name}.xml` });
     const bytes = readFileSync(bundledSwfFile(name));
     const { doc: binDoc } = await parseSwfBinary(
@@ -176,6 +180,44 @@ describe.each(EXPORTS)('original bytes ≡ xml: %s', (name) => {
     );
     compareDocs(xmlDoc, binDoc, name);
   }, 60000);
+});
+
+describe('bundled originals (not regenerated)', () => {
+  const ORIGINALS = bundledSwfNames().filter((n) => {
+    const bytes = readFileSync(bundledSwfFile(n));
+    return bytes[0] === 0x43; // CWS — the writer only ever emits FWS
+  });
+
+  it('finds the uncompressed originals in the bundled set', () => {
+    expect(ORIGINALS.length).toBeGreaterThan(0);
+  });
+
+  it.each(ORIGINALS)('%s decodes with no structural report', async (name) => {
+    const bytes = readFileSync(bundledSwfFile(name));
+    const { doc } = await parseSwfBinary(
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+      `${name}.swf`,
+    );
+    expect(doc.warnings.filter((w) => /left after the last field|records end at byte/.test(w))).toEqual([]);
+  });
+
+  it('reads placed-record names and clip depths from real bytes', async () => {
+    // bassken_game4.21 sprite 14 depth 2, the only original record that carries
+    // both: `66 02 00 0a 00 00 | "mask" | 06 00` — Name then ClipDepth, consuming
+    // the 13-byte tag exactly. Reading ClipDepth first yields clip depth 24941
+    // (greater than every layer in the movie) and a name of "sk".
+    const bytes = readFileSync(bundledSwfFile('bassken_game4.21'));
+    const { doc } = await parseSwfBinary(
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+      'bassken_game4.21.swf',
+    );
+    const display = doc.timelines.get('sprite:14')?.frames[0]?.display ?? [];
+    const mask = display.find((d) => d.name === 'mask');
+    expect(mask).toMatchObject({ characterId: 10, depth: 2, clipDepth: 6 });
+    for (const item of display) {
+      if (item.clipDepth != null) expect(item.clipDepth).toBeGreaterThan(item.depth);
+    }
+  });
 });
 
 describe.each(EXPORTS)('swf round-trip: %s', (name) => {

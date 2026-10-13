@@ -15,7 +15,7 @@
 
 import { AssetCache, expandUploadFiles, filePath, hydrateActionScriptSources, ingestFiles, patchButtonAssetIds, splitPackages, type SwfPackage } from './assets';
 import { parseSwfXml } from './parser';
-import { parseSwfBinary } from './swf/binary';
+import { parseSwfBinary, type SwfFile } from './swf/binary';
 import { swfFilesToFiles } from './bundled';
 import { orderSources, swfSourcesFromFiles } from './swfSources';
 import type { SwfDocument } from '../types';
@@ -70,7 +70,17 @@ export async function loadUploadedPackages(
       if (source.kind === 'binary') {
         const file = filesByKey.get(source.key);
         if (!file) continue;
-        const { doc, files: parsedFiles } = await parseSwfBinary(await file.arrayBuffer(), source.fileName);
+        let parsed: { doc: SwfDocument; files: SwfFile[] };
+        try {
+          parsed = await parseSwfBinary(await file.arrayBuffer(), source.fileName);
+        } catch (error) {
+          // Which of several uploaded SWFs failed is not guessable from the
+          // message alone ("unknown filter 51" says nothing about the file).
+          // The parser's own message already names the tag and record.
+          const message = error instanceof Error ? error.message : String(error);
+          throw new Error(`${source.fileName}: ${message}`);
+        }
+        const { doc, files: parsedFiles } = parsed;
         built.push(await buildPackage(swfFilesToFiles(parsedFiles, source.stem), doc, onChange));
       } else {
         const part = xmlParts.get(source.key);
