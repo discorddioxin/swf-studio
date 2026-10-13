@@ -779,7 +779,7 @@ interface ClipActionRec {
 interface Place2Info {
   depth: number; hasChar: boolean; move: boolean; characterId: number;
   matrix?: Matrix; ct?: ColorTransform; ratio?: number; name?: string;
-  clipDepth?: number; clipActions?: ClipActionRec[];
+  clipDepth?: number; hasFilters: boolean; clipActions?: ClipActionRec[];
 }
 
 const SWF_SPECIAL_KEYS: Record<number, string> = {
@@ -830,6 +830,8 @@ function parsePlace2(data: Uint8Array, isPlace3 = false, version = 8): Place2Inf
   const hasCacheAsBitmap = !!(f2 & 0x04);
   const hasBlendMode = !!(f2 & 0x02);
   const hasFilterList = !!(f2 & 0x01);
+  const hasVisibility = !!(f2 & 0x20);
+  const hasBackgroundColor = !!(f2 & 0x40);
   const depth = br.u16();
   if (hasClassName || (hasImage && hasChar)) br.str();
   let characterId = 0;
@@ -837,15 +839,22 @@ function parsePlace2(data: Uint8Array, isPlace3 = false, version = 8): Place2Inf
   const matrix = hasMatrix ? readMatrix(br) : undefined;
   const ct = hasCt ? readCxform(br, true) : undefined;
   const ratio = hasRatio ? br.u16() : undefined;
+  // Placed records put ClipDepth before Name (verified against the bundled
+  // gsecs2.9 sprite 22 record and its FFDec export: the bytes are
+  // `ratio, clipDepth, "mask"`). The published spec lists Name first, so do
+  // not "fix" the order by reading the tag definition alone — follow the
+  // bytes and the FFDec oracle (swf-roundtrip.test.ts).
   let clipDepth: number | undefined;
   if (hasClipDepth) {
     const v = br.u16();
     if (v > 0) clipDepth = v;
   }
   const name = hasName ? br.str() || undefined : undefined;
-  if (hasFilterList) skipFilterList(br);
+  if (hasFilterList) skipFilterList(br, `PlaceObject${isPlace3 ? 3 : 2} depth ${depth}`);
   if (hasBlendMode) br.u8();
   if (hasCacheAsBitmap) br.u8();
+  if (hasVisibility) br.u8();
+  if (hasBackgroundColor) br.skip(4); // RGBA — not modelled
   let clipActions: ClipActionRec[] | undefined;
   if (hasClipActions && br.remaining >= (version >= 6 ? 6 : 4)) {
     try {
@@ -880,7 +889,7 @@ function parsePlace2(data: Uint8Array, isPlace3 = false, version = 8): Place2Inf
   }
   return {
     depth, hasChar, move, characterId, matrix,
-    ct: ct ? normalizeCt(ct) : undefined, ratio, name, clipDepth, clipActions,
+    ct: ct ? normalizeCt(ct) : undefined, ratio, name, clipDepth, hasFilters: hasFilterList, clipActions,
   };
 }
 
@@ -919,7 +928,7 @@ function parseButton2(data: Uint8Array): {
     const placeDepth = br.u16();
     const matrix = readMatrix(br);
     const ct = normalizeCt(readCxform(br, true));
-    if (hasFilters) skipFilterList(br);
+    if (hasFilters) skipFilterList(br, `DefineButton2 #${id}`);
     if (hasBlend) br.u8();
     records.push({ up, over, down, hit, characterId, placeDepth, matrix, ct });
     void recReserved;
@@ -958,45 +967,44 @@ function parseButton2(data: Uint8Array): {
   };
 }
 
-function skipFilterList(br: BitReader) {
+/**
+ * Skip a FILTERLIST (SWF 8+). The pipeline keeps only "this record has
+ * filters" — the filter parameters themselves are not modelled yet — but the
+ * byte count has to be exact: a filter list sits in the middle of a
+ * DefineButton2 record / PlaceObject3 place record, so one wrong size shifts
+ * every following field and the next byte read as a filter id becomes garbage
+ * (`unknown filter N`).
+ *
+ * Sizes follow the SWF format spec, "Filters" (FIXED = 4 bytes, FIXED8 = 2),
+ * cross-checked against JPEXS' filter classes and swf-parser 0.14.1:
+ *   0 drop shadow     RGBA(4) + blurX/blurY/angle/distance(16) + strength(2) + flags(1) = 23
+ *   1 blur            blurX/blurY(8) + flags(1)                                            =  9
+ *   2 glow            RGBA(4) + blurX/blurY(8) + strength(2) + flags(1)                   = 15
+ *   3 bevel           2 × RGBA(8) + blurX/blurY/angle/distance(16) + strength(2) + flags(1) = 27
+ *   4/7 grad glow/bevel  numColors(1) + numColors × RGBA(4n) + numColors × ratio(n)
+ *                        + blurX/blurY/angle/distance(16) + strength(2) + flags(1)        = 20 + 5n
+ *   5 convolution     matrixX+matrixY(2) + divisor(4) + bias(4) + w·h FLOAT(4wh)
+ *                        + defaultColor(4) + flags(1)                                      = 15 + 4wh
+ *   6 colour matrix   20 × FLOAT(80)                                                      = 80
+ */
+function skipFilterList(br: BitReader, context: string) {
+  const start = br.offsetBytes;
   const count = br.u8();
   for (let i = 0; i < count; i++) {
+    const at = br.offsetBytes - start;
     const id = br.u8();
     switch (id) {
-      case 0: // drop shadow
-        br.u8(); br.u8(); br.u8(); br.u8();
-        br.skip(4 * 4); br.skip(4); br.skip(4); br.u8(); br.u32();
-        break;
-      case 1: // blur
-        br.skip(8); br.skip(4); br.u8();
-        break;
-      case 2: // glow
-        br.u8(); br.u8(); br.u8(); br.u8();
-        br.skip(8); br.skip(4); br.skip(4); br.u8();
-        break;
-      case 3: // bevel
-        br.u8(); br.u8(); br.u8(); br.u8(); br.u8(); br.u8(); br.u8(); br.u8();
-        br.skip(8); br.skip(8); br.skip(4); br.skip(4); br.u8();
-        break;
-      case 4: // gradient glow
-        br.u8(); br.u8(); br.u8(); br.u8();
-        br.skip(8); br.skip(4); br.skip(4); br.u8(); br.u8();
-        { const n = br.u8(); br.skip(n * 4); }
-        break;
-      case 5: // convolution
-        br.skip(4); { const n = br.u8(); br.skip(n * 4); br.skip(n * 4); }
-        br.skip(4); br.skip(4); br.skip(4); br.u8();
-        break;
-      case 6: // color matrix
-        br.skip(20);
-        break;
-      case 7: // gradient bevel
-        br.u8(); br.u8(); br.u8(); br.u8(); br.u8(); br.u8(); br.u8(); br.u8();
-        br.skip(8); br.skip(8); br.skip(4); br.skip(4); br.u8(); br.u8();
-        { const n = br.u8(); br.skip(n * 4); }
-        break;
+      case 0: br.skip(4 + 16 + 2 + 1); break;
+      case 1: br.skip(8 + 1); break;
+      case 2: br.skip(4 + 8 + 2 + 1); break;
+      case 3: br.skip(8 + 16 + 2 + 1); break;
+      case 4: case 7: { const n = br.u8(); br.skip(n * 4 + n + 16 + 2 + 1); break; }
+      case 5: { const w = br.u8(); const h = br.u8(); br.skip(4 + 4 + w * h * 4 + 4 + 1); break; }
+      case 6: br.skip(20 * 4); break;
       default:
-        throw new Error(`unknown filter ${id}`);
+        throw new Error(
+          `unknown filter ${id} (${context}, filter ${i + 1}/${count}, +${at} bytes into the list)`,
+        );
     }
   }
 }
@@ -1337,7 +1345,7 @@ export async function parseSwfBinary(
           tagType: type, depth: info.depth, characterId: cid,
           matrix: info.matrix, colorTransform: info.ct,
           ratio: info.ratio, name: info.name, clipDepth: info.clipDepth,
-          hasFilters: false,
+          hasFilters: info.hasFilters,
         });
         if (info.clipActions?.length) {
           const effCid = cid || prev?.characterId || 0;
@@ -1365,7 +1373,7 @@ export async function parseSwfBinary(
             depth: info.depth, characterId: cid,
             matrix: info.matrix ?? { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 },
             colorTransform: info.ct, ratio: info.ratio ?? 0, name: info.name,
-            clipDepth: info.clipDepth, hasFilters: false, startFrame: frameIndex,
+            clipDepth: info.clipDepth, hasFilters: info.hasFilters, startFrame: frameIndex,
           });
         } else if (prev) {
           const next: DisplayItem = { ...prev };

@@ -4,6 +4,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { parseSwfXml } from '../../../lib/parser';
 import { currentHost } from '../../../runtime/as2';
+import { _global } from '@/runtime/as2';
 import { buildAS2Program } from '../program';
 import { AS2Player } from '../player';
 import type { LogEntry } from '../../flash/player';
@@ -109,16 +110,24 @@ describe('AS2 player', () => {
     player.dispose();
   });
 
-  it('runs DoInitAction scripts in SWF tag order rather than sprite-id or filename order', () => {
+  it('runs DoInitAction scripts in SWF tag order, each applied to its own sprite', () => {
     const build = buildAS2Program([
-      { path: 'scripts/frame_1/DoInitAction.as', text: 'order = [29];', tagOrder: 1090, targetSpriteId: 29 },
-      { path: 'scripts/frame_1/DoInitAction_2.as', text: 'order.push(28);', tagOrder: 1091, targetSpriteId: 28 },
+      { path: 'scripts/frame_1/DoInitAction.as', text: '_global.order = [29];', tagOrder: 1090, targetSpriteId: 29 },
+      { path: 'scripts/frame_1/DoInitAction_2.as', text: '_global.order.push(28);', tagOrder: 1091, targetSpriteId: 28 },
     ]);
     expect(build.errors).toEqual([]);
     const player = new AS2Player({ doc: parseSwfXml(XML, { fileName: 'fixture.xml' }), program: build.program });
     player.start();
-    expect((player.root.obj as any).order).toEqual([29, 28]);
+    // Tag order decides execution order...
+    expect((_global as any).order).toEqual([29, 28]);
+    // ...and a sprite-targeted DoInitAction is applied to that sprite (SWF spec:
+    // "these are outside of the given sprite and will reference the sprite so all the
+    // actions are automatically applied to the sprite"), not to the movie's root clip.
+    const scopes = [29, 28].map((id) => player.spriteScope(player.movie, id));
+    expect(scopes.map((n) => n.characterId)).toEqual([29, 28]);
+    expect(scopes.every((n) => n.parent === null && n.movie === player.movie)).toBe(true);
     player.dispose();
+    delete (_global as any).order;
   });
 
   it('runs frame scripts after placement, honours stop() and never throws on undefined', () => {

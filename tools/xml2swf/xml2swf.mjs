@@ -409,6 +409,7 @@ function writePlace2(w, el) {
   if (matrix) writeMatrix(w, matrix);
   if (ct) writeCxform(w, ct, true);
   if (ratioAttr) w.u16(num(el, 'ratio'));
+  // placed records store ClipDepth before Name — see decompiler/swf/binary.ts
   if (clipDepth != null) w.u16(clipDepth);
   if (has(el, 'name')) w.str(nm);
   if (clipActions) writeClipActions(w, clipActions);

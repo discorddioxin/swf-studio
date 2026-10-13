@@ -5,6 +5,7 @@
 import * as RT from '../../runtime/as2';
 import type { ColorTransform, Rect } from '../../types';
 import { identity, invert, apply as applyM, transformRect } from './geom';
+import { avm1Root } from './player';
 import { DEPTH_OFFSET, NODE, TWIPS, nodeOf } from './constants';
 import type { AS2Player, DisplayNode, DrawCmd, Movie } from './player';
 
@@ -43,6 +44,31 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   };
 
   const missingWarned = new Set<string>();
+  /** Every movie whose library is loaded in this run (main + `loadMovie` targets). */
+  const loadedMovies: Movie[] = [p.movie];
+  const movieLabel = (m: Movie) => m.doc.header.fileName ?? m.url ?? '?';
+  /** Libraries other than the given one that export `linkage` — diagnostic only: it
+   *  explains why Flash would still fail the lookup (`_lockroot`/levels scope symbols
+   *  per movie). */
+  /**
+   * The library a Sound resolves its exported sound in: the Sound's target clip
+   * when it has one, otherwise the AVM1 root movie of the clip whose script is
+   * running (Ruffle `sound.rs`, using Flash's `avm1_root` walk — `_lockroot`
+   * included). Falls back to the main movie for host code with no base clip.
+   */
+  function soundLibrary(sound: any): Movie {
+    const owner = N(sound.target) ?? p.runningClip();
+    return (avm1Root(owner) ?? p.root).movie;
+  }
+
+  function externalLibraries(linkage: string, except?: Movie): string[] {
+    const out: string[] = [];
+    for (const m of loadedMovies) {
+      if (m === except || out.includes(movieLabel(m))) continue;
+      if ([...m.doc.characters.values()].some((c) => c.exportName === linkage)) out.push(movieLabel(m));
+    }
+    return out;
+  }
 
   // ------------------------------------------------------------ helpers
   function nextDepth(node: DisplayNode) {
@@ -57,11 +83,22 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   }
 
   function attachMovie(parent: DisplayNode, linkage: string, name: string, depth: number, init?: Record<string, unknown> | null) {
-    // Flash looks the symbol up in the library of the SWF the target clip belongs to; fall back to the main movie
-    let movie = parent.movie;
-    let ch = [...movie.doc.characters.values()].find((c) => c.exportName === linkage);
-    if (!ch && movie !== p.movie) { movie = p.movie; ch = [...movie.doc.characters.values()].find((c) => c.exportName === linkage); }
-    if (!ch) { p.log('warn', `attachMovie: no symbol exported as "${linkage}"`); return undefined; }
+    // Symbols are resolved in the library of the SWF the target clip belongs to —
+    // Flash has no cross-movie fallback (Ruffle `avm1/globals/movie_clip.rs`
+    // `attach_movie` looks only in `movie_clip.movie()`'s library; sharing across
+    // movies needs ImportAssets). Widening this hid the real error and could
+    // attach a same-named symbol from a different movie.
+    const movie = parent.movie;
+    const ch = [...movie.doc.characters.values()].find((c) => c.exportName === linkage);
+    if (!ch) {
+      // Report where the symbol *is* exported: for a `_root.attachMovie(…)` in a
+      // movie loaded into a clip, the usual cause is the loaded movie expecting
+      // its own `_root` (Flash's `_lockroot` on the container before loading).
+      const owners = externalLibraries(linkage);
+      p.log('warn', `attachMovie: no symbol exported as "${linkage}" in ${movie.doc.header.fileName ?? movie.url}` +
+        (owners.length ? ` (exported by ${owners.join(', ')})` : ''));
+      return undefined;
+    }
     place(parent, num(depth));
     const node = p.instantiate(movie, ch.id, parent, num(depth), String(name), { initObject: init ?? null });
     p.runQueue();
@@ -180,6 +217,10 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     node.handlers = node.handlers.filter((h) => h.kind === 'onClipEvent');
     node.drawing = null;
     if (!movie) { node.timeline = null; node.frame = 0; return; }
+    // Register before the movie's init actions run: they are the first place a
+    // missing export is reported (`attachMovie` on `_root`), and the point of the
+    // hint is to name the loaded libraries that do export it.
+    if (!loadedMovies.includes(movie)) loadedMovies.push(movie);
     node.movie = movie;
     node.characterId = 0;
     node.timeline = movie.doc.root;
@@ -197,18 +238,11 @@ export function installBuiltins(p: AS2Player): BuiltinState {
         // in an MX component movie. Skipping them leaves every skin/subelement a
         // plain MovieClip, which collapses MX layouts (a List then keeps its white
         // border and never creates a single row).
-        if (prog.initActions?.length) {
-          for (const action of [...prog.initActions].sort((a, b) => a.order - b.order)) {
-            const label = action.targetSpriteId != null
-              ? `init action of sprite ${action.targetSpriteId} (${url})`
-              : action.linkageName
-                ? `init action "${action.linkageName}" (${url})`
-                : `init action (${url})`;
-            p.guard(label, () => action.run.call(node.obj));
-          }
-        }
+        if (prog.initActions?.length) p.runInitActions(movie, node, url);
         for (const [n, fn] of Object.entries(prog.initByName ?? {})) p.guard(`init action "${n}" (${url})`, () => fn.call(node.obj));
-        for (const [id, mod] of Object.entries(prog.timelines)) if (mod.init) p.guard(`init action ${id} (${url})`, () => mod.init!.call(node.obj));
+        for (const [id, mod] of Object.entries(prog.timelines)) {
+          if (mod.init && Number(id) !== 0) p.guard(`init action of sprite ${id} (${url})`, () => mod.init!.call(p.spriteScope(movie, Number(id)).obj));
+        }
       } finally {
         RT.setLinkageScope(prev);
       }
@@ -221,6 +255,11 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     for (const c of [...node.children]) p.removeNode(c);
     node.timeline = null;
     node.frame = 0;
+    // an unmounted library must not be named as the owner of a symbol
+    const mounted = new Set<Movie>();
+    const walk = (n: DisplayNode) => { if (n.movie) mounted.add(n.movie); for (const c of n.children) walk(c); };
+    walk(p.root);
+    for (let i = loadedMovies.length - 1; i >= 0; i--) if (!mounted.has(loadedMovies[i])) loadedMovies.splice(i, 1);
   }
 
   function loadVariables(url: string, node: DisplayNode | null) {
@@ -335,8 +374,13 @@ export function installBuiltins(p: AS2Player): BuiltinState {
       set(this: any, v: any) { const n = N(this); if (!n || n === p.root) return; p.unpublishName(n); n.name = String(v); p.publishName(n); },
     },
     _parent: { get(this: any) { return N(this)?.parent?.obj; } },
-    _root: { get() { return p.root.obj; } },
-    _level0: { get() { return p.root.obj; } },
+    // Flash's `_root`: the top-most AVM1 ancestor, or the nearest clip that
+    // declared itself a root with `_lockroot` (Ruffle `avm1_root`). A movie
+    // loaded into a clip therefore keeps the loading movie's `_root` unless the
+    // container locked it — which is why that path is the documented way to give
+    // a loaded movie its own symbol library.
+    _root: { get(this: any) { return (avm1Root(N(this)) ?? p.root).obj; } },
+    _level0: { get(this: any) { return (avm1Root(N(this)) ?? p.root).obj; } },
     _global: { get() { return RT._global; } },
     _target: { get(this: any) { return N(this)?.slashPath() ?? ''; } },
     _url: { get(this: any) { const n = N(this); return n?.url && n.url !== 'root' ? n.url : p.doc.header.fileName; } },
@@ -358,7 +402,13 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     _totalframes: { get(this: any) { return N(this)?.totalFrames ?? 1; } },
     _framesloaded: { get(this: any) { return N(this)?.totalFrames ?? 1; } },
     _droptarget: { get() { const t = p.mouseTarget(p.mouse.x, p.mouse.y); return t ? t.slashPath() : ''; } },
-    _lockroot: { get() { return false; } },
+    // Flash-verified coercion (Ruffle's `movieclip_lockroot` oracle): AVM1
+    // `toBoolean` — only the empty string is false among strings, and NaN/0/null
+    // /undefined are false.
+    _lockroot: {
+      get(this: any) { return N(this)?.lockRoot ?? false; },
+      set(this: any, v: any) { const n = N(this); if (n) n.lockRoot = RT.$rt.avm1.toBoolean(v); },
+    },
     play(this: any) { const n = N(this); if (n) n.playing = true; },
     stop(this: any) { const n = N(this); if (n) n.playing = false; },
     nextFrame(this: any) { const n = N(this); if (n) { n.playing = false; p.gotoFrame(n, n.frame + 1); } },
@@ -618,13 +668,18 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   // ------------------------------------------------------------ Sound
   def(RT.Sound.prototype, {
     attachSound(this: any, id: any) {
-      // the library of the SWF the Sound's target clip came from, then the main movie
-      const own = N(this.target)?.movie;
-      const find = (m: Movie) => [...m.doc.characters.values()].find((c) => c.kind === 'sound' && c.exportName === String(id));
-      let movie: Movie = own ?? p.movie;
-      let ch = find(movie);
-      if (!ch && movie !== p.movie) { movie = p.movie; ch = find(movie); }
-      if (!ch) p.log('warn', `Sound.attachSound: no sound exported as "${id}"`);
+      // Ruffle `avm1/globals/sound.rs::attach_sound`: a global (target-less) Sound
+      // resolves the export in the library of the *running script's* AVM1 root
+      // movie; a Sound created with a target clip uses that clip's own movie. The
+      // main movie is not a fallback — Flash never searches other movies, and
+      // widening it hid which movie actually lacks the sound.
+      const movie = soundLibrary(this);
+      const ch = [...movie.doc.characters.values()].find((c) => c.kind === 'sound' && c.exportName === String(id));
+      if (!ch) {
+        const owners = externalLibraries(String(id), movie);
+        p.log('warn', `Sound.attachSound: no sound exported as "${id}" in ${movieLabel(movie)}` +
+          (owners.length ? ` (exported by ${owners.join(', ')})` : ''));
+      }
       this.__movie = movie;
       this.__sound = ch?.id ?? null;
       this.__url = null;
@@ -646,7 +701,7 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     },
     stop(this: any, id?: any) {
       if (id != null) {
-        const movie: Movie = this.__movie ?? N(this.target)?.movie ?? p.movie;
+        const movie: Movie = this.__movie ?? soundLibrary(this);
         const ch = [...movie.doc.characters.values()].find((c) => c.exportName === String(id));
         p.stopSound(ch?.id ?? -1, movie);
         return;

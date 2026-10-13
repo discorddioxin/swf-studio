@@ -8,7 +8,7 @@ import { parseSwfXml } from '../parser';
 import { decodeDoInitAction, parseSwfBinary } from './binary';
 import { isLikelyActionStream } from './bitio';
 import { xmlToSwf } from '../../../tools/xml2swf/xml2swf.mjs';
-import { bundledExportedNames, bundledExternalDir } from '../__tests__/bundledSet';
+import { bundledExportedNames, bundledExternalDir, bundledSwfFile } from '../__tests__/bundledSet';
 
 const EXTERNAL = bundledExternalDir();
 const EXPORTS = bundledExportedNames();
@@ -157,6 +157,25 @@ describe('DoInitAction payload decoding', () => {
     expect(decoded.spriteId).toBe(29);
     expect([...decoded.actions]).toEqual([0x04, 0]);
   });
+});
+
+describe.each(EXPORTS)('original bytes ≡ xml: %s', (name) => {
+  const xmlPath = resolve(EXTERNAL, name, `${name}.xml`);
+  const xmlText = readFileSync(xmlPath, 'utf8');
+
+  // The strongest oracle: the binary reader and the FFDec XML reader must agree
+  // on the *original* game bytes. The re-serialising round-trip below cannot see
+  // mistakes that the writer shares with the reader (a swapped record field, for
+  // instance, stays invisible while both sides swap it).
+  it('parseSwfBinary(original) ≡ parseSwfXml', async () => {
+    const xmlDoc = parseSwfXml(xmlText, { fileName: `${name}.xml` });
+    const bytes = readFileSync(bundledSwfFile(name));
+    const { doc: binDoc } = await parseSwfBinary(
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+      `${name}.xml`,
+    );
+    compareDocs(xmlDoc, binDoc, name);
+  }, 60000);
 });
 
 describe.each(EXPORTS)('swf round-trip: %s', (name) => {

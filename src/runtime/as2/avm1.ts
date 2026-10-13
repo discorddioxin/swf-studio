@@ -849,14 +849,14 @@ function loop(frame: Frame, code: Uint8Array): Return {
       }
       case 0x30: { const n = toInt32(pop()); push(n > 0 ? Math.floor(Math.random() * n) : 0); advance(); break; }
       case 0x31: push(stringValue(pop()).length); advance(); break;
-      case 0x32: push(stringValue(pop()).charCodeAt(0) || 0); advance(); break;
+      case 0x32: push(avm1Semantics.charCode(pop())); advance(); break;
       case 0x33: { const c = toUint16(pop()); push(c ? String.fromCharCode(c) : ''); advance(); break; }
       case 0x34: push(Number(globalFn('getTimer')) || 0); advance(); break;
       case 0x35: { const n = toInt32(pop()), i = toInt32(pop()), s = stringValue(pop()); push(s.substr(i >= 1 ? i - 1 : 0, n < 0 ? 0 : n)); advance(); break; }
       case 0x36: push(stringValue(pop()).charCodeAt(0) || 0); advance(); break;
       case 0x37: { const c = toUint16(pop()); push(c ? String.fromCharCode(c) : ''); advance(); break; }
 
-      case 0x3a: { const name = stringValue(pop()); const obj = pop(); push(obj === null || obj === undefined ? true : deleteProp(obj, name)); advance(); break; }
+      case 0x3a: { const name = stringValue(pop()); const obj = coerceObject(pop()); push(name === '' || obj === null || obj === undefined ? true : deleteProp(obj, name)); advance(); break; }
       case 0x3b: {
         const path = stringValue(pop());
         const sep = lastSeparator(path);
@@ -949,13 +949,8 @@ function loop(frame: Frame, code: Uint8Array): Return {
       case 0x67: { const a = pop(), b = pop(); push(lessThan(a, b) ?? false); advance(); break; }
       case 0x68: { const a = pop(), b = pop(); push(stringValue(b) > stringValue(a)); advance(); break; }
       case 0x69: { // Extends(subclass, superclass)
-        const superclass = coerceObject(pop()), subclass = coerceObject(pop());
-        if (subclass && superclass) {
-          const proto = Object.create(superclass.prototype ?? Object.prototype);
-          proto.constructor = superclass;
-          proto.__constructor__ = superclass;
-          try { subclass.prototype = proto; } catch { /* ignore */ }
-        }
+        const superclass = pop(), subclass = pop();
+        avm1Semantics.extendsClass(subclass, superclass);
         advance(); break;
       }
 
@@ -1280,10 +1275,49 @@ function dynamicFrame(clip: any): Frame {
 }
 
 /** Small semantic helpers for decoded TypeScript; these do not run bytecode. */
+/**
+ * Marker for a function local that a *conditional* `var` has not created yet.
+ * Flash's `DefineLocal` only creates the variable when its branch runs, and a
+ * later unqualified read/write then falls through to the clip/global scope. The
+ * decoder hoists such locals and leaves them at this sentinel until the branch
+ * assigns them, so lifted code resolves the name exactly like the interpreter.
+ */
+export const LOCAL_UNSET = Symbol('avm1.unset');
+
 export const avm1Semantics = {
+  UNSET: LOCAL_UNSET,
   typeOf,
   number: numberValue,
   string: stringValue,
+  /** AVM1 `toBoolean` — only `""` is false among strings (`"false"` is true). */
+  toBoolean: boolValue,
+  /**
+   * The `super` object a function that preloads `super` receives. Flash derives it
+   * from the object the method was *called* on and the prototype the method was
+   * found on; the runtime already knows both for this call, so lifted code can
+   * build the same object instead of falling back to the interpreter.
+   */
+  superValue(thisVal: any): any { return makeSuper(thisVal === null ? undefined : thisVal, pendingOwner); },
+  int32: toInt32,
+  uint16: toUint16,
+  /** `String.fromCharCode` — AsciiToChar (0x33); NUL yields the empty string, as Flash does. */
+  asciiChar: (code: any): string => { const c = toUint16(code); return c ? String.fromCharCode(c) : ''; },
+  /** CharToAscii (0x32) — the first character code, `0` for an empty string. */
+  charCode(v: any): number { return stringValue(v).charCodeAt(0) || 0; },
+  /** Extends (0x69) — point `subclass.prototype` at a child of the superclass's. */
+  extendsClass(subclass: any, superclass: any): void {
+    const sub = coerceObject(subclass), sup = coerceObject(superclass);
+    if (!sub || !sup) return;
+    const proto: any = Object.create(sup.prototype ?? Object.prototype);
+    proto.constructor = sup;
+    proto.__constructor__ = sup;
+    try { sub.prototype = proto; } catch { /* non-writable prototype */ }
+  },
+  /** Delete (0x3a) — a computed property name of the object on the operand stack. */
+  deleteProperty(obj: any, name: any): boolean {
+    const target = coerceObject(obj), key = stringValue(name);
+    return key === '' || target === null || target === undefined ? true : deleteProp(target, key);
+  },
   equals: abstractEquals,
   strictEquals: (a: any, b: any) => a === b,
   less: lessThan,
