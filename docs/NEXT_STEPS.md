@@ -73,6 +73,7 @@ File[] → loadUploadedPackages / fetchBundledManifest → mergeBundledExternals
 ### Track D — AS3 / DoABC
 
 - `EngineFlash` (`FlashPlayer 722 + loader 270`) is isolated from `EngineAS2`. `DoABC2` is currently alias-missing per SPEC — add `avm2` crate only if a bundled movie ever emits `DoABC` (the sample’s main movie doesn’t; it’s AVM1).
+- **Started:** the ABC reader + disassembler (`decompiler/swf/abc.ts`) now pulls code out of `DoABC` tags per the AVM2 spec, so AS3 movies no longer depend on hand-supplied sources. Verified on the uploaded AS3 sets (pinball 435 classes / 3,690 bodies, towns2 762 / 8,372 — every body decodes to its exact length, every reachable jump lands on an instruction) and on a 4,916-SWF independent corpus. Still to come: ABC → IR → TS emission and execution; until then AS3 movies parse and inspect but do not run.
 
 ---
 
