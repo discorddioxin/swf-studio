@@ -29,8 +29,11 @@ export interface ClassInfo { name: string; qualifiedName: string; path: string }
 export interface LinkedProgram {
   getDefinition(name: string): unknown;
   classes: ClassInfo[];
-  errors: { path: string; message: string }[];
+  errors: { path: string; message: string; detail?: string }[];
 }
+
+/** Thrown while loading a module: the module that threw is the one that reports it. */
+class LoadFailure extends Error {}
 
 const CODE_EXT = /\.(tsx?|mts|cts|jsx?|mjs|cjs)$/i;
 const SKIP = /(^|\/)(node_modules|\.git)\/|\.d\.ts$/i;
@@ -62,27 +65,45 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
     const key = stripExt(m.path).toLowerCase();
     noExt.set(key, [...(noExt.get(key) ?? []), m]);
   }
-  const cache = new Map<string, { exports: Record<string, unknown>; loaded: boolean }>();
-  const errors: { path: string; message: string }[] = [];
+  const cache = new Map<string, { exports: Record<string, unknown>; loaded: boolean; error?: string; detail?: string }>();
+  const errors: { path: string; message: string; detail?: string }[] = [];
   for (const m of compiled.modules) if (m.error) errors.push({ path: m.path, message: `Compile error: ${m.error}` });
 
   const globalNames = Object.keys(TOP_LEVEL);
   const globalValues = globalNames.map((n) => TOP_LEVEL[n]);
 
+  // A module that throws is retried after the first pass: classes in this code are
+  // defined eagerly, so a cyclic `class A extends B` can only link once B exists.
+  const retries: CompiledModule[] = [];
   const load = (m: CompiledModule): Record<string, unknown> => {
     const hit = cache.get(m.path);
-    if (hit) return hit.exports;
-    const module = { exports: {} as Record<string, unknown>, loaded: false };
+    if (hit) {
+      if (hit.error) throw new LoadFailure(hit.error);
+      return hit.exports;
+    }
+    const module = { exports: {} as Record<string, unknown>, loaded: false, error: undefined as string | undefined, detail: undefined as string | undefined };
     cache.set(m.path, module);
-    if (m.code == null) throw new Error(`${m.path} failed to compile: ${m.error}`);
+    if (m.code == null) throw new LoadFailure(`${m.path} failed to compile: ${m.error}`);
     const dir = m.path.includes('/') ? m.path.slice(0, m.path.lastIndexOf('/')) : '';
     const require = (spec: string) => resolve(spec, m.path, dir);
     const fn = new Function('exports', 'require', 'module', '__filename', '__dirname', ...globalNames,
       `${m.code}\n//# sourceURL=swf-code:///${m.path}`);
-    fn.call(module.exports, module.exports, require, module, m.path, dir, ...globalValues);
+    try {
+      fn.call(module.exports, module.exports, require, module, m.path, dir, ...globalValues);
+    } catch (e) {
+      if (e instanceof LoadFailure) throw e;               // the module that threw already reported
+      const message = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      module.error = message;
+      failures.set(m.path, message);
+      module.detail = e instanceof Error ? e.stack : undefined;
+      throw new LoadFailure(message);
+    }
     module.loaded = true;
     return module.exports;
   };
+
+  /** The module that actually threw, so an error is never blamed on its importer. */
+  const failures = new Map<string, string>();
 
   const resolve = (spec: string, from: string, dir: string): unknown => {
     const flash = resolveFlash(spec);
@@ -95,8 +116,29 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
   for (const m of compiled.modules) {
     if (cache.has(m.path) || m.code == null) continue;
     try { load(m); } catch (e) {
-      errors.push({ path: m.path, message: e instanceof Error ? `${e.name}: ${e.message}` : String(e) });
+      if (e instanceof LoadFailure) retries.push(m);
+      else errors.push({ path: m.path, message: e instanceof Error ? `${e.name}: ${e.message}` : String(e) });
     }
+  }
+  // Retry what a cycle held back, as long as each pass makes progress.
+  for (let pass = 0; pass < 4 && retries.length; pass++) {
+    const pending = retries.splice(0, retries.length);
+    let progress = false;
+    for (const m of pending) {
+      cache.delete(m.path);
+      failures.delete(m.path);
+      try { load(m); progress = true; } catch { retries.push(m); }
+    }
+    if (!progress) break;
+  }
+  for (const m of retries) {
+    const message = failures.get(m.path) ?? `${m.path} could not be linked`;
+    if (!errors.some((e) => e.path === m.path)) errors.push({ path: m.path, message, detail: cache.get(m.path)?.detail });
+  }
+  for (const [path, message] of failures) {
+    if (errors.some((e) => e.path === path)) continue;
+    const detail = cache.get(path)?.detail;
+    errors.push({ path, message, detail });
   }
 
   // Index classes: `com/game/Enemy.ts` exporting Enemy → Enemy, game.Enemy, com.game.Enemy, …
@@ -114,8 +156,10 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
     const fileBase = segments[segments.length - 1];
     const pkgSegments = segments.slice(0, -1);
     for (const [exportName, value] of Object.entries(mod.exports)) {
-      if (typeof value !== 'function' || !/^[A-Z_$]/.test(exportName === 'default' ? fileBase : exportName)) continue;
       const name = exportName === 'default' ? fileBase : exportName;
+      // A class is an exported function named like its file, or capitalised. Timeline
+      // symbol classes are lower-case (`mcRampBank_Gate_113`), so the file name counts.
+      if (typeof value !== 'function' || (!/^[A-Z_$]/.test(name) && name !== fileBase)) continue;
       const qualifiedName = qualify(pkgSegments, name);
       if (!byQualified.has(qualifiedName)) { classes.push({ name, qualifiedName, path }); byQualified.set(qualifiedName, value); }
       setQualifiedName(value, qualifiedName);

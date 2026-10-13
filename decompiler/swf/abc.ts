@@ -87,6 +87,8 @@ const VALUE_KIND: Record<number, 'string' | 'number' | 'bool' | 'null' | 'raw'> 
 export interface AbcNamespace { kind: string; name: string }
 export interface AbcMultiname {
   kind: string; name: string; ns?: string; nsSet?: string[]; params?: string[];
+  /** kind of the namespace a QName refers to: `package` (file level), `private`/`protected` (class member) … */
+  nsKind?: string;
 }
 export interface AbcMethodInfo {
   name: string; returnType: string; paramTypes: string[]; paramNames: string[];
@@ -113,6 +115,9 @@ export interface AbcMethodBody {
 }
 export interface AbcFile {
   version: string;
+  ints: number[];
+  uints: number[];
+  doubles: number[];
   strings: string[];
   namespaces: AbcNamespace[];
   nsSets: string[][];
@@ -178,8 +183,8 @@ export function parseAbc(data: Uint8Array): AbcFile {
     const label = MULTINAME_KIND[kind] ?? `0x${kind.toString(16)}`;
     switch (kind) {
       case 0x07: case 0x0d: {
-        const ns = namespaces[r.u30()]?.name ?? '';
-        multinames.push({ kind: label, name: strings[r.u30()] ?? '', ns });
+        const ns = namespaces[r.u30()];
+        multinames.push({ kind: label, name: strings[r.u30()] ?? '', ns: ns?.name ?? '', nsKind: ns?.kind });
         break;
       }
       case 0x0f: case 0x10:
@@ -353,7 +358,7 @@ export function parseAbc(data: Uint8Array): AbcFile {
   }
 
   return {
-    version, strings, namespaces, nsSets, multinames, methods, classes, scripts, bodies, metadata,
+    version, ints, uints, doubles, strings, namespaces, nsSets, multinames, methods, classes, scripts, bodies, metadata,
   };
 }
 
