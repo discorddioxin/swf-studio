@@ -58,6 +58,8 @@ it('per-file compile: attribute every error to its file', () => {
   for (const d of result.diagnostics) kinds.set(bucket(d.message), (kinds.get(bucket(d.message)) ?? 0) + 1);
   console.log('lift refusals by kind:');
   for (const [kind, count] of [...kinds].sort((a, b) => b[1] - a[1])) console.log(`  ${count}  ${kind}`);
+  // SWF_LIST=<substring of the reason> lists each refusal with its method.
+  if (process.env.SWF_LIST) for (const d of result.diagnostics) if (d.message.includes(process.env.SWF_LIST)) console.log(`REFUSE ${d.where} @${d.offset}: ${d.message}`);
   for (const b of [...new Set(bad.map((x) => x.replace(/\(.*?\)/, '').replace(/from .*$/, '')))].slice(0, 20)) console.log(`  ${b}`);
   // locate 'super' / 'left-hand side' problems: show the offending lines
   for (const [path, t] of text) {

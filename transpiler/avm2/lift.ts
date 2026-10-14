@@ -163,6 +163,29 @@ const GLOBALS = new Set([
 
 // ------------------------------------------------------------------ lifting
 
+const RESERVED_PARAM = new Set(('this arguments rest super class function var let const return new delete default if else ' +
+  'while do for in of instanceof typeof void switch case break continue throw try catch finally with import export ' +
+  'extends implements interface package private public protected static yield await enum null true false undefined ' +
+  'eval NaN Infinity debugger').split(' '));
+
+/**
+ * The parameter names a method's body and signature use. `HAS_PARAM_NAMES` is debug
+ * information only — the VM never reads it — and compilers fill it unreliably:
+ * Flex SDK output repeats one name for every parameter (`easeIn(b, b, b, b, …)`) or
+ * writes a keyword (`localToGlobal(void)`). The declared set is used when it is a
+ * set of distinct, usable identifiers; otherwise every parameter is `paramN`, so a
+ * signature never mixes the two schemes.
+ */
+export function parameterNames(info: { paramTypes: string[]; paramNames?: string[] } | undefined): string[] {
+  if (!info) return [];
+  const fallback = info.paramTypes.map((_, k) => `param${k + 1}`);
+  const declared = info.paramNames ?? [];
+  if (declared.length !== info.paramTypes.length) return fallback;
+  const usable = declared.every((name) => /^[A-Za-z_$][\w$]*$/.test(name) && !RESERVED_PARAM.has(name) &&
+    !/^(local|param)\d+$/.test(name) && !name.startsWith('__'));
+  return usable && new Set(declared).size === declared.length ? [...declared] : fallback;
+}
+
 export function liftMethod(ctx: MethodContext): LiftResult {
   const { body } = ctx;
   const dis = disassemble(body.code);
@@ -208,8 +231,13 @@ class Lifter {
   constructor(private ctx: MethodContext, instructions: AbcInstruction[]) {
     this.byOffset = new Map(instructions.map((i) => [i.offset, i]));
     for (let k = 0; k + 1 < instructions.length; k++) this.nextAt.set(instructions[k].offset, instructions[k + 1].offset);
-    // A nested function's scope frame starts with the scopes its closure captured.
-    this.scopeObjects = [...(ctx.enclosingScopes ?? [{ k: 'id', name: 'this', line: 0 }])];
+    // `getscopeobject n` indexes the *local* scope stack of this frame (AVM2 overview,
+    // `getscopeobject`: "the index of the scope object to retrieve from the local scope
+    // stack"; Ruffle `op_get_scope_object` reads `scope_frame[n]`). It starts empty in
+    // every frame — a method's `getlocal0; pushscope` makes `this` index 0, and its
+    // activation index 1. The closure's captured chain is the *outer* scope, reached by
+    // name or `getouterscope`, never by these indices.
+    this.scopeObjects = [];
     // An exception table makes its protected ranges `try` blocks: those boundaries
     // are leaders even when no branch lands on them.
     for (const ex of ctx.body.exceptions ?? []) this.leaders.add(ex.from);
@@ -453,7 +481,16 @@ class Lifter {
       // or — when both arms leave one value on the stack — as a `cond ? a : b` value.
       const cond = this.branchTest(last);
       const base = [...this.stack];
-      const thenArm = this.emitArm(fallThrough, target);
+      let thenArm = this.emitArm(fallThrough, target);
+      // The then arm cannot merge *inside itself*: a jump that lands within
+      // [fallThrough, target) is still the arm — the compiler's trampoline after a
+      // `try` (its closing jump lands on another jump), or the jump over a switch's
+      // case bodies to its dispatch. Lifting continues there.
+      for (let guard = 0; guard < 8; guard++) {
+        if (thenArm.end.kind !== 'jump' || thenArm.end.target <= fallThrough || thenArm.end.target >= target) break;
+        const more = this.emitArm(thenArm.end.target, target);
+        thenArm = { stmts: [...thenArm.stmts, ...more.stmts], end: more.end };
+      }
       const thenStack = [...this.stack];
       this.stack = [...base];
       const jumpTo = thenArm.end.kind === 'jump' ? thenArm.end.target : null;
@@ -490,7 +527,7 @@ class Lifter {
       if (thenVals.length || elseVals.length) {
         // Both paths must produce the same single value: that is the compiler's `?:`.
         if (thenVals.length !== 1 || elseVals.length !== 1 || elseArm.end.kind !== 'stop') {
-          throw new Refuse(last.offset, 'if/else arms leave different numbers of values');
+          throw new Refuse(last.offset, `if/else arms leave different numbers of values (then=${thenVals.map((v) => v.e.k).join(',')} else=${elseVals.map((v) => v.e.k).join(',')} thenEnd=${thenArm.end.kind} elseEnd=${elseArm.end.kind})`);
         }
         if (!thenArm.stmts.length && !elseArm.stmts.length) {
           this.push({ k: 'cond', test: cond, then: thenVals[0].e, else: elseVals[0].e });
@@ -720,6 +757,11 @@ class Lifter {
     const left = this.stack[0];
     this.stack = [left];
 
+    if (info.value == null) return null;
+    // The arm runs when the branch does *not* jump: `if_false` falls through on a
+    // truthy `a` (`a && b`), `if_true` on a falsy one (`a || b`).
+    const op = info.jumpOnTruthy ? '||' : '&&';
+    const mark = this.out.length;
     const leftName = `__v${this.temps++}`;
     const joinName = `__j${this.temps++}`;
     this.out.push({ k: 'var', decls: [{ name: leftName, type: null, init: left.e }] });
@@ -727,12 +769,21 @@ class Lifter {
 
     const arm = this.emitArm(fallThrough, target);
     if (arm.end.kind !== 'stop' || this.stack.length !== 1) {
-      throw new Refuse(last.offset, 'short-circuit join does not produce a single value');
+      throw new Refuse(last.offset, `short-circuit join does not produce a single value (end=${arm.end.kind} stack=${this.stack.length})`);
     }
     const right = this.stack[this.stack.length - 1];
+    if (!arm.stmts.length) {
+      // Nothing but the right operand's value: the join is the expression itself.
+      this.out.splice(mark);
+      this.stack = [{ e: { k: 'binary', op, left: left.e, right: right.e } }];
+      return { next: target };
+    }
+    // `a` is evaluated once, into `__v`; the arm (with its statements) runs only on
+    // the path that needs `b`.
+    const runsArm: Expr = info.jumpOnTruthy ? notOf(id(leftName)) : id(leftName);
     this.out.push({
       k: 'if',
-      test: info.value as Expr,
+      test: runsArm,
       then: block([...arm.stmts, exprStmt(assign(id(joinName), right.e))]),
       else: block([exprStmt(assign(id(joinName), id(leftName)))]),
     });
@@ -1034,8 +1085,7 @@ class Lifter {
         return;
       case 'get_scope_object': {
         const index = o[0] ?? 0;
-        if (index === 0) { this.push({ k: 'id', name: 'this', line: 0 }); return; }
-        const scope = this.scopeObjects[index];
+        const scope = this.scopeObjects[index] ?? (index === 0 && !this.ctx.enclosingScopes ? ({ k: 'id', name: 'this', line: 0 } as Expr) : undefined);
         if (!scope) throw new Refuse(i.offset, `get_scope_object ${index} is outside the scope frame this body builds`);
         this.push(scope);
         return;
@@ -1193,7 +1243,10 @@ class Lifter {
         // `callsuper`'s operand is a *multiname* — the same pool `callproperty` uses —
         // and its namespace is the class that declares the method. Resolving it as a
         // method index instead picks up whichever trait happens to share that number.
+        // Stack: receiver, arg1 … argN → value. The receiver is `this` in compiled code
+        // (`getlocal0`), and it has to come off the stack with the arguments.
         const args = this.popArgs(argCountOf(i, o));
+        this.pop();
         const name = this.multiname(o[0]).name;
         this.resultOrStatement({ k: 'call', callee: member(superRef(), name), args }, i.name === 'call_super_void');
         return;
@@ -1389,7 +1442,7 @@ class Lifter {
           memberNames: this.ctx.memberNames,
           staticMembers: this.ctx.staticMembers,
           staticOwner: this.ctx.staticOwner,
-          paramNames: method?.paramNames,
+          paramNames: parameterNames(method),
           needRest: method?.needRest,
           needArguments: method?.needArguments,
           // A closure sees the frames its creation site sits in, and the register the
@@ -1402,7 +1455,8 @@ class Lifter {
           const d = result.diagnostics[0];
           throw new Refuse(d?.offset ?? i.offset, `a nested function could not be lifted: ${d?.message ?? 'unknown'}`);
         }
-        const params = Array.from({ length: paramCount }, (_, k) => method?.paramNames?.[k] ?? `param${k + 1}`);
+        const names = parameterNames(method);
+        const params = Array.from({ length: paramCount }, (_, k) => names[k] ?? `param${k + 1}`);
         // `newfunction` takes nothing off the operand stack: the closure captures the
         // *scope chain* (AVM2 overview, `newfunction`: "… => …, function_obj"; Ruffle
         // `op_new_function` only pushes).

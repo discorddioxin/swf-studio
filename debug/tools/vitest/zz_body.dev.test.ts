@@ -46,7 +46,7 @@ describe.skipIf(!CORPUS_OK)('corpus harness', () => {
       if (c.instance.iinit != null) owned.set(c.instance.iinit, `${c.instance.name}::<iinit>`);
     }
     // SWF_NAME=<Class::method substring> finds the body by its owner instead.
-    const byName = process.env.SWF_NAME ? [...owned].find(([, n]) => n.includes(process.env.SWF_NAME!))?.[0] : undefined;
+    const byName = process.env.SWF_NAME ? [...owned].find(([, n]) => new RegExp(process.env.SWF_NAME!).test(n))?.[0] : undefined;
     const body = abc.bodies.find((b) => b.method === (byName ?? want));
     if (!body) throw new Error(`no body for method ${want}`);
     console.log(`##### ${owned.get(body.method) ?? body.method} body=${body.method} bytes=${body.code.length} locals=${body.localCount}`);

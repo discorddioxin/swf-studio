@@ -9,7 +9,7 @@
 import type { Stmt } from '../as2/ast';
 import type { AbcClassDef, AbcFile, AbcMethodInfo, AbcTrait } from '../../decompiler/swf/abc';
 import { FLASH_DEFINITIONS, TOP_LEVEL } from '../../src/engine/flash/packages';
-import { liftMethod, type LiftDiagnostic } from './lift';
+import { liftMethod, parameterNames, type LiftDiagnostic } from './lift';
 
 export interface EmittedFile { path: string; text: string }
 
@@ -525,14 +525,13 @@ function paramsOf(abc: AbcFile, method: number): string {
 
 /** The name a parameter has in the signature and in the body — the same one. */
 function paramName(info: AbcMethodInfo | undefined, index: number): string {
-  const declared = info?.paramNames[index];
-  return declared && /^[A-Za-z_$][\w$]*$/.test(declared) ? declared : `param${index + 1}`;
+  return parameterNames(info)[index] ?? `param${index + 1}`;
 }
 
 function paramNamesOf(abc: AbcFile, method: number): string[] | undefined {
   const info = abc.methods[method];
   if (!info) return undefined;
-  return info.paramTypes.map((_, i) => paramName(info, i));
+  return parameterNames(info);
 }
 
 /** The ABI extra locals (`rest`, `arguments`) the body may read. */

@@ -9,25 +9,10 @@
 // (Number NaN, Boolean false, int 0, `*` undefined, otherwise null), and optional
 // parameters keep their declared defaults.
 import { describe, expect, it } from 'vitest';
-import type { AbcFile, AbcMethodBody, AbcMethodInfo, AbcTrait } from '../../decompiler/swf/abc';
+import type { AbcFile } from '../../decompiler/swf/abc';
 import { compileSources, linkProgram } from '../../src/engine/flash/loader';
 import { transpileAbc } from './index';
-
-const method = (paramTypes: string[] = [], optional: AbcMethodInfo['optional'] = []): AbcMethodInfo => ({
-  name: '', returnType: '', paramTypes, paramNames: [], optional, needArguments: false, needActivation: false, needRest: false,
-});
-const body = (index: number, bytes: number[]): AbcMethodBody => ({
-  method: index, maxStack: 4, localCount: 4, initScopeDepth: 0, maxScopeDepth: 1, code: new Uint8Array(bytes), exceptions: [], traits: [],
-});
-const attr = { final: false, override: false, metadata: false };
-const slot = (name: string, type: string, value?: { kind: number; value: number | string | boolean | null }): AbcTrait => ({
-  name, kind: 'slot', attr, type, metadata: [], ...(value ? { valueKind: value.kind, value: value.value } : {}),
-});
-const fn = (name: string, index: number): AbcTrait => ({ name, kind: 'method', attr, method: index, metadata: [] });
-
-// getlocal0 pushscope … returnvoid, the frame every body here starts and ends with.
-const OPEN = [0xd0, 0x30];
-const RETURN_VOID = 0x47;
+import { attr, body, fn, method, OPEN, RETURN_VOID, slot } from './testAbc';
 
 function fixture(): AbcFile {
   return {
