@@ -72,6 +72,18 @@ export interface MethodContext {
   captureLocal?: number;
   /** The scope objects of the function this one is nested in, for `get_scope_object`. */
   enclosingScopes?: Expr[];
+  /**
+   * Variables of enclosing frames' activations a closure sees, source name → the
+   * emitted variable. Activations lift to plain `var`s, so a JS closure captures
+   * them lexically, the way AVM2's scope chain does.
+   */
+  captured?: Map<string, string>;
+  /**
+   * The instance a closure's enclosing *method* runs on. A closure's own `this` is
+   * its call receiver, so names the scope chain finds on that instance go through an
+   * alias the method declares (`var __self = this;`) when a closure used it.
+   */
+  outerSelf?: { name: string; used: boolean };
 }
 
 export class Refuse extends Error {
@@ -214,9 +226,18 @@ class Lifter {
 
   /** The scope objects `get_scope_object` indexes into; 0 is the enclosing traits. */
   private scopeObjects: Expr[] = [];
+  /** Which entries of `scopeObjects` are `with` scopes (`pushwith`), parallel to it. */
+  private withFlags: boolean[] = [];
+  private withs = 0;
   /** Activation objects this body made: their slots are fields of that object. */
   private activationNames = new Set<string>();
   private activations = 0;
+  /** This frame's activation slots as variables: slot id → emitted name. */
+  private activationVars = new Map<number, string>();
+  /** Source name → emitted name for this frame's activation variables. */
+  private activationByName = new Map<string, string>();
+  /** The alias of `this` closures created here use, shared down the closure tree. */
+  private selfAlias: { name: string; used: boolean } | null = null;
   /** The catch variable of the handler being lifted, so `newcatch` names it. */
   private catchParam: string | null = null;
   private catches = 0;
@@ -277,6 +298,15 @@ class Lifter {
     const decls: Stmt[] = [...this.usedLocals]
       .sort((a, b) => a - b)
       .map((index) => ({ k: 'var' as const, decls: [{ name: this.locals.get(index) as string, type: null, init: null }] }));
+    // The activation's slots are this frame's captured variables, with AVM2's
+    // per-type defaults until the code assigns them.
+    const params = new Set(this.ctx.paramNames ?? []);
+    for (const trait of this.ctx.body.traits ?? []) {
+      const name = trait.slotId != null ? this.activationVars.get(trait.slotId) : undefined;
+      if (!name || params.has(name)) continue;
+      decls.push({ k: 'var', decls: [{ name, type: null, init: slotDefaultExpr(trait.type) }] });
+    }
+    if (this.selfAlias?.used) decls.unshift({ k: 'var', decls: [{ name: this.selfAlias.name, type: null, init: thisRef() }] });
     return [...decls, ...this.out];
   }
 
@@ -388,6 +418,7 @@ class Lifter {
       const block = this.blocks.get(cur);
       if (!block || !block.length) throw new Refuse(cur, 'jump leaves the method body');
       const last = block[block.length - 1];
+      this.enterScopes(cur);
       this.pc = last.offset + last.size;
       for (const i of block) {
         if (i === last && (branch(i) || i.name === 'jump' || i.name === 'lookup_switch' || TERMINATORS.has(i.name))) continue;
@@ -395,6 +426,10 @@ class Lifter {
         this.pc = i.offset;
         this.step(i);
       }
+      // Every successor starts with the scope stack this block leaves, whichever
+      // order the lifter visits them in.
+      const falls = !(last.name === 'jump' || last.name === 'lookup_switch' || TERMINATORS.has(last.name));
+      for (const next of [...targets(last), ...(falls ? [last.offset + last.size] : [])]) this.recordScopes(next);
       const exit = this.emitControl(last, block, stop);
       if (exit.done) return exit.end;
       if (exit.next == null) return exit.end;
@@ -404,6 +439,26 @@ class Lifter {
       cur = exit.next;
     }
     return { kind: 'end' };
+  }
+
+  /**
+   * The scope stack at a block's entry. The verifier requires the same scope depth on
+   * every path into an instruction, so it is a property of the offset — but the
+   * lifter visits blocks in construct order, not flow order: the then arm may run
+   * through the merge's `popscope` before the else arm is lifted. The state each
+   * control transfer carries is recorded for its targets and restored on entry.
+   */
+  private scopesAt = new Map<number, { objects: Expr[]; withFlags: boolean[] }>();
+
+  private recordScopes(offset: number, objects = this.scopeObjects, withFlags = this.withFlags) {
+    if (!this.scopesAt.has(offset)) this.scopesAt.set(offset, { objects: [...objects], withFlags: [...withFlags] });
+  }
+
+  private enterScopes(offset: number) {
+    const known = this.scopesAt.get(offset);
+    if (!known) { this.recordScopes(offset); return; }
+    this.scopeObjects = [...known.objects];
+    this.withFlags = [...known.withFlags];
   }
 
   /** Offsets on the path currently being lifted, so nothing re-enters itself. */
@@ -754,10 +809,8 @@ class Lifter {
     if (armFirst?.name !== 'pop') return null;
     const info = this.branchInfo(last);
     if (!info) return null;
-    const left = this.stack[0];
-    this.stack = [left];
-
     if (info.value == null) return null;
+    const left = this.stack[0];
     // The arm runs when the branch does *not* jump: `if_false` falls through on a
     // truthy `a` (`a && b`), `if_true` on a falsy one (`a || b`).
     const op = info.jumpOnTruthy ? '||' : '&&';
@@ -767,6 +820,9 @@ class Lifter {
     this.out.push({ k: 'var', decls: [{ name: leftName, type: null, init: left.e }] });
     this.out.push({ k: 'var', decls: [{ name: joinName, type: null, init: null }] });
 
+    // The copy the arm's leading `pop` discards is `a` itself, already evaluated:
+    // the arm sees the temp, so dropping it runs nothing a second time.
+    this.stack = [{ ...left, e: id(leftName) }];
     const arm = this.emitArm(fallThrough, target);
     if (arm.end.kind !== 'stop' || this.stack.length !== 1) {
       throw new Refuse(last.offset, `short-circuit join does not produce a single value (end=${arm.end.kind} stack=${this.stack.length})`);
@@ -876,6 +932,7 @@ class Lifter {
   private emitTry(ex: { from: number; to: number; target: number; type: string }, mine: number[]): RegionEnd {
     this.pc = ex.from;
     const base = [...this.stack];
+    const scopes = [...this.scopeObjects], withFlags = [...this.withFlags];
     // `from` is already on the active list: this region is the try's body.
     const body = this.emitArm(ex.from, ex.to, { enter: false, shared: mine });
     // The jump at the end of the protected range is where the `try` continues when
@@ -890,6 +947,13 @@ class Lifter {
     else throw new Refuse(ex.from, 'a protected region leaves through a loop edge');
 
     this.stack = [...base];
+    // A handler is entered with the scope stack emptied (AVM2 overview §3.3.1, the
+    // exception handler; Ruffle `handle_err` calls `clear_scope` before jumping there):
+    // its code pushes `this`, the activation and the catch scope again, so its
+    // `getscopeobject` indices count from zero.
+    this.scopeObjects = [];
+    this.withFlags = [];
+    this.recordScopes(ex.target, [], []);
     const param = `__caught${this.catches++}`;
     this.catchParam = param;
     // The two paths usually merge on the same instruction, but the compiler's scope
@@ -900,6 +964,8 @@ class Lifter {
       ? this.emitArm(ex.target, null, { shared: mine })
       : this.emitArmTo(ex.target, merge);
     this.catchParam = null;
+    this.scopeObjects = scopes;
+    this.withFlags = withFlags;
     if (handler.end.kind === 'backEdge') throw new Refuse(ex.from, 'an exception handler leaves through a loop edge');
     if (handler.end.kind === 'jump') {
       if (merge == null) merge = handler.end.target;
@@ -1072,10 +1138,27 @@ class Lifter {
         // The scope object goes onto the scope stack, where `get_scope_object`
         // finds it again: the value itself is what those reads want.
         this.scopeObjects.push(this.pop().e);
+        this.withFlags.push(false);
         return;
+      case 'push_with': {
+        // A `with` scope: names are looked up on this object first, at run time
+        // (`with (o) {…}`, and every E4X filter `list.(predicate)`, which ASC
+        // compiles as a loop that pushes each item as a `with` scope). The object is
+        // read once per lookup, so anything but a plain name is held in a temp.
+        let scope = this.pop().e;
+        if (scope.k !== 'id') {
+          const name = `__w${this.withs++}`;
+          this.out.push({ k: 'var', decls: [{ name, type: null, init: scope }] });
+          scope = id(name);
+        }
+        this.scopeObjects.push(scope);
+        this.withFlags.push(true);
+        return;
+      }
       case 'pop_scope':
         // The scope frame shrinks; the scope object itself is not an operand.
         this.scopeObjects.pop();
+        this.withFlags.pop();
         return;
       case 'get_global_scope':
         // The script's global object. A class reaches itself through it — the script's
@@ -1086,7 +1169,7 @@ class Lifter {
       case 'get_scope_object': {
         const index = o[0] ?? 0;
         const scope = this.scopeObjects[index] ?? (index === 0 && !this.ctx.enclosingScopes ? ({ k: 'id', name: 'this', line: 0 } as Expr) : undefined);
-        if (!scope) throw new Refuse(i.offset, `get_scope_object ${index} is outside the scope frame this body builds`);
+        if (!scope) throw new Refuse(i.offset, `get_scope_object ${index} is outside the scope frame this body builds (depth ${this.scopeObjects.length})`);
         this.push(scope);
         return;
       }
@@ -1149,13 +1232,16 @@ class Lifter {
       }
       case 'get_lex': {
         const m = mn();
-        this.push(this.reference(m.name, m.ns, m.nsKind));
+        const scope = this.withScope(m);
+        this.push(scope ? member(scope, m.name) : this.reference(m.name, m.ns, m.nsKind));
         return;
       }
       case 'find_prop_strict': case 'find_property': case 'find_def': {
         const m = mn();
         if (m.dynamic || m.nsOnStack) throw new Refuse(i.offset, `${i.name} on a runtime name is not lifted yet`);
-        this.pushValue(this.findReference(m));
+        // `finddef` searches the global definitions only; `with` scopes don't apply.
+        const scope = i.name === 'find_def' ? null : this.withScope(m);
+        this.pushValue(scope ? { e: scope } : this.findReference(m));
         return;
       }
       case 'get_slot': {
@@ -1169,6 +1255,8 @@ class Lifter {
           this.push({ k: 'id', name: this.ctx.scriptSlots.get(o[0])!, line: 0 });
           return;
         }
+        const variable = this.activationVar(recv.e, o[0]);
+        if (variable) { this.push(id(variable)); return; }
         this.push(this.memberOfValue(recv, { name: this.slotProp(o[0], recv.e) }));
         return;
       }
@@ -1177,6 +1265,12 @@ class Lifter {
         const recv = this.stack.length ? this.pop() : this.scopeValue();
         // The compiler keeps the stored value on the stack; copies must not re-run it.
         this.holdCopies(value.e);
+        const variable = this.activationVar(recv.e, o[0]);
+        if (variable) {
+          // ASC copies each captured parameter into its slot: `x = x` says nothing.
+          if (!isId(value.e, variable)) this.assign(id(variable), value.e);
+          return;
+        }
         this.assign(this.memberOfValue(recv, { name: this.slotProp(o[0], recv.e) }), value.e);
         return;
       }
@@ -1414,14 +1508,14 @@ class Lifter {
         throw new Refuse(i.offset, 'hasnext (the registerless for-in form) is not lifted yet');
       case 'lookup_switch':
         throw new Refuse(i.offset, 'lookupswitch (indexed switch) is not lifted yet');
-      case 'push_with':
-        throw new Refuse(i.offset, 'with (pushwith) is not lifted yet');
       case 'new_activation': {
         // The activation object is where a nested function reads the locals this
         // frame captures: `setslot k` writes register `k` of this frame, and the
         // closure reads the same field through the scope it was created with.
+        // Its slots become plain variables named by the body's traits (`var itr`), so
+        // the object itself never needs to exist: every access to it is a slot access.
         const name = `__activation${this.activations++}`;
-        this.out.push({ k: 'var', decls: [{ name, type: null, init: { k: 'object', props: [] } }] });
+        this.declareActivation();
         this.activationNames.add(name);
         this.push({ k: 'id', name, line: 0 });
         return;
@@ -1442,6 +1536,12 @@ class Lifter {
           memberNames: this.ctx.memberNames,
           staticMembers: this.ctx.staticMembers,
           staticOwner: this.ctx.staticOwner,
+          superOwner: this.ctx.superOwner,
+          instanceMethods: this.ctx.instanceMethods,
+          staticMethods: this.ctx.staticMethods,
+          scriptSlots: this.ctx.scriptSlots,
+          captured: new Map([...(this.ctx.captured ?? []), ...this.activationByName]),
+          outerSelf: this.closureSelf(),
           paramNames: parameterNames(method),
           needRest: method?.needRest,
           needArguments: method?.needArguments,
@@ -1545,6 +1645,13 @@ class Lifter {
   private storeLocal(index: number) {
     const v = this.pop();
     const name = (this.local(index) as { name: string }).name;
+    if (v.e.k === 'id' && this.activationNames.has(v.e.name)) {
+      // The register only ever holds the activation: it is an alias, not a value.
+      this.activationNames.add(name);
+      this.usedLocals.delete(index);
+      for (let k = 0; k < this.stack.length; k++) if (this.stack[k].e === v.e) this.stack[k] = { e: id(name) };
+      return;
+    }
     for (let k = 0; k < this.stack.length; k++) {
       const e = this.stack[k].e;
       if (e.k === 'id' && e.name === name) this.hold(k);
@@ -1620,7 +1727,8 @@ class Lifter {
     if (prop.index) return { k: 'index', obj: recv.e, index: prop.index };
     const name = prop.name as string;
     if (recv.find === name) {
-      return recv.owner ? member(recv.owner, name) : { k: 'id', name, line: 0 };
+      if (recv.owner) return member(recv.owner, name);
+      return recv.e.k === 'id' ? recv.e : { k: 'id', name, line: 0 };
     }
     return member(recv.e, name);
   }
@@ -1657,7 +1765,7 @@ class Lifter {
    */
   private isMethodName(name: string, recv: Value, superRead: boolean): boolean {
     if (superRead) return this.methodsOf(this.ctx.superOwner).has(name) || this.ctx.instanceMethods?.has(name) === true;
-    const isThis = recv.e.k === 'id' && (recv.e.name === 'this' || recv.e.name === (this.ctx.staticOwner ?? '\u0000'));
+    const isThis = this.isSelf(recv.e) || (recv.e.k === 'id' && recv.e.name === (this.ctx.staticOwner ?? '\u0000'));
     if (isThis) {
       if (recv.find === name && this.ctx.staticMethods?.has(name)) return true;
       return this.ctx.instanceMethods?.has(name) === true;
@@ -1700,8 +1808,85 @@ class Lifter {
    * member, `this` for an instance member, the global object otherwise. A following
    * `get/set/callproperty X` then fuses to `Owner.X` / `this.X` / `X`.
    */
+  /**
+   * While a `with` scope is on the scope stack, a name is resolved at run time:
+   * `__withScope([innermost, …], name, fallback)` is the first `with` object that has
+   * the property, else the object the name resolves on without them — `this`, the
+   * class, or (for a global/imported definition) a one-property object holding it.
+   * The caller reads, writes or calls `<that>.name`, so a method keeps its receiver.
+   */
+  private withScope(m: MnInfo): Expr | null {
+    const scopes: Expr[] = [];
+    for (let k = this.scopeObjects.length - 1; k >= 0; k--) if (this.withFlags[k]) scopes.push(this.scopeObjects[k]);
+    if (!scopes.length) return null;
+    const normal = this.findReference(m);
+    const fallback: Expr = normal.owner ?? (normal.e.k === 'id' && normal.e.name === m.name
+      ? { k: 'object', props: [{ key: m.name, value: this.reference(m.name, m.ns, m.nsKind) }] }
+      : normal.e);
+    return { k: 'call', callee: id('__withScope'), args: [{ k: 'array', items: scopes }, { k: 'str', v: m.name }, fallback] };
+  }
+
+  /** The `this` alias a closure created here resolves member names against. */
+  private closureSelf(): { name: string; used: boolean } | undefined {
+    if (this.ctx.target === 'instance') return (this.selfAlias ??= { name: '__self', used: false });
+    return this.ctx.target === 'none' ? this.ctx.outerSelf : undefined;
+  }
+
+  /** Name the activation's slots, avoiding names the module already uses. */
+  private declareActivation() {
+    if (this.activationVars.size) return;
+    const taken = new Set<string>([...GLOBALS, ...(this.ctx.globals ?? []), ...this.ctx.abc.classes.map((c) => simpleName(c.instance.name))]);
+    const params = new Set(this.ctx.paramNames ?? []);
+    for (const trait of this.ctx.body.traits ?? []) {
+      if (trait.slotId == null) continue;
+      const source = simpleName(trait.name);
+      let name = /^[A-Za-z_$][\w$]*$/.test(source) && !RESERVED_PARAM.has(source) && !/^(local|param)\d+$/.test(source) && !source.startsWith('__')
+        ? source : `slot${trait.slotId}`;
+      if (taken.has(name) && !params.has(name)) name = `${name}_`;
+      while ([...this.activationVars.values()].includes(name)) name = `${name}_`;
+      this.activationVars.set(trait.slotId, name);
+      this.activationByName.set(source, name);
+    }
+  }
+
+  /** A slot access on this frame's activation: the variable it lifted to. */
+  private activationVar(recv: Expr, slot: number): string | null {
+    if (recv.k !== 'id' || !this.activationNames.has(recv.name)) return null;
+    return this.activationVars.get(slot) ?? null;
+  }
+
+  /**
+   * A name the scope chain finds in an activation — this frame's (a nested function
+   * statement it declared) or an enclosing one's (a closure's captured variable).
+   */
+  private capturedName(name: string): string | null {
+    return this.activationByName.get(name) ?? this.ctx.captured?.get(name) ?? null;
+  }
+
+  /** In a closure created by an instance method, member names resolve on that instance. */
+  private selfTarget(): MethodContext['target'] {
+    return this.ctx.target === 'none' && this.ctx.outerSelf ? 'instance' : this.ctx.target;
+  }
+
+  private selfRef(): Expr {
+    if (this.ctx.target === 'none' && this.ctx.outerSelf) {
+      this.ctx.outerSelf.used = true;
+      return id(this.ctx.outerSelf.name);
+    }
+    return thisRef();
+  }
+
+  private isSelf(e: Expr): boolean {
+    if (e.k === 'lit' && e.v === 'this') return this.ctx.target !== 'none' || !this.ctx.outerSelf;
+    if (e.k !== 'id') return false;
+    if (this.ctx.target === 'none' && this.ctx.outerSelf) return e.name === this.ctx.outerSelf.name;
+    return e.name === 'this';
+  }
+
   private findReference(m: MnInfo): Value {
     const name = m.name;
+    const captured = this.capturedName(name);
+    if (captured) return { e: id(captured), find: name };
     const ownNamespace = m.nsKind === 'private' || m.nsKind === 'protected' || m.nsKind === 'staticProtected' || m.ns === '';
     // In class code the class object is the scope the name is found on, so a static is
     // a static whatever namespace it was declared in — Adobe's own framework classes
@@ -1711,8 +1896,8 @@ class Lifter {
       const owner: Expr = { k: 'id', name: this.ctx.staticOwner ?? 'this', line: 0 };
       return { e: owner, find: name, owner };
     }
-    if (ownNamespace && this.ctx.target === 'instance' && !GLOBALS.has(name) && !this.ctx.globals?.has(name) && !this.knownLocal(name)) {
-      const owner = thisRef();
+    if (ownNamespace && this.selfTarget() === 'instance' && !GLOBALS.has(name) && !this.ctx.globals?.has(name) && !this.knownLocal(name)) {
+      const owner = this.selfRef();
       return { e: owner, find: name, owner };
     }
     return { e: { k: 'id', name, line: 0 }, find: name };
@@ -1720,11 +1905,14 @@ class Lifter {
 
   private reference(name: string, ns: string, nsKind?: string): Expr {
     if (this.knownLocal(name)) return { k: 'id', name, line: 0 };
+    const captured = this.capturedName(name);
+    if (captured) return id(captured);
     if (GLOBALS.has(name) || this.ctx.globals?.has(name)) return { k: 'id', name, line: 0 };
     // A trait of the class being emitted — frame scripts included — is a member, and
     // a *method* read this way is the bound closure `obj.method` means in AVM2.
-    if (this.ctx.target === 'instance' && this.ctx.memberNames?.has(name)) {
-      return this.ctx.instanceMethods?.has(name) ? this.methodRef(thisRef(), name) : member(thisRef(), name);
+    if (this.selfTarget() === 'instance' && this.ctx.memberNames?.has(name)) {
+      const self = this.selfRef();
+      return this.ctx.instanceMethods?.has(name) ? this.methodRef(self, name) : member(self, name);
     }
     if (this.ctx.staticMembers?.has(name)) {
       const owner: Expr = { k: 'id', name: this.ctx.staticOwner ?? 'this', line: 0 };
@@ -1732,8 +1920,9 @@ class Lifter {
     }
     const ownNamespace = nsKind === 'private' || nsKind === 'protected' || nsKind === 'staticProtected' || ns === '';
     if (!ownNamespace) return { k: 'id', name, line: 0 };
-    if (this.ctx.target === 'instance') {
-      return this.ctx.instanceMethods?.has(name) ? this.methodRef(thisRef(), name) : member(thisRef(), name);
+    if (this.selfTarget() === 'instance') {
+      const self = this.selfRef();
+      return this.ctx.instanceMethods?.has(name) ? this.methodRef(self, name) : member(self, name);
     }
     return { k: 'id', name, line: 0 };
   }
@@ -1795,7 +1984,9 @@ class Lifter {
     const declared = index > 0 ? this.ctx.paramNames?.[index - 1] : undefined;
     // Local 0 is the receiver: the instance in a constructor/method, the class
     // object in a static method (where TypeScript's `this` is that class object).
-    const receiver = index === 0 && (this.ctx.target === 'instance' || this.ctx.target === 'class');
+    // A closure's (and a script function's) local 0 is its own receiver — `this` of
+    // the emitted `function`, never an undeclared register.
+    const receiver = index === 0;
     const name = receiver ? 'this' : declared || this.extraArgName(index) || `local${index}`;
     this.locals.set(index, name);
     // `this` needs no declaration, parameters come from the signature, and the ABI
@@ -1854,6 +2045,16 @@ function joinValue(cond: Expr, then: Expr, otherwise: Expr): Expr | null {
 /** Does this instruction end a region rather than fall into the next block? */
 function i_is_control(i: AbcInstruction): boolean {
   return TERMINATORS.has(i.name) || i.name === 'lookup_switch';
+}
+
+/** AVM2's default for a slot of this type: false, NaN, 0, null — `*` stays undefined. */
+function slotDefaultExpr(type: string | undefined): Expr | null {
+  const t = simpleName(type ?? '');
+  if (t === 'Boolean') return lit('false');
+  if (t === 'Number') return id('NaN');
+  if (t === 'int' || t === 'uint') return { k: 'num', v: '0' };
+  if (!t || t === '*' || t === 'void') return null;
+  return lit('null');
 }
 
 function block(body: Stmt[]): Stmt { return { k: 'block', body }; }

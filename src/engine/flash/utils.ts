@@ -152,6 +152,24 @@ export function __method(recv: unknown, name: string, owner?: { prototype?: obje
 const METHOD_CACHE = new WeakMap<object, Map<string, unknown>>();
 
 /**
+ * Name resolution through `with` scopes (`pushwith`; also every E4X filter
+ * `list.(predicate)`, whose predicate runs with each item as a `with` scope). The
+ * scopes come innermost first; the first that *has* the property is where the name
+ * lives, as AVM2's scope-chain search asks each `with` object `hasProperty`. A value
+ * can answer that itself through `__hasProperty` — XML does, since its children and
+ * attributes are properties no `in` test sees. Otherwise the name resolves where it
+ * would without the `with`: `fallback`.
+ */
+export function __withScope(scopes: unknown[], name: string, fallback: unknown): unknown {
+  for (const scope of scopes) {
+    if (scope == null) continue;
+    const probe = (scope as { __hasProperty?: (n: string) => boolean }).__hasProperty;
+    if (typeof probe === 'function' ? probe.call(scope, name) : name in Object(scope)) return scope;
+  }
+  return fallback;
+}
+
+/**
  * AVM2 interfaces exist at runtime: `x is IFoo`, `x as IFoo` and
  * `x instanceof IFoo` all work, and a class declares the interfaces it implements.
  * TypeScript erases both the interface and the `implements` clause, so the engine

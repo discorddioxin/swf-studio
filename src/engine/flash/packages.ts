@@ -76,6 +76,8 @@ export const TOP_LEVEL: Record<string, unknown> = {
   // `obj.method` read as a value: a closure bound to `obj`.
   __method: utils.__method,
   __slots: utils.__slots,
+  // Name lookups inside `with` scopes and E4X filter predicates.
+  __withScope: utils.__withScope,
   DefinitionError: utils.DefinitionError,
   SecurityError: utils.SecurityError,
   VerifyError: utils.VerifyError,

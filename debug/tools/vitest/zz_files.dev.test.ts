@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { inflateSync } from 'node:zlib';
 import { it } from 'vitest';
 import { abcClassNames, parseAbc, type AbcFile } from '@/../decompiler/swf/abc';
@@ -38,6 +39,9 @@ it('per-file compile: attribute every error to its file', () => {
   const abc = abcOf(payloads(process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf')[0]);
   const result = transpileAbc({ abc, projectClasses: new Set(abcClassNames(abc)) });
   const text = new Map(result.files.map((f) => [f.path, f.text]));
+  // SWF_DUMP=<dir> writes every emitted module there, for grepping whole outputs.
+  const dump = process.env.SWF_DUMP;
+  if (dump) for (const f of result.files) { const out = join(dump, f.path); mkdirSync(dirname(out), { recursive: true }); writeFileSync(out, f.text); }
   const bad: string[] = [];
   for (const f of result.files) {
     const program = linkProgram(compileSources([f]));
