@@ -98,6 +98,8 @@ interface LoopFrame {
   head: number;
   exit: number;
   test?: number;
+  /** A `for` loop's update: a jump here from the body is `continue`. */
+  cont?: number;
 }
 
 interface BranchInfo {
@@ -394,6 +396,10 @@ class Lifter {
     let first = true;
     while (cur != null) {
       if (stop != null && cur === stop) return { kind: 'stop' };
+      // The end of the code: ASC's switch layout jumps there from after its last case
+      // (`jump END` behind a case that returns) when nothing follows the switch. The
+      // verifier rejects falling off the code, so no path arriving here is live.
+      if (cur === this.ctx.body.code.length) return { kind: 'end' };
       // A protected range is a `try`: its handler runs on the same stack, and both
       // sides merge where the try's closing jump goes.
       // `enter === false` means this region *is* a protected body: its handler was
@@ -482,7 +488,7 @@ class Lifter {
       {
         // a `continue` from inside the loop's body: the branch to the test is the edge
         const frame = this.loops[this.loops.length - 1];
-        if (frame && frame.test === target) {
+        if (frame && (frame.test === target || frame.cont === target)) {
           this.out.push({ k: 'continue', label: null });
           return { done: true, end: { kind: 'stop' }, next: null };
         }
@@ -680,6 +686,11 @@ class Lifter {
       // test started on — which is where the loop head is entered from.
       const info = this.branchInfo(test.decide);
       if (!info) throw new Refuse(test.decide.offset, `${test.decide.name} is not a supported loop test`);
+      const cont = this.forUpdate(head, target);
+      if (cont != null) {
+        const lifted = this.tryForLoop(head, exit, target, cont, info.jump);
+        if (lifted) return lifted;
+      }
       const frame: LoopFrame = { head, exit, test: target };
       this.loops.push(frame);
       const arm = this.emitArm(head, target);
@@ -687,6 +698,62 @@ class Lifter {
       if (arm.end.kind !== 'stop' && arm.end.kind !== 'end') throw new Refuse(jump.offset, 'loop body leaves through an unexpected edge');
       this.out.push({ k: 'while', test: info.jump, body: block(arm.stmts) });
       return { done: false, end: { kind: 'stop' }, next: exit };
+    }
+  }
+
+  /**
+   * A `for` loop's update block: straight-line code that runs into the test, and
+   * that the body jumps to — that jump is the `continue` of a `for (…; …; update)`,
+   * which must run the update before testing again. Null when no jump goes there.
+   */
+  private forUpdate(head: number, test: number): number | null {
+    let best: number | null = null;
+    for (const [at, block] of this.blocks) {
+      if (at < head || at >= test || !block.length) continue;
+      const last = block[block.length - 1];
+      if (last.name !== 'jump') continue;
+      const to = last.target as number;
+      if (to <= at || to >= test || (best != null && to >= best)) continue;
+      if (this.straightTo(to, test)) best = to;
+    }
+    return best;
+  }
+
+  /** Does [from, to) run straight into `to` — no branch, jump or exit on the way? */
+  private straightTo(from: number, to: number): boolean {
+    let at = from;
+    for (let guard = 0; guard < 64 && at < to; guard++) {
+      const block = this.blocks.get(at);
+      if (!block?.length) return false;
+      const last = block[block.length - 1];
+      if (branch(last) || last.name === 'jump' || last.name === 'lookup_switch' || TERMINATORS.has(last.name)) return false;
+      at = last.offset + last.size;
+    }
+    return at === to;
+  }
+
+  /** `for (; test; update) { body }`, speculatively: the update must lift to expressions. */
+  private tryForLoop(head: number, exit: number, test: number, cont: number, cond: Expr): { done: boolean; end: RegionEnd; next: number | null } | null {
+    const snap = this.snapshot();
+    try {
+      const frame: LoopFrame = { head, exit, test, cont };
+      this.loops.push(frame);
+      const body = this.emitArmTo(head, cont);
+      if (body.end.kind !== 'stop' && body.end.kind !== 'end') throw new Refuse(head, 'for body');
+      const update = this.emitArm(cont, test);
+      this.loops.pop();
+      if (update.end.kind !== 'stop' || !update.stmts.every((st) => st.k === 'expr')) throw new Refuse(cont, 'for update');
+      const items = update.stmts.map((st) => (st as { e: Expr }).e);
+      this.out.push({
+        k: 'for', init: null, test: cond,
+        update: items.length === 0 ? null : items.length === 1 ? items[0] : { k: 'seq', items },
+        body: block(body.stmts),
+      });
+      return { done: false, end: { kind: 'stop' }, next: exit };
+    } catch (e) {
+      if (!(e instanceof Refuse)) throw e;
+      this.restore(snap);
+      return null;
     }
   }
 
@@ -859,11 +926,15 @@ class Lifter {
     loops: LoopFrame[];
     out: number;
     pc: number;
+    scopes: Expr[];
+    withFlags: boolean[];
+    scopesAt: Map<number, { objects: Expr[]; withFlags: boolean[] }>;
   } {
     return {
       stack: [...this.stack], locals: new Map(this.locals), types: new Map(this.localTypes),
       killed: new Set(this.killed), active: new Set(this.active), temps: this.temps,
       used: new Set(this.usedLocals), loops: [...this.loops], out: this.out.length, pc: this.pc,
+      scopes: [...this.scopeObjects], withFlags: [...this.withFlags], scopesAt: new Map(this.scopesAt),
     };
   }
 
@@ -878,6 +949,9 @@ class Lifter {
     this.temps = snap.temps;
     this.usedLocals = snap.used;
     this.loops = snap.loops;
+    this.scopeObjects = snap.scopes;
+    this.withFlags = snap.withFlags;
+    this.scopesAt = snap.scopesAt;
   }
 
   /**
@@ -996,13 +1070,16 @@ class Lifter {
    */
   private emitLookupSwitch(i: AbcInstruction): { done: boolean; end: RegionEnd; next: number | null } {
     const all = i.targets ?? [];
-    // The table is `default (s24), count (u30), count offsets`; the parser hands the
-    // cases over in order and the default as `target`.
-    const count = i.operands[1] ?? all.length - 1;
+    // The table is `default (s24), case_count (u30), case_count + 1 offsets` (AVM2
+    // overview, `lookupswitch`: index 0 … case_count are cases); the parser hands
+    // the case offsets over in order and the default as `target`.
+    const count = (i.operands[1] ?? all.length - 1) + 1;
     const cases = all.slice(0, count);
     const fallback = i.target ?? all[all.length - 1];
     if (!cases.length || fallback == null) throw new Refuse(i.offset, 'a switch table with nothing to dispatch to');
     const merge = i.offset + i.size;
+    const structured = this.tryStructuredSwitch(i, cases, fallback, merge);
+    if (structured) return structured;
     const index = this.pop();
     const base = [...this.stack];
 
@@ -1056,6 +1133,128 @@ class Lifter {
     this.out.push({ k: 'switch', disc: index.e, cases: clauses.map((c) => ({ test: c.test, body: c.body })) });
     this.stack = pushed ? [...base, { e: pushed }] : [...base];
     return { done: false, end: { kind: 'stop' }, next: merge };
+  }
+
+  /**
+   * The switch as it was written. Every target is one clause, in address order —
+   * the order of the source — labelled with every index that dispatches to it, so a
+   * shared body (`case 4:` and `default:` on one target) is emitted once and a case
+   * that runs into the next one falls through as JavaScript does. When the selector
+   * is ASC's comparison chain (`K0 === x ? 0 : K1 === x ? 1 : … : n`) over constants,
+   * the labels are the case values and the discriminant is `x` itself.
+   *
+   * Speculative: anything outside that shape (a case leaving values, jumping to a
+   * place that is neither the next clause nor the end) restores the state and the
+   * table lift above takes over.
+   */
+  private tryStructuredSwitch(i: AbcInstruction, cases: number[], fallback: number, merge: number): { done: boolean; end: RegionEnd; next: number | null } | null {
+    const snap = this.snapshot();
+    try {
+      const index = this.pop();
+      const base = [...this.stack];
+      const groups = new Map<number, { labels: number[]; isDefault: boolean }>();
+      cases.forEach((target, n) => {
+        const g = groups.get(target) ?? { labels: [], isDefault: false };
+        g.labels.push(n);
+        groups.set(target, g);
+      });
+      if (fallback !== merge) {
+        const g = groups.get(fallback) ?? { labels: [], isDefault: false };
+        g.isDefault = true;
+        groups.set(fallback, g);
+      }
+      const order = [...groups.keys()].sort((a, b) => a - b);
+      if (order.some((t) => t >= merge || t > i.offset)) throw new Refuse(i.offset, 'switch layout');
+
+      // The selector chain, when there is one: index → case value.
+      const chain = selectorChain(index.e);
+      const values = new Map<number, Expr>();
+      let elseIndex: number | null = null;
+      if (chain) {
+        for (const link of chain.links) if (!values.has(link.index)) values.set(link.index, link.value);
+        elseIndex = chain.elseIndex;
+        // A chain index past the table dispatches to the default, like any other.
+        const fallbackGroup = groups.get(fallback);
+        for (const n of values.keys()) if (n >= cases.length && n !== elseIndex && fallbackGroup) fallbackGroup.labels.push(n);
+      }
+
+      const clauses: { labels: (Expr | null)[]; body: Stmt[] }[] = [];
+      for (let k = 0; k < order.length; k++) {
+        const target = order[k];
+        const stop = order[k + 1] ?? merge;
+        this.stack = [...base];
+        const arm = this.emitArmTo(target, stop);
+        const body = [...arm.stmts];
+        if (arm.end.kind === 'jump' && arm.end.target === merge) body.push({ k: 'break', label: null });
+        else if (arm.end.kind === 'stop') {
+          // Ran into the next clause (falls through) or, for the last, into the end.
+          if (stop === merge) body.push({ k: 'break', label: null });
+        } else if (arm.end.kind !== 'end') throw new Refuse(i.offset, 'switch layout');
+        if (arm.end.kind !== 'end' && this.stack.length !== base.length) throw new Refuse(i.offset, 'switch layout');
+        const g = groups.get(target)!;
+        const labels: (Expr | null)[] = [];
+        for (const n of g.labels) {
+          if (chain) {
+            const value = values.get(n);
+            if (value) labels.push(value);
+            else if (n === elseIndex && !g.isDefault) labels.push(null);
+          } else labels.push({ k: 'num', v: String(n) });
+        }
+        if (g.isDefault && !labels.includes(null)) labels.push(null);
+        if (!labels.length) throw new Refuse(i.offset, 'switch layout');
+        clauses.push({ labels, body });
+      }
+      // With a chain, the index the chain falls back to must reach the default.
+      if (chain && elseIndex != null && fallback !== merge) {
+        const elseTarget = cases[elseIndex] ?? fallback;
+        if (elseTarget !== fallback) throw new Refuse(i.offset, 'switch layout');
+      }
+      if (clauses.filter((c) => c.labels.includes(null)).length > 1) throw new Refuse(i.offset, 'switch layout');
+      // JavaScript tests `case` expressions lazily, in textual order, with `===` — the
+      // chain's own semantics — so the labels may be any expressions as long as they
+      // come out in the chain's order. Distinct constants can come in any order.
+      if (chain) {
+        const emitted = clauses.flatMap((c) => c.labels).filter((l): l is Expr => l != null);
+        // Values that dispatch past the table with no default clause run nothing.
+        const dropped = (n: number) => n >= cases.length && n !== elseIndex && fallback === merge;
+        const expected = chain.links.filter((l, k) => chain.links.findIndex((m) => m.index === l.index) === k && !dropped(l.index)).map((l) => l.value);
+        const inOrder = emitted.length === expected.length && emitted.every((e, k) => e === expected[k]);
+        const known = emitted.map((e) => this.constantValue(e));
+        const constants = known.every((v) => v !== NOT_CONSTANT) && new Set(known.map((v) => JSON.stringify(v))).size === known.length;
+        if (!inOrder && !constants) throw new Refuse(i.offset, 'switch layout');
+      }
+
+      const cs: { test: Expr | null; body: Stmt[] }[] = [];
+      for (const clause of clauses) {
+        clause.labels.forEach((test, n) => cs.push({ test, body: n === clause.labels.length - 1 ? clause.body : [] }));
+      }
+      this.out.push({ k: 'switch', disc: chain ? chain.subject : index.e, cases: cs });
+      this.stack = [...base];
+      return { done: false, end: { kind: 'stop' }, next: merge };
+    } catch (e) {
+      if (!(e instanceof Refuse)) throw e;
+      this.restore(snap);
+      return null;
+    }
+  }
+
+  /**
+   * The value of a constant expression: a literal, or a `static const` the ABC gives
+   * a value (`VideoAlign.CENTER`, also reached as `require('./VideoAlign').VideoAlign
+   * .CENTER`). Reading one has no effect, so constants may be tested in any order.
+   */
+  private constantValue(e: Expr): unknown {
+    if (e.k === 'str') return e.v;
+    if (e.k === 'num') return Number(e.v);
+    if (e.k === 'unary' && e.op === '-' && e.arg.k === 'num') return -Number(e.arg.v);
+    if (e.k === 'lit' && e.v !== 'this') return ({ true: true, false: false, null: null, undefined: '\u0000undefined' } as const)[e.v];
+    if (e.k !== 'member') return NOT_CONSTANT;
+    const owner = e.obj.k === 'id' ? e.obj.name : e.obj.k === 'member' ? e.obj.prop : null;
+    if (!owner) return NOT_CONSTANT;
+    const cls = this.ctx.abc.classes.find((c) => simpleName(c.instance.name) === owner);
+    const trait = cls?.traits.find((t) => simpleName(t.name) === e.prop);
+    if (!trait || trait.kind !== 'const' || trait.value === undefined) return NOT_CONSTANT;
+    return trait.value;
   }
 
   /**
@@ -1883,6 +2082,27 @@ class Lifter {
     return e.name === 'this';
   }
 
+  /**
+   * Does the enclosing class (or a superclass this ABC defines) declare `name` in
+   * namespace `ns` — as a static of the class itself, or as an instance member?
+   */
+  private declaredIn(name: string, ns: string): 'static' | 'instance' | null {
+    if (!ns || !this.ctx.staticOwner) return null;
+    const qualified = `${ns}.${name}`;
+    const byName = new Map(this.ctx.abc.classes.map((c) => [c.instance.name, c]));
+    let cls = [...byName.values()].find((c) => simpleName(c.instance.name) === this.ctx.staticOwner);
+    if (cls?.traits.some((t) => t.name === qualified)) return 'static';
+    const seen = new Set<string>();
+    for (let depth = 0; cls && depth < 32; depth++) {
+      if (cls.instance.traits.some((t) => t.name === qualified)) return 'instance';
+      const superName = cls.instance.superName;
+      if (!superName || seen.has(superName)) break;
+      seen.add(superName);
+      cls = byName.get(superName);
+    }
+    return null;
+  }
+
   private findReference(m: MnInfo): Value {
     const name = m.name;
     const captured = this.capturedName(name);
@@ -1891,12 +2111,13 @@ class Lifter {
     // In class code the class object is the scope the name is found on, so a static is
     // a static whatever namespace it was declared in — Adobe's own framework classes
     // put some of theirs in a namespace of their own (`http://www.adobe.com/...`).
-    const staticHit = this.ctx.staticMembers?.has(name) && (ownNamespace || this.ctx.target === 'class');
+    const declared = this.declaredIn(name, m.ns);
+    const staticHit = (this.ctx.staticMembers?.has(name) && (ownNamespace || this.ctx.target === 'class')) || declared === 'static';
     if (staticHit) {
       const owner: Expr = { k: 'id', name: this.ctx.staticOwner ?? 'this', line: 0 };
       return { e: owner, find: name, owner };
     }
-    if (ownNamespace && this.selfTarget() === 'instance' && !GLOBALS.has(name) && !this.ctx.globals?.has(name) && !this.knownLocal(name)) {
+    if ((ownNamespace || declared === 'instance') && this.selfTarget() === 'instance' && !GLOBALS.has(name) && !this.ctx.globals?.has(name) && !this.knownLocal(name)) {
       const owner = this.selfRef();
       return { e: owner, find: name, owner };
     }
@@ -1919,7 +2140,20 @@ class Lifter {
       return this.ctx.staticMethods?.has(name) ? this.methodRef(owner, name) : member(owner, name);
     }
     const ownNamespace = nsKind === 'private' || nsKind === 'protected' || nsKind === 'staticProtected' || ns === '';
-    if (!ownNamespace) return { k: 'id', name, line: 0 };
+    if (!ownNamespace) {
+      // A member in a namespace of its own (`flvplayback_internal`, `mx_internal`):
+      // the class — or a superclass in this ABC — declares exactly `ns.name`.
+      const declared = this.declaredIn(name, ns);
+      if (declared === 'static') {
+        const owner: Expr = { k: 'id', name: this.ctx.staticOwner ?? 'this', line: 0 };
+        return this.ctx.staticMethods?.has(name) ? this.methodRef(owner, name) : member(owner, name);
+      }
+      if (declared === 'instance' && this.selfTarget() === 'instance') {
+        const self = this.selfRef();
+        return this.ctx.instanceMethods?.has(name) ? this.methodRef(self, name) : member(self, name);
+      }
+      return { k: 'id', name, line: 0 };
+    }
     if (this.selfTarget() === 'instance') {
       const self = this.selfRef();
       return this.ctx.instanceMethods?.has(name) ? this.methodRef(self, name) : member(self, name);
@@ -2056,6 +2290,32 @@ function slotDefaultExpr(type: string | undefined): Expr | null {
   if (!t || t === '*' || t === 'void') return null;
   return lit('null');
 }
+
+/**
+ * ASC's switch selector: `K0 === x ? 0 : K1 === x ? 1 : … : n`, one subject `x` (a
+ * plain name, read once either way). Null when the expression is anything else.
+ */
+function selectorChain(e: Expr): { subject: Expr; links: { value: Expr; index: number }[]; elseIndex: number } | null {
+  const links: { value: Expr; index: number }[] = [];
+  let subject: Expr | null = null;
+  let at = e;
+  while (at.k === 'cond') {
+    const test = at.test;
+    if (test.k !== 'binary' || test.op !== '===' || at.then.k !== 'num') return null;
+    // ASC pushes the case value, then the subject: `K === x`.
+    const [value, x]: [Expr, Expr] = test.right.k === 'id' && (!subject || sameExpr(subject, test.right)) ? [test.left, test.right] : [test.right, test.left];
+    if (x.k !== 'id') return null;
+    if (subject && !sameExpr(subject, x)) return null;
+    subject = x;
+    links.push({ value, index: Number(at.then.v) });
+    at = at.else;
+  }
+  if (!subject || at.k !== 'num' || !links.length) return null;
+  return { subject, links, elseIndex: Number(at.v) };
+}
+
+const NOT_CONSTANT = Symbol('not constant');
+
 
 function block(body: Stmt[]): Stmt { return { k: 'block', body }; }
 function lit(v: 'true' | 'false' | 'null' | 'undefined' | 'this'): Expr { return { k: 'lit', v }; }
