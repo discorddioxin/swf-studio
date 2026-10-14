@@ -1545,15 +1545,12 @@ class Lifter {
         return;
       }
       case 'call': {
+        // `…, function, receiver, arg1…argN` (AVM2 overview, `call`): the receiver
+        // is the `this` the function runs with, so the emitted call carries it.
         const args = this.popArgs(argCountOf(i, o));
+        const recv = this.pop();
         const fn = this.pop();
-        // AVM2's `call` pops the receiver under the arguments as well: it is the
-        // `this` the function runs with, so the emitted call carries it.
-        const recv = this.stack.length ? this.pop() : null;
-        this.resultOrStatement(
-          recv ? { k: 'call', callee: member(fn.e, 'call'), args: [recv.e, ...args] } : { k: 'call', callee: fn.e, args },
-          false,
-        );
+        this.resultOrStatement({ k: 'call', callee: member(fn.e, 'call'), args: [recv.e, ...args] }, false);
         return;
       }
       case 'construct': {
@@ -1582,9 +1579,12 @@ class Lifter {
         return;
       }
       case 'new_class': {
-        // `newclass` builds the class object of the enclosing script; the emitted
-        // TypeScript class declaration *is* that object, so the value is a no-op.
-        this.push({ k: 'id', name: `__class${o[0]}`, line: 0 });
+        // `newclass` pops the base class and pushes the new class object. The
+        // emitted TypeScript class declaration *is* that object, so the value is the
+        // class itself, by name.
+        this.pop();
+        const made = this.ctx.abc.classes[o[0]]?.instance.name;
+        this.push({ k: 'id', name: made ? simpleName(made) : `__class${o[0]}`, line: 0 });
         return;
       }
       case 'new_array': {
@@ -2019,10 +2019,14 @@ class Lifter {
     for (let k = this.scopeObjects.length - 1; k >= 0; k--) if (this.withFlags[k]) scopes.push(this.scopeObjects[k]);
     if (!scopes.length) return null;
     const normal = this.findReference(m);
-    const fallback: Expr = normal.owner ?? (normal.e.k === 'id' && normal.e.name === m.name
-      ? { k: 'object', props: [{ key: m.name, value: this.reference(m.name, m.ns, m.nsKind) }] }
-      : normal.e);
-    return { k: 'call', callee: id('__withScope'), args: [{ k: 'array', items: scopes }, { k: 'str', v: m.name }, fallback] };
+    const args: Expr[] = [{ k: 'array', items: scopes }, { k: 'str', v: m.name }];
+    if (normal.owner || normal.e.k !== 'id' || normal.e.name !== m.name) return { k: 'call', callee: id('__withScope'), args: [...args, normal.owner ?? normal.e] };
+    // A global/imported name is read only if no `with` object has it: AVM2 never
+    // looks further, and a JavaScript free name that nothing defines would throw
+    // just by being evaluated (`type` inside `describeType(x).(@name == type)`).
+    const holder: Expr = { k: 'object', props: [{ key: m.name, value: this.reference(m.name, m.ns, m.nsKind) }] };
+    const lazy: Expr = { k: 'func', name: null, params: [], ret: null, body: [{ k: 'return', arg: holder }] };
+    return { k: 'call', callee: id('__withScope'), args: [...args, { k: 'lit', v: 'undefined' }, lazy] };
   }
 
   /** The `this` alias a closure created here resolves member names against. */
@@ -2103,6 +2107,40 @@ class Lifter {
     return null;
   }
 
+  /**
+   * A superclass's static, named without its class: AS3 code sees the statics of
+   * every class it extends (`mergeStyles(…)` in LabelButton is
+   * `UIComponent.mergeStyles`). Instance members, own statics and locals win; the
+   * nearest superclass this ABC defines that declares the name is the owner.
+   */
+  private inheritedStaticOwner(name: string): string | null {
+    if (!this.ctx.staticOwner || this.knownLocal(name) || this.capturedName(name)) return null;
+    if (this.ctx.memberNames?.has(name) || this.ctx.instanceMethods?.has(name) || this.ctx.staticMembers?.has(name)) return null;
+    if (GLOBALS.has(name) || this.ctx.globals?.has(name)) return null;
+    const byName = new Map(this.ctx.abc.classes.map((c) => [c.instance.name, c]));
+    let cls = [...byName.values()].find((c) => simpleName(c.instance.name) === this.ctx.staticOwner);
+    const seen = new Set<string>();
+    for (let depth = 0; cls && depth < 32; depth++) {
+      const superName = cls.instance.superName;
+      if (!superName || seen.has(superName)) break;
+      seen.add(superName);
+      cls = byName.get(superName);
+      if (cls?.traits.some((t) => t.kind !== 'class' && simpleName(t.name) === name)) return simpleName(cls.instance.name);
+    }
+    return null;
+  }
+
+  /** A private/protected multiname for a member this class declares. */
+  private classPrivate(name: string, nsKind?: string): boolean {
+    if (nsKind !== 'private' && nsKind !== 'protected' && nsKind !== 'staticProtected') return false;
+    return !!(this.ctx.memberNames?.has(name) || this.ctx.staticMembers?.has(name));
+  }
+
+  private staticMethodOf(owner: string, name: string): boolean {
+    const cls = this.ctx.abc.classes.find((c) => simpleName(c.instance.name) === owner);
+    return !!cls?.traits.some((t) => t.kind === 'method' && simpleName(t.name) === name);
+  }
+
   private findReference(m: MnInfo): Value {
     const name = m.name;
     const captured = this.capturedName(name);
@@ -2117,7 +2155,15 @@ class Lifter {
       const owner: Expr = { k: 'id', name: this.ctx.staticOwner ?? 'this', line: 0 };
       return { e: owner, find: name, owner };
     }
-    if ((ownNamespace || declared === 'instance') && this.selfTarget() === 'instance' && !GLOBALS.has(name) && !this.ctx.globals?.has(name) && !this.knownLocal(name)) {
+    const inherited = this.inheritedStaticOwner(name);
+    if (inherited) {
+      const owner = id(inherited);
+      return { e: owner, find: name, owner };
+    }
+    // A private/protected name is the class's own however a global would be spelt
+    // (SushiAPI's private `getTimer()` is no flash.utils.getTimer).
+    const global = (GLOBALS.has(name) || !!this.ctx.globals?.has(name)) && !this.classPrivate(name, m.nsKind);
+    if ((ownNamespace || declared === 'instance') && this.selfTarget() === 'instance' && !global && !this.knownLocal(name)) {
       const owner = this.selfRef();
       return { e: owner, find: name, owner };
     }
@@ -2128,7 +2174,7 @@ class Lifter {
     if (this.knownLocal(name)) return { k: 'id', name, line: 0 };
     const captured = this.capturedName(name);
     if (captured) return id(captured);
-    if (GLOBALS.has(name) || this.ctx.globals?.has(name)) return { k: 'id', name, line: 0 };
+    if ((GLOBALS.has(name) || this.ctx.globals?.has(name)) && !this.classPrivate(name, nsKind)) return { k: 'id', name, line: 0 };
     // A trait of the class being emitted — frame scripts included — is a member, and
     // a *method* read this way is the bound closure `obj.method` means in AVM2.
     if (this.selfTarget() === 'instance' && this.ctx.memberNames?.has(name)) {
@@ -2138,6 +2184,11 @@ class Lifter {
     if (this.ctx.staticMembers?.has(name)) {
       const owner: Expr = { k: 'id', name: this.ctx.staticOwner ?? 'this', line: 0 };
       return this.ctx.staticMethods?.has(name) ? this.methodRef(owner, name) : member(owner, name);
+    }
+    const inherited = this.inheritedStaticOwner(name);
+    if (inherited) {
+      const owner = id(inherited);
+      return this.staticMethodOf(inherited, name) ? this.methodRef(owner, name) : member(owner, name);
     }
     const ownNamespace = nsKind === 'private' || nsKind === 'protected' || nsKind === 'staticProtected' || ns === '';
     if (!ownNamespace) {

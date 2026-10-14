@@ -158,15 +158,16 @@ const METHOD_CACHE = new WeakMap<object, Map<string, unknown>>();
  * lives, as AVM2's scope-chain search asks each `with` object `hasProperty`. A value
  * can answer that itself through `__hasProperty` — XML does, since its children and
  * attributes are properties no `in` test sees. Otherwise the name resolves where it
- * would without the `with`: `fallback`.
+ * would without the `with`: `fallback`, or what `lazyFallback()` returns — a global
+ * is only read when no `with` object answers, since reading an undefined one throws.
  */
-export function __withScope(scopes: unknown[], name: string, fallback: unknown): unknown {
+export function __withScope(scopes: unknown[], name: string, fallback: unknown, lazyFallback?: () => unknown): unknown {
   for (const scope of scopes) {
     if (scope == null) continue;
     const probe = (scope as { __hasProperty?: (n: string) => boolean }).__hasProperty;
     if (typeof probe === 'function' ? probe.call(scope, name) : name in Object(scope)) return scope;
   }
-  return fallback;
+  return lazyFallback ? lazyFallback() : fallback;
 }
 
 /**

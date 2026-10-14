@@ -97,7 +97,7 @@ export function transpileAbc(options: AbcModuleOptions): EmitResult {
         }
       }
     }
-    const init = emitScriptInit(abc, script.init, script.traits);
+    const init = emitScriptInit(abc, script.init, script.traits, pathOf);
     if (init) files.push(init);
   }
 
@@ -474,28 +474,40 @@ function refusalStub(where: string, diagnostics: EmitDiagnostic[]): string {
 }
 
 /** The module that runs a script's top level (its trait bindings are the class objects). */
-function emitScriptInit(abc: AbcFile, method: number, traits: AbcTrait[]): EmittedFile | null {
+function emitScriptInit(abc: AbcFile, method: number, traits: AbcTrait[], pathOf: Map<string, string>): EmittedFile | null {
   const body = abc.bodies.find((b) => b.method === method);
   if (!body) return null;
   const result = liftMethod({ abc, body, target: 'none' });
   if (!result.stmts) return null;
   const used: NameUse = { values: new Set(), types: new Set() };
+  const self = `script/init_${method}`;
   // Names the module itself defines: a script init that only re-states them
-  // (`this.Thing = Thing`, the class/function slots) says nothing new.
+  // (`this.Thing = Thing` / `Thing = Thing`, the class/function slots) says nothing new. `newclass`
+  // is the class by name, often kept in a local first (`local1 = Void;
+  // this.Void = local1;`), so a local holding an own class counts as that class.
   const own = new Set(traits.map((t) => simpleName(t.name)));
-  const restatesOwnSlot = (text: string) => {
-    const m = /^this\.([\w$]+) = (this|[\w$]+);$/.exec(text.trim());
-    return !!m && own.has(m[1]) && (m[2] === 'this' || m[2] === m[1]);
+  const aliases = new Set<string>();
+  const structural = (text: string) => {
+    const local = /^([\w$]+) = ([\w$]+);$/.exec(text.trim());
+    if (local && /^local\d+$/.test(local[1]) && own.has(local[2])) { aliases.add(local[1]); return false; }
+    const m = /^(?:this\.)?([\w$]+) = (this|[\w$]+);$/.exec(text.trim());
+    return !!m && own.has(m[1]) && (m[2] === 'this' || m[2] === m[1] || aliases.has(m[2]));
   };
-  // The structural part of a script init (`newclass`, `initproperty`) *is* the
-  // TypeScript class declaration, so statements that only build class objects go.
-  const kept = result.stmts
-    .map((s) => ({ stmt: s, text: new Printer(used).print([s]) }))
-    .filter((r) => r.text.trim() && !/__class\d+/.test(r.text) && r.stmt.k !== 'return' && !restatesOwnSlot(r.text));
-  if (!kept.length) return null;
-  const printed = kept.map((r) => r.text).join('\n');
-  const header = `// Script init from the ABC — runs when the module is linked.\n`;
-  return { path: `script/init_${method}.ts`, text: `${header}export function __scriptInit() {\n${printed.split('\n').map((l) => `  ${l}`).join('\n')}\n}\n` };
+  // Printed bare first, to recognise the structure; what is kept is printed again
+  // with the module's references (a sibling class is required where it is used).
+  const kept = result.stmts.filter((s) => {
+    const text = new Printer({ values: new Set(), types: new Set() }).print([s]);
+    return text.trim() && s.k !== 'return' && !structural(text);
+  });
+  // Only the declarations are left (`var local1;`): nothing runs.
+  if (!kept.some((s) => s.k !== 'var')) return null;
+  const printed = new Printer(used, { pathOf, self }).print(kept);
+  const header = [
+    '// Script init from the ABC. AVM2 runs it before the script\'s definitions are',
+    '// first used; the loader runs it once every module is linked.',
+    '',
+  ].join('\n');
+  return { path: `${self}.ts`, text: `${header}export function __scriptInit() {\n${printed.split('\n').map((l) => `  ${l}`).join('\n')}\n}\n` };
 }
 
 /** An `internal function frame1()` binding, for the rare block that names a function. */
@@ -639,7 +651,9 @@ function importLines(
   for (const qualified of poolNames.concat(abc.classes.map((c) => c.instance.name))) {
     if (!qualified) continue;
     const name = simpleName(qualified);
-    if (!/^[A-Z]/.test(name) && name !== simple) continue;
+    // Classes, and the player's package-level functions (`flash.utils.getTimer`,
+    // `flash.net.navigateToURL`): AS3 imports both the same way.
+    if (!/^[A-Z]/.test(name) && name !== simple && !FLASH_DEFINITIONS.has(qualified)) continue;
     const ns = qualified.includes('.') ? qualified.slice(0, qualified.lastIndexOf('.')) : '';
     const better = !packageOf.has(name) || (AS3_PACKAGES.has(ns) && !AS3_PACKAGES.has(packageOf.get(name)!.slice(0, packageOf.get(name)!.lastIndexOf('.'))));
     if (better) packageOf.set(name, qualified);

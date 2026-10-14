@@ -169,6 +169,8 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
     }
   }
 
+  runScriptInits(cache, errors);
+
   return {
     classes,
     errors,
@@ -193,6 +195,48 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
       return undefined;
     },
   };
+}
+
+/** The builtins whose prototypes the engine's own code shares with a movie. */
+const SHARED_BUILTINS: { prototype: object }[] = [Object, Array, String, Number, Boolean, Function, RegExp, Date, Error];
+
+/**
+ * Run every linked script's initializer (`script/init_N.ts` → `__scriptInit`),
+ * once, in the order the ABC lists its scripts. AVM2 runs a script's initializer
+ * before its definitions are first touched; every module is linked eagerly here,
+ * so after linking and before any movie code runs is that moment for all of them.
+ *
+ * A script init may install methods on a builtin's prototype (haXe's `Boot` adds
+ * `Array.prototype.copy` and wraps `String.prototype.charCodeAt`). New names are
+ * kept, exactly as in AS3. A *native* method is put back: in AVM2 a builtin's
+ * sealed methods are traits that typed code calls past the prototype — the
+ * wrapper itself calls `s.charCodeAt` and gets the native — whereas JavaScript has
+ * one slot for both, shared with the engine, where the wrapper would call itself.
+ */
+function runScriptInits(
+  cache: Map<string, { exports: Record<string, unknown>; error?: string }>,
+  errors: { path: string; message: string; detail?: string }[],
+): void {
+  const inits = [...cache].filter(([path, mod]) => /(^|\/)script\/init_\d+\.[jt]s$/.test(path) && !mod.error
+    && typeof mod.exports.__scriptInit === 'function');
+  if (!inits.length) return;
+  const natives = SHARED_BUILTINS.map((b) => {
+    const proto = b.prototype as Record<string, unknown>;
+    return { proto, methods: new Map(Object.getOwnPropertyNames(proto).map((n) => [n, Object.getOwnPropertyDescriptor(proto, n)!])) };
+  });
+  for (const [path, mod] of inits) {
+    try {
+      (mod.exports.__scriptInit as () => void)();
+    } catch (e) {
+      errors.push({ path, message: e instanceof Error ? `${e.name}: ${e.message}` : String(e), detail: e instanceof Error ? e.stack : undefined });
+    }
+  }
+  for (const { proto, methods } of natives) {
+    for (const [name, descriptor] of methods) {
+      const now = Object.getOwnPropertyDescriptor(proto, name);
+      if (now?.value !== descriptor.value && descriptor.configurable) Object.defineProperty(proto, name, descriptor);
+    }
+  }
 }
 
 /**
