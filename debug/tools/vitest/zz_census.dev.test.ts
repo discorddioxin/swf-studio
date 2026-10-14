@@ -120,16 +120,20 @@ async function avm1(dir: string, file: string, all: string[], vars: Record<strin
     player = new AS2Player({
       doc, program: build.program, assets: null, audio: null, resolveExternal: resolver, missingExternal: 'empty',
       onLog: (e) => logs.push(e), flashVars: vars,
-      fetchText: async (url) => { network.push(url); return null; },
+      fetchText: async (url, method) => { network.push(`${method} ${url}`); return null; },
+      onExternalUrl: (url: string) => { network.push(`getURL ${url}`); return true; },
     });
     player.start();
-    for (let i = 0; i < FRAMES; i++) { player.tick(); player.runQueue(); await new Promise((res) => setTimeout(res, 1)); }
+    // `step(now)` is what the app drives: it runs timers (`setInterval`) as well as frames.
+    let now = 0; (player as any).last = 0;
+    for (let i = 0; i < FRAMES; i++) { now += 1000 / 24; player.step(now); player.runQueue(); await new Promise((res) => setTimeout(res, 1)); }
   } catch (e) {
     r.bootThrew = (e as Error).message.slice(0, 200);
   }
   r.bootMs = Date.now() - t;
   const root = (player as any)?.root;
   r.displayObjects = root ? countNodes(root, (o) => o.children) : 0;
+  r.topLevel = (root?.children ?? []).map((c: any) => c.name).filter(Boolean).slice(0, 12);
   r.currentFrame = root?.obj?._currentframe ?? null;
   r.totalFrames = root?.obj?._totalframes ?? null;
   r.externalsLoaded = loaded;
