@@ -38,9 +38,9 @@ describe.skipIf(!available)('AVM2 movie → running program', () => {
    * `switch`, mixed-value joins) instead of silently running half a method.
    */
   const MOVIES = [
-    { name: 'pinball', file: 'pinball-swfs/game.swf', refusals: 235, classes: 435 },
+    { name: 'pinball', file: 'pinball-swfs/game.swf', refusals: 11, classes: 435 },
     { name: 'tiles', file: 'tiles-swfs/assets.swf', refusals: 0, classes: 35 },
-    { name: 'towns2', file: 'towns2-swfs/towns2.swf', refusals: 397, classes: 762 },
+    { name: 'towns2', file: 'towns2-swfs/towns2.swf', refusals: 80, classes: 762 },
   ];
 
   for (const movie of MOVIES) {

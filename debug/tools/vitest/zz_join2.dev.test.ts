@@ -48,6 +48,7 @@ describe.skipIf(!CORPUS_OK)('corpus harness', () => {
   }
   let shown = 0;
   for (const b of abc.bodies) {
+    if (process.env.SWF_BODY && b.method !== Number(process.env.SWF_BODY)) continue;
     const m = abc.methods[b.method];
     const result = liftMethod({ abc, body: b, target: 'instance', ownTraits: [], staticMembers: new Set(), staticOwner: '', globals: new Set<string>(), memberNames: new Set<string>(), paramNames: m?.paramNames });
     if (result.stmts || !result.diagnostics[0] || !result.diagnostics[0].message.includes(kind)) continue;

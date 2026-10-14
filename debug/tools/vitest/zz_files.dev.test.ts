@@ -35,7 +35,7 @@ function abcOf(p: Uint8Array): AbcFile {
 }
 
 it('per-file compile: attribute every error to its file', () => {
-  const abc = abcOf(payloads('/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf')[0]);
+  const abc = abcOf(payloads(process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf')[0]);
   const result = transpileAbc({ abc, projectClasses: new Set(abcClassNames(abc)) });
   const text = new Map(result.files.map((f) => [f.path, f.text]));
   const bad: string[] = [];
@@ -54,7 +54,8 @@ it('per-file compile: attribute every error to its file', () => {
   }
   console.log(`files with syntax/type errors: ${bad.length}`);
   const kinds = new Map<string, number>();
-  for (const d of result.diagnostics) kinds.set(d.message.replace(/ at byte \d+/, ''), (kinds.get(d.message.replace(/ at byte \d+/, '')) ?? 0) + 1);
+  const bucket = (m: string) => m.replace(/ at byte \d+/, '').replace(/\(.*$/, '').trim();
+  for (const d of result.diagnostics) kinds.set(bucket(d.message), (kinds.get(bucket(d.message)) ?? 0) + 1);
   console.log('lift refusals by kind:');
   for (const [kind, count] of [...kinds].sort((a, b) => b[1] - a[1])) console.log(`  ${count}  ${kind}`);
   for (const b of [...new Set(bad.map((x) => x.replace(/\(.*?\)/, '').replace(/from .*$/, '')))].slice(0, 20)) console.log(`  ${b}`);

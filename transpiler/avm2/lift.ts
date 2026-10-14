@@ -169,8 +169,12 @@ class Lifter {
   private byOffset = new Map<number, AbcInstruction>();
   private slotTraits?: Map<number, AbcTrait>;
 
+  /** The next instruction after each offset: a zero-size `label` has no size to add. */
+  private nextAt = new Map<number, number>();
+
   constructor(private ctx: MethodContext, instructions: AbcInstruction[]) {
     this.byOffset = new Map(instructions.map((i) => [i.offset, i]));
+    for (let k = 0; k + 1 < instructions.length; k++) this.nextAt.set(instructions[k].offset, instructions[k + 1].offset);
     // A nested function's scope frame starts with the scopes its closure captured.
     this.scopeObjects = [...(ctx.enclosingScopes ?? [{ k: 'id', name: 'this', line: 0 }])];
     // An exception table makes its protected ranges `try` blocks: those boundaries
@@ -306,10 +310,15 @@ class Lifter {
       const handler = enter || !first
         ? this.ctx.body.exceptions?.find((ex) => ex.from === cur && ex.to > cur && this.byOffset.has(ex.target))
         : null;
-      if (handler) return this.emitTry(handler, mine);
+      if (handler) {
+        const end = this.emitTry(handler, mine);
+        // A `try` whose both sides land exactly on this region's stop *is* this
+        // region reaching its stop — the caller must be able to tell.
+        return end.kind === 'jump' && stop != null && end.target === stop ? { kind: 'stop' } : end;
+      }
       if (this.active.has(cur)) {
         if (first && !enter) { first = false; }
-        else throw new Refuse(cur, 'control flow re-enters a region still being lifted (irreducible)');
+        else throw new Refuse(cur, `control flow re-enters a region still being lifted (irreducible: ${cur} in [${[...this.active].join(',')}])`);
       } else {
         this.active.add(cur);
         mine.push(cur);
@@ -351,10 +360,7 @@ class Lifter {
       this.step(last);
       return { done: true, end: { kind: 'end' }, next: null };
     }
-    if (last.name === 'lookup_switch') {
-      // Emitting nothing here silently drops the body; the table is a `switch`.
-      throw new Refuse(last.offset, 'lookup_switch (a `switch` statement) is not lifted yet');
-    }
+    if (last.name === 'lookup_switch') return this.emitLookupSwitch(last);
     if (last.name === 'jump') {
       const target = last.target as number;
       {
@@ -362,6 +368,13 @@ class Lifter {
         const frame = this.loops[this.loops.length - 1];
         if (frame && frame.test === target) {
           this.out.push({ k: 'continue', label: null });
+          return { done: true, end: { kind: 'stop' }, next: null };
+        }
+        // A jump straight out of the loop (or back to its head) is that loop's
+        // `break` / `continue`, even when it happens inside a `try` — the trip out
+        // belongs to the statement, not to the region the `try` is lifted from.
+        if (frame && (target === frame.exit || target === frame.head) && target !== stop) {
+          this.out.push({ k: target === frame.exit ? 'break' : 'continue', label: null });
           return { done: true, end: { kind: 'stop' }, next: null };
         }
         const loop = this.tryPreTestedWhile(last, target);
@@ -469,8 +482,10 @@ class Lifter {
       });
       return { done: false, end: { kind: 'stop' }, next: merge };
     }
-    // plain block: fall through
-    const next = last.offset + last.size;
+    // plain block: fall through. A zero-size `label` — every loop head carries one —
+    // is not code of its own: the region continues at the next instruction, or it
+    // would re-enter itself at the same offset.
+    const next = last.size ? last.offset + last.size : (this.nextAt.get(last.offset) ?? last.offset + last.size);
     if (next >= this.ctx.body.code.length) {
       throw new Refuse(last.offset, 'control falls off the end of the body (no return)');
     }
@@ -658,14 +673,16 @@ class Lifter {
     const base = [...this.stack];
     // `from` is already on the active list: this region is the try's body.
     const body = this.emitArm(ex.from, ex.to, { enter: false, shared: mine });
+    // The jump at the end of the protected range is where the `try` continues when
+    // it completes; a body that ended early (a `break` out of the enclosing loop, a
+    // `return`) does not move that point.
+    const tail = this.byOffset.get(ex.to);
     let merge: number | null = null;
-    if (body.end.kind === 'jump') merge = body.end.target;
+    if (tail?.name === 'jump') merge = tail.target as number;
+    else if (body.end.kind === 'jump') merge = body.end.target;
     else if (body.end.kind === 'end') merge = null;                 // the body returns
-    else if (body.end.kind === 'stop') {
-      const tail = this.byOffset.get(ex.to);
-      if (tail?.name !== 'jump') throw new Refuse(ex.from, 'a protected region does not end on a jump');
-      merge = tail.target as number;
-    } else throw new Refuse(ex.from, 'a protected region leaves through a loop edge');
+    else if (body.end.kind === 'stop') throw new Refuse(ex.from, 'a protected region does not end on a jump');
+    else throw new Refuse(ex.from, 'a protected region leaves through a loop edge');
 
     this.stack = [...base];
     const param = `__caught${this.catches++}`;
@@ -690,6 +707,84 @@ class Lifter {
     // A try leaves its region through the merge its body and handler share; with no
     // merge both sides ended the flow (a return or a throw on every path).
     return merge != null ? { kind: 'jump', target: merge } : { kind: 'end' };
+  }
+
+  /**
+   * `lookup_switch` — the table ASC puts at the tail of every `switch` statement.
+   *
+   * The compiler first computes a *selector*: a local holding an index, one per
+   * `case`, built by comparing the discriminant against each case value in turn.
+   * Then it dispatches on that index. The case bodies are laid out *before* the
+   * table, in whatever order the compiler chose (so the targets usually point
+   * backwards), and each one ends by jumping to the instruction after the table,
+   * which is the code that follows the `switch`.
+   *
+   * That makes the lift a real `switch` statement whose arms are those regions and
+   * whose discriminant is whatever the table pops — the index the compiler built,
+   * not the case value, so the output is as faithful as the table itself.
+   */
+  private emitLookupSwitch(i: AbcInstruction): { done: boolean; end: RegionEnd; next: number | null } {
+    const all = i.targets ?? [];
+    // The table is `default (s24), count (u30), count offsets`; the parser hands the
+    // cases over in order and the default as `target`.
+    const count = i.operands[1] ?? all.length - 1;
+    const cases = all.slice(0, count);
+    const fallback = i.target ?? all[all.length - 1];
+    if (!cases.length || fallback == null) throw new Refuse(i.offset, 'a switch table with nothing to dispatch to');
+    const merge = i.offset + i.size;
+    const index = this.pop();
+    const base = [...this.stack];
+
+    const clauses: { test: Expr | null; body: Stmt[]; stack: Value[]; merges: boolean }[] = [];
+    const liftCase = (target: number, test: Expr | null) => {
+      this.stack = [...base];
+      // A case can fall through into the next one (`case 1: case 2:` or a missing
+      // `break`), which is a jump to another case body: follow it and inline it.
+      const arm = this.emitArmTo(target, merge);
+      const stack = [...this.stack];
+      const body = [...arm.stmts];
+      let merges = false;
+      if (arm.end.kind === 'stop') merges = true;
+      else if (arm.end.kind === 'jump') throw new Refuse(i.offset, 'a switch case jumps out of the switch before its end');
+      else if (arm.end.kind === 'backEdge') {
+        const loop = this.loops[this.loops.length - 1];
+        if (!loop || (arm.end.target !== loop.head && arm.end.target !== loop.exit)) {
+          throw new Refuse(i.offset, 'a switch case leaves through an unknown loop edge');
+        }
+        body.push(arm.end.target === loop.head ? { k: 'continue', label: null } : { k: 'break', label: null });
+      }
+      clauses.push({ test, body, stack, merges });
+      return merges;
+    };
+
+    for (let n = 0; n < cases.length; n++) liftCase(cases[n], { k: 'num', v: String(n) });
+    liftCase(fallback, null);
+
+    // A `switch` cannot carry values out of its cases. When the compiler used the
+    // table to *choose a value* (each case leaves one and the code after the table
+    // consumes it), the cases write it to one variable and the merge reads that.
+    const joining = clauses.filter((c) => c.merges);
+    const depths = new Set(joining.map((c) => c.stack.length));
+    if (depths.size > 1) throw new Refuse(i.offset, `switch cases leave different numbers of values (${[...depths].sort().join(',')})`);
+    const depth = joining.length ? joining[0].stack.length : base.length;
+    if (depth !== base.length && depth !== base.length + 1) {
+      throw new Refuse(i.offset, `a switch case leaves ${depth - base.length} values on the stack`);
+    }
+    let pushed: Expr | null = null;
+    if (depth === base.length + 1) {
+      const name = `__s${this.temps++}`;
+      this.out.push({ k: 'var', decls: [{ name, type: null, init: null }] });
+      for (const clause of joining) {
+        clause.body.push(exprStmt(assign(id(name), clause.stack[base.length].e)), { k: 'break', label: null });
+      }
+      pushed = id(name);
+    } else {
+      for (const clause of clauses) if (clause.merges) clause.body.push({ k: 'break', label: null });
+    }
+
+    this.out.push({ k: 'switch', disc: index.e, cases: clauses.map((c) => ({ test: c.test, body: c.body })) });
+    this.stack = pushed ? [...base, { e: pushed }] : [...base];
+    return { done: false, end: { kind: 'stop' }, next: merge };
   }
 
   /**
@@ -940,7 +1035,13 @@ class Lifter {
       case 'call': {
         const args = this.popArgs(argCountOf(i, o));
         const fn = this.pop();
-        this.resultOrStatement({ k: 'call', callee: fn.e, args }, false);
+        // AVM2's `call` pops the receiver under the arguments as well: it is the
+        // `this` the function runs with, so the emitted call carries it.
+        const recv = this.stack.length ? this.pop() : null;
+        this.resultOrStatement(
+          recv ? { k: 'call', callee: member(fn.e, 'call'), args: [recv.e, ...args] } : { k: 'call', callee: fn.e, args },
+          false,
+        );
         return;
       }
       case 'construct': {
