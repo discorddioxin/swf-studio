@@ -34,7 +34,7 @@ function abcOf(p: Uint8Array): AbcFile {
 }
 
 /** SWF_BODY=<body index> prints a whole method body: `SWF_FROM`/`SWF_TO` clip it. */
-const CORPUS_OK = existsSync(process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf') && !!process.env.SWF_BODY;
+const CORPUS_OK = existsSync(process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf') && !!(process.env.SWF_BODY || process.env.SWF_NAME);
 
 describe.skipIf(!CORPUS_OK)('corpus harness', () => {
   it('disassembles a whole body', () => {
@@ -45,7 +45,9 @@ describe.skipIf(!CORPUS_OK)('corpus harness', () => {
       for (const t of [...c.instance.traits, ...c.traits]) if (t.method != null) owned.set(t.method, `${c.instance.name}::${t.name}`);
       if (c.instance.iinit != null) owned.set(c.instance.iinit, `${c.instance.name}::<iinit>`);
     }
-    const body = abc.bodies.find((b) => b.method === want);
+    // SWF_NAME=<Class::method substring> finds the body by its owner instead.
+    const byName = process.env.SWF_NAME ? [...owned].find(([, n]) => n.includes(process.env.SWF_NAME!))?.[0] : undefined;
+    const body = abc.bodies.find((b) => b.method === (byName ?? want));
     if (!body) throw new Error(`no body for method ${want}`);
     console.log(`##### ${owned.get(body.method) ?? body.method} body=${body.method} bytes=${body.code.length} locals=${body.localCount}`);
     for (const ex of body.exceptions ?? []) console.log(`exception from=${ex.from} to=${ex.to} target=${ex.target} type=${ex.type} name=${ex.name}`);

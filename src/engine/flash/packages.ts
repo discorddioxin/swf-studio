@@ -5,6 +5,7 @@ import * as display from './display';
 import * as events from './events';
 import * as fl from './fl';
 import * as geom from './geom';
+import * as faces from './interfaces';
 import * as media from './media';
 import * as misc from './misc';
 import * as text from './text';
@@ -17,6 +18,7 @@ export const PACKAGES: Record<string, Record<string, unknown>> = {
   'flash.display': {
     ...pick(display, ['DisplayObject', 'InteractiveObject', 'DisplayObjectContainer', 'Sprite', 'MovieClip', 'Shape',
       'SimpleButton', 'Stage', 'Bitmap', 'BitmapData', 'Graphics', 'FrameLabel', 'Scene', 'LoaderInfo', 'StaticText']),
+    ...pick(faces, ['IBitmapDrawable', 'IGraphicsData', 'IGraphicsFill', 'IGraphicsPath', 'IGraphicsStroke']),
     StageAlign: { TOP: 'T', BOTTOM: 'B', LEFT: 'L', RIGHT: 'R', TOP_LEFT: 'TL', TOP_RIGHT: 'TR', BOTTOM_LEFT: 'BL', BOTTOM_RIGHT: 'BR' },
     StageScaleMode: { EXACT_FIT: 'exactFit', NO_BORDER: 'noBorder', NO_SCALE: 'noScale', SHOW_ALL: 'showAll' },
     StageQuality: { LOW: 'low', MEDIUM: 'medium', HIGH: 'high', BEST: 'best' },
@@ -55,6 +57,9 @@ export const PACKAGES: Record<string, Record<string, unknown>> = {
   'fl.transitions': pick(fl, ['Tween', 'TweenEvent']),
   'fl.transitions.easing': pick(fl, ['None', 'Regular', 'Strong', 'Back', 'Elastic', 'Bounce']),
 };
+Object.assign(PACKAGES['flash.events'], pick(faces, ['IEventDispatcher']));
+Object.assign(PACKAGES['flash.utils'], pick(faces, ['IDataInput', 'IDataOutput', 'IExternalizable']));
+Object.assign(PACKAGES['flash.net'], pick(faces, ['IDynamicPropertyOutput', 'IDynamicPropertyWriter']));
 
 /** AS3 top-level names made available to every module without an import. */
 export const TOP_LEVEL: Record<string, unknown> = {

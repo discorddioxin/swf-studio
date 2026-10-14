@@ -34,7 +34,7 @@ describe.skipIf(!CORPUS_OK)('corpus harness', () => {
     const bundle = ingestFiles(swfFilesToFiles(files, FILE.split('/').pop()));
     const cache = new AssetCache(bundle, () => {});
     const logs: LogEntry[] = [];
-    const player = new FlashPlayer({ doc, program, assets: cache, onLog: (entry) => logs.push(entry) });
+    const player = new FlashPlayer({ doc, program, assets: cache, onLog: (entry) => logs.push(entry), parameters: Object.fromEntries(new URLSearchParams(process.env.SWF_VARS ?? '')) });
     try {
       player.start();
       for (let i = 0; i < Number(process.env.SWF_FRAMES ?? 120); i += 1) player.step();

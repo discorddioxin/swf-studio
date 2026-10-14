@@ -89,6 +89,12 @@ export interface PlayerOptions {
   program?: ProgramLike | ((player: FlashPlayer) => ProgramLike) | null;
   /** Override for the document class (defaults to SymbolClass id 0). */
   documentClass?: string | null;
+  /**
+   * FlashVars: what the embedding page passed (`<param name="flashvars">`, the query
+   * string). The root's `loaderInfo.parameters` — a movie that reads one the page
+   * did not pass gets `undefined`, as in Flash Player.
+   */
+  parameters?: Record<string, string> | null;
   audio?: AudioBackend | null;
   onLog?: (entry: LogEntry) => void;
   /** Injected debugger (defaults to globalDebugger singleton for backward compat). */
@@ -110,6 +116,8 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
   /** Human-readable linkage report for the UI. */
   readonly linkage: { id: number; className: string; linked: boolean }[] = [];
   documentClassName: string | null = null;
+  /** FlashVars of the root movie (see `PlayerOptions.parameters`). */
+  readonly parameters: Record<string, string>;
   cursor = 'default';
 
   private readonly assets: AssetSource | null;
@@ -136,6 +144,7 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     this.doc = opts.doc;
     this.assets = opts.assets ?? null;
     this.audio = opts.audio ?? null;
+    this.parameters = { ...(opts.parameters ?? {}) };
     this.onLog = opts.onLog ?? (() => {});
     this.dbg = opts.debugger ?? globalDebugger;
     const s = this.doc.header.stage;

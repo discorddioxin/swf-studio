@@ -629,6 +629,14 @@ function importLines(
 ): string[] {
   const packageOf = new Map<string, string>();
   const poolNames = abc.multinames.map((m) => (m.nsKind === 'package' || m.nsKind === 'packageInternal' || m.nsKind === 'namespace') && m.ns ? `${m.ns}.${m.name}` : m.name);
+  // A multiname with a namespace *set* (how `implements`/`extends` lists name an
+  // interface) gives no package by itself; the set's package that actually defines
+  // the name — in the movie or in the player — is where it comes from.
+  for (const m of abc.multinames) {
+    if (!m.nsSet?.length || !m.name) continue;
+    const home = m.nsSet.find((ns) => ns && (projectClasses.has(`${ns}.${m.name}`) || FLASH_DEFINITIONS.has(`${ns}.${m.name}`)));
+    if (home) poolNames.push(`${home}.${m.name}`);
+  }
   for (const qualified of poolNames.concat(abc.classes.map((c) => c.instance.name))) {
     if (!qualified) continue;
     const name = simpleName(qualified);

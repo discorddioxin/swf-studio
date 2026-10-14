@@ -37,6 +37,7 @@ export interface DisplayHost extends PlayerContext {
   readonly root: DisplayObject | null;
   readonly frameId: number;
   readonly mouse: { x: number; y: number; down: boolean };
+  readonly parameters: Record<string, string>;
   timelineFor(symbol: SymbolRef): Timeline | undefined;
   classForSymbol(id: number): Ctor | undefined;
   symbolForClass(ctor: Function): SymbolRef | undefined;
@@ -888,7 +889,8 @@ export class Stage extends DisplayObjectContainer {
 // --------------------------------------------------------------- LoaderInfo --
 
 export class LoaderInfo extends EventDispatcher {
-  readonly parameters: Record<string, string> = {};
+  /** FlashVars: the player's for the root movie (an object, never null). */
+  get parameters(): Record<string, string> { return host()?.parameters ?? {}; }
   readonly url = 'file:///game.swf';
   readonly loaderURL = 'file:///game.swf';
   readonly contentType = 'application/x-shockwave-flash';

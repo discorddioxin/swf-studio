@@ -1403,7 +1403,9 @@ class Lifter {
           throw new Refuse(d?.offset ?? i.offset, `a nested function could not be lifted: ${d?.message ?? 'unknown'}`);
         }
         const params = Array.from({ length: paramCount }, (_, k) => method?.paramNames?.[k] ?? `param${k + 1}`);
-        this.pop();                                          // the activation object it captures
+        // `newfunction` takes nothing off the operand stack: the closure captures the
+        // *scope chain* (AVM2 overview, `newfunction`: "… => …, function_obj"; Ruffle
+        // `op_new_function` only pushes).
         this.push({ k: 'func', name: null, params: params.map((name) => ({ name, type: null, rest: false })), ret: null, body: result.stmts });
         return;
       }
