@@ -15,9 +15,9 @@ A SWF can be transcribed two ways, and both are wanted:
 | Use | running a shipped SWF | porting a game, extending it, testing it without a timeline |
 
 Tier 1 already works: pinball (435 classes) and tiles (35) boot through `FlashPlayer`
-with the document class, the timeline and the library, with 34 of 3,690 lifted bodies
-refused and named in the diagnostics. Tier 2 is this framework, built and tested the
-same window.
+with the document class, the timeline and the library — 11 of pinball's 3,690 method
+bodies are refused, each one named with its byte offset, and 0. Tier 2 is this
+framework, built and tested in the same window.
 
 `src/runtime/as2/actor.ts` is the older, in-host bridge for AVM1: it hands a live
 `AS2Clip` three ports (sprite / animation / graphics) so behaviour can move out of a
