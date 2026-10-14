@@ -18,6 +18,8 @@ import { FlashPlayer, HtmlAudioBackend, type LogEntry } from '../engine/flash/pl
 import type { AudioBackend } from '../engine/flash/media';
 import { DisplayObject, MovieClip } from '../engine/flash/display';
 import { As2Execute, isAs2Bundle } from './As2Execute';
+import { MissingDependenciesBanner, MissingDependenciesPanel, dependencyProblems, useMissingDependencies } from './MissingDependencies';
+import type { DependencyFiles } from '../engine/flash/dependencies';
 import { useDebugger, useDebuggerState } from '../debug/store';
 import { DebugPanel } from '../debug/DebugPanel';
 import { usePopout } from '../debug/Popout';
@@ -38,8 +40,10 @@ type CodeState =
 
 const MAX_LOG = 500;
 
-export function ExecuteTab({ externals, project, gameSetId, adapterId, onAdapterChange, ...props }: {
+export function ExecuteTab({ externals, project, gameSetId, adapterId, onAdapterChange, dependencyFiles, ...props }: {
   doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
+  /** non-SWF files uploaded with the movies (XML, CSS, MP3, …), which they may request at run time */
+  dependencyFiles?: DependencyFiles | null;
   /** bundled game set the session came from, if any (the adapter hint) */
   gameSetId?: string | null;
   /** game adapter pick: 'auto' (detect) or an id from src/adapters */
@@ -47,11 +51,14 @@ export function ExecuteTab({ externals, project, gameSetId, adapterId, onAdapter
   onAdapterChange?: (id: string) => void;
 }) {
   return isAs2Bundle(props.doc, props.assets)
-    ? <As2Execute {...props} project={project} externals={externals} gameSetId={gameSetId} adapterId={adapterId} onAdapterChange={onAdapterChange} />
-    : <As3Execute {...props} project={project} externals={externals} />;
+    ? <As2Execute {...props} project={project} externals={externals} gameSetId={gameSetId} adapterId={adapterId} onAdapterChange={onAdapterChange} dependencyFiles={dependencyFiles} />
+    : <As3Execute {...props} project={project} externals={externals} uploadedFiles={dependencyFiles ?? null} />;
 }
 
-function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[] }) {
+function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles = null }: {
+  doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
+  uploadedFiles?: DependencyFiles | null;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<FlashPlayer | null>(null);
@@ -70,6 +77,10 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
   const [size, setSize] = useState({ w: 800, h: 500 });
   const pendingLogs = useRef<LogEntry[]>([]);
   const executionFaultRef = useRef(false);
+  const dependencies = useMissingDependencies(useCallback(() => playerRef.current?.dependencies, []));
+  // The other loaded SWFs, by file name. A string, so the player is not rebuilt on
+  // every render (`externals` defaults to a fresh array).
+  const externalSwfNames = externals.map((pkg) => pkg.doc.header.fileName ?? '').filter(Boolean).join('\n');
   const dbg = useDebugger();
   const dbgState = useDebuggerState();
   const executePopout = usePopout({ title: 'Execute Engine — SWF Studio', width: 900, height: 700 });
@@ -206,6 +217,8 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
       debugger: dbg,
       program: code.compiled.modules.length ? () => linkProgram(code.compiled) : null,
       documentClass: docClass,
+      dependencyFiles: uploadedFiles,
+      externalSwfs: externalSwfNames ? externalSwfNames.split('\n') : [],
       onLog: (entry) => {
         pendingLogs.current.push(entry);
         if (entry.level === 'error') console.error('[game]', entry.message, entry.detail ?? '');
@@ -224,7 +237,7 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
     player.start();
     canvasRef.current?.focus({ preventScroll: true });
     return () => { player.dispose(); if (playerRef.current === player) playerRef.current = null; };
-  }, [doc, cache, code, docClass, session]);
+  }, [doc, cache, code, docClass, session, uploadedFiles, externalSwfNames]);
 
   // ---- fit the canvas to the panel
   useEffect(() => {
@@ -345,7 +358,7 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
   ] : code.status === 'failed' ? [{
     level: 'error', kind: 'problem', source: 'forge', context: 'reading code files', message: code.error, time: 0,
   }] : [];
-  const consoleEntries = [...forgeProblems, ...logs];
+  const consoleEntries = [...forgeProblems, ...dependencyProblems(dependencies), ...logs];
   const errorCount = consoleEntries.filter((entry) => entry.level === 'error').length;
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
@@ -396,6 +409,8 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
           For an AS1 / AS2 movie the code lives in DoAction tags and runs on the AS2 engine; for an AVM2 movie add its folder.
         </div>
       )}
+
+      <MissingDependenciesBanner list={dependencies} />
 
       {dbgState.paused && (
         <div className="flex shrink-0 items-center gap-2 border-b border-amber-900/40 bg-amber-950/30 px-3 py-1.5 text-xs text-amber-200">
@@ -493,6 +508,7 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
                     ))}
                   </tbody>
                 </table>
+                <div className="mt-3"><MissingDependenciesPanel list={dependencies} /></div>
               </div>
             </div>
           )}

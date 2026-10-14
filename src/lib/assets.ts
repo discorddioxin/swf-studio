@@ -1,3 +1,4 @@
+import type { DependencyFiles } from '../engine/flash/dependencies';
 import JSZip from 'jszip';
 import { type AssetBundle, type AssetCategory, type AssetFile, type Rect, TWIPS, type SwfDocument, type Timeline } from '../types';
 
@@ -101,6 +102,8 @@ export interface SwfPackage {
   doc: SwfDocument;
   bundle: AssetBundle;
   cache: AssetCache;
+  /** Non-SWF files uploaded with the movies, which they may request at run time. */
+  dependencyFiles?: DependencyFiles;
 }
 
 /** One FFDec export inside an upload: its .xml plus every file under the xml's folder. */

@@ -103,14 +103,17 @@ export class SharedObject extends EventDispatcher {
 }
 export const SharedObjectFlushStatus = { FLUSHED: 'flushed', PENDING: 'pending' } as const;
 
-/** Network loading is not available to the offline player: loads fail with IO_ERROR. */
+/**
+ * flash.net.URLLoader. A file uploaded with the movie answers; anything else fails
+ * with IO_ERROR as an unreachable URL does, and is listed as a missing dependency.
+ */
 export class URLLoader extends EventDispatcher {
   data: unknown = null; dataFormat = 'text'; bytesLoaded = 0; bytesTotal = 0;
-  constructor(_request: URLRequest | null = null) { super(); }
+  constructor(request: URLRequest | null = null) { super(); if (request) this.load(request); }
   load(request: URLRequest) {
     const payload = request.data == null ? undefined : String(request.data);
-    (runtime.player as unknown as { failLoad?: (t: EventDispatcher, url: string, method?: string, payload?: string) => void } | null)
-      ?.failLoad?.(this, request.url, request.method, payload);
+    (runtime.player as unknown as { loadUrl?: (t: URLLoader, url: string, method?: string, payload?: string) => void } | null)
+      ?.loadUrl?.(this, request.url, request.method, payload);
   }
   close() {}
 }

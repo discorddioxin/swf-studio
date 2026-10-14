@@ -81,6 +81,26 @@ export function swfSourcesFromFiles(files: File[]): SwfSource[] {
 }
 
 /**
+ * True when an .xml file is a JPEXS/FFDec SWF export (root element `<swf>`), false
+ * for any other XML — a data file such as `config.xml` the movie loads itself.
+ */
+export async function isSwfXmlExport(file: Blob): Promise<boolean> {
+  const head = new TextDecoder().decode(await readHead(file, 2048));
+  const body = head.replace(/^\uFEFF/, '').replace(/<\?[\s\S]*?\?>/g, '').replace(/<!--[\s\S]*?-->/g, '').replace(/<!DOCTYPE[^>]*>/gi, '').trimStart();
+  return /^<swf[\s>/]/i.test(body);
+}
+function readHead(file: Blob, n: number): Promise<ArrayBuffer> {
+  const part = file.slice(0, n);
+  if (typeof part.arrayBuffer === 'function') return part.arrayBuffer();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(part);
+  });
+}
+
+/**
  * Like `swfSourcesFromFiles`, but also looks inside ZIP archives. Only the
  * archive's name table is read (no entry is inflated), so this stays cheap
  * enough to run on every change of the queue.
@@ -90,7 +110,8 @@ export async function collectSwfSources(files: File[]): Promise<SwfSource[]> {
   for (const file of files) {
     if (!/\.zip$/i.test(file.name)) {
       const source = sourceFromPath(filePath(file));
-      if (source) out.push(source);
+      // a data .xml (not an FFDec export) is a dependency, not a movie to pick
+      if (source && (source.kind !== 'xml' || await isSwfXmlExport(file))) out.push(source);
       continue;
     }
     try {

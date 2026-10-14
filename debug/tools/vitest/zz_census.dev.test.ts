@@ -6,6 +6,7 @@
 //   (SWF_SET=towns2 limits it to one set; output goes to CENSUS_OUT, default /tmp/census.jsonl)
 //
 // @vitest-environment jsdom
+import { describeDependency } from '@/../src/engine/flash/dependencies';
 import { appendFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'vitest';
@@ -54,7 +55,7 @@ async function parse(path: string) {
 const as2Sources = (files: { path: string; bytes: Uint8Array }[]): SourceInput[] =>
   files.filter((f) => /\.as$/i.test(f.path)).map((f) => ({ path: f.path, text: new TextDecoder().decode(f.bytes) }));
 
-async function avm2(path: string, vars: Record<string, string> = {}) {
+async function avm2(path: string, vars: Record<string, string> = {}, others: string[] = []) {
   const { doc, files } = await parse(path);
   const lifted = abcSources(doc.abc ?? []);
   const compiled = compileSources(lifted.sources);
@@ -74,7 +75,7 @@ async function avm2(path: string, vars: Record<string, string> = {}) {
   let player: FlashPlayer | null = null;
   try {
     const cache = new AssetCache(ingestFiles(swfFilesToFiles(files, path.split('/').pop()!)), () => {});
-    player = new FlashPlayer({ doc, program, assets: cache, onLog: (e) => logs.push(e), parameters: vars });
+    player = new FlashPlayer({ doc, program, assets: cache, onLog: (e) => logs.push(e), parameters: vars, externalSwfs: others });
     player.start();
     for (let i = 0; i < FRAMES; i += 1) player.step();
   } catch (e) {
@@ -82,6 +83,7 @@ async function avm2(path: string, vars: Record<string, string> = {}) {
   }
   r.bootMs = Date.now() - t;
   r.document = player?.documentClassName ?? null;
+  r.dependencies = player ? player.dependencies.list().map(describeDependency) : [];
   r.displayObjects = player?.root ? countNodes(player.root, (o) => o._children) : 0;
   r.errors = bucket(logs, /error/);
   r.errorCount = logs.filter((e) => /error/.test(e.level)).length;
@@ -139,7 +141,7 @@ async function avm1(dir: string, file: string, all: string[], vars: Record<strin
   r.externalsLoaded = loaded;
   r.externalBuildErrors = externalErrors.length;
   r.externalBuildErrorSample = externalErrors.slice(0, 5);
-  r.missingExternals = player ? [...player.missingExternals] : [];
+  r.dependencies = player ? player.dependencies.list().map(describeDependency) : [];
   r.network = [...new Set(network)].slice(0, 10);
   r.errors = bucket(logs, /error/);
   r.errorCount = logs.filter((e) => /error/.test(e.level)).length;
@@ -168,7 +170,7 @@ describe.skipIf(!existsSync(CORPUS))('game corpus census', () => {
           row.vm = row.abc ? 'AVM2' : row.as2Scripts ? 'AVM1' : 'none';
           const entry = ENTRY[set]?.file === file;
           row.entry = entry;
-          if (row.vm === 'AVM2') Object.assign(row, await avm2(join(dir, file), entry ? ENTRY[set].vars : {}));
+          if (row.vm === 'AVM2') Object.assign(row, await avm2(join(dir, file), entry ? ENTRY[set].vars : {}, all.filter((f) => f !== file)));
           else if (row.vm === 'AVM1') Object.assign(row, await avm1(dir, file, all, entry ? ENTRY[set].vars : {}));
           else {
             // No code: what a host gets is its library. Count exported symbols.

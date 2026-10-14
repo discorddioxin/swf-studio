@@ -505,6 +505,7 @@ export default function App() {
           assets={assets}
           project={api.project}
           externals={externalPackages}
+          dependencyFiles={packages[0]?.dependencyFiles ?? null}
           gameSetId={gameSetId}
           adapterId={adapterId}
           onAdapterChange={setAdapterId}

@@ -4,6 +4,7 @@
 
 import * as RT from '../../runtime/as2';
 import type { ColorTransform, Rect } from '../../types';
+import { dependencyKind, isServiceEndpoint } from '../flash/dependencies';
 import { identity, invert, apply as applyM, transformRect } from './geom';
 import { avm1Root } from './player';
 import { DEPTH_OFFSET, NODE, TWIPS, nodeOf } from './constants';
@@ -43,7 +44,6 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     duplicate, removeClip, startDrag, updateDrag, loadMovie, loadVariables, unloadMovie, typeInto,
   };
 
-  const missingWarned = new Set<string>();
   /** Every movie whose library is loaded in this run (main + `loadMovie` targets). */
   const loadedMovies: Movie[] = [p.movie];
   const movieLabel = (m: Movie) => m.doc.header.fileName ?? m.url ?? '?';
@@ -163,8 +163,10 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     };
     const u = String(url).trim();
     if (!u) return;
-    if (/\.(jpe?g|png|gif)(\?|$)/i.test(u)) {
-      p.log('warn', `loadMovie("${u}"): external images are not supported offline`);
+    const api = loader ? 'MovieClipLoader.loadClip' : 'loadMovie';
+    const requestedBy = p.requester();
+    if (dependencyKind(u, api) === 'image' && p.opts.dependencyFiles?.find(u)) {
+      p.log('warn', `${api}("${u}"): the image is uploaded, but loading images into clips is not implemented yet`);
     }
     const resolved = p.opts.resolveExternal ? Promise.resolve(p.opts.resolveExternal(u)) : Promise.resolve(null);
     const target = node;
@@ -184,19 +186,15 @@ export function installBuiltins(p: AS2Player): BuiltinState {
         // avatars and similar live assets) keep the clip's built-in artwork
         // without reporting a missing external SWF. Everything else is real.
         if (p.opts.isOptionalExternal?.(u)) {
-          p.log('info', `loadMovie("${u}"): optional asset, not bundled`);
+          p.dependencies.record({ url: u, api, requestedBy, optional: true });
+          p.log('info', `${api}("${u}"): optional live asset, not available offline`);
           return;
         }
+        p.dependencies.record({ url: u, api, requestedBy });
         if ((p.opts.missingExternal ?? 'empty') === 'error') {
-          p.log('error', `loadMovie: "${u}" is not available (external SWF missing)`);
           fire('onLoadError', 'URLNotFound', 404);
           return;
         }
-        if (!missingWarned.has(u)) {
-          missingWarned.add(u);
-          p.log('warn', `loadMovie: "${u}" is not available – continuing as if it loaded empty. Add its FFDec export to play this part of the game.`);
-        }
-        p.missingExternals.add(u);
         fire('onLoadStart');
         replaceContent(target, null, u);
         fire('onLoadProgress', 0, 0);
@@ -263,7 +261,7 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   }
 
   function loadVariables(url: string, node: DisplayNode | null) {
-    fetchText(url, 'GET', null).then((txt) => {
+    fetchText(url, 'GET', null, 'loadVariables').then((txt) => {
       if (txt == null || !node || node.removed) return;
       decodeVars(node.obj, txt);
       p.dispatchClipEvent(node, 'data');
@@ -271,14 +269,35 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     });
   }
 
-  function fetchText(url: string, method: string, body: string | null): Promise<string | null> {
-    if (p.opts.fetchText) return p.opts.fetchText(url, method, body, (event) => p.recordNetwork(event)).catch((error: unknown) => {
+  /**
+   * A text request (XML, LoadVars, loadVariables, StyleSheet). An uploaded file of
+   * that path answers first; then the adapter's offline network. A request nothing
+   * answers is recorded as a missing dependency of the movie that made it.
+   */
+  function fetchText(url: string, method: string, body: string | null, api: string): Promise<string | null> {
+    const requestedBy = p.requester();
+    const missing = () => { p.dependencies.record({ url, api, requestedBy, method }); };
+    const files = p.opts.dependencyFiles;
+    if (files && !isServiceEndpoint(url, method) && files.find(url)) {
+      const requestId = p.nextNetworkRequestId('file');
+      p.recordNetwork({ kind: 'request', transport: 'http', direction: 'outgoing', requestId, method, url, status: 'sent', payload: body ?? undefined });
+      return files.text(url).then((text) => {
+        p.recordNetwork({ kind: 'response', transport: 'http', direction: 'incoming', requestId, method, url, status: 'ok', payload: text ?? undefined, message: `${api} ${url}: served from the uploaded file` });
+        return text;
+      });
+    }
+    if (p.opts.fetchText) return p.opts.fetchText(url, method, body, (event) => p.recordNetwork(event)).then((text) => {
+      if (text == null) missing();
+      return text;
+    }, (error: unknown) => {
       const err = error instanceof Error ? error : new Error(String(error));
       const message = `HTTP mock request failed: ${method} ${url}: ${err.message}`;
       p.log('error', message, err.stack, { source: 'engine', kind: 'problem', context: 'HTTP mock transport' });
       p.recordNetwork({ kind: 'response', transport: 'http', direction: 'incoming', method, url, status: 'error', payload: err.stack, message });
+      missing();
       return null;
     });
+    missing();
     const requestId = p.nextNetworkRequestId('http');
     p.recordNetwork({ kind: 'request', transport: 'http', direction: 'outgoing', requestId, method, url, status: 'sent', payload: body ?? undefined });
     const message = `network request not available offline: ${method} ${url}`;
@@ -684,10 +703,18 @@ export function installBuiltins(p: AS2Player): BuiltinState {
       this.__sound = ch?.id ?? null;
       this.__url = null;
     },
-    loadSound(this: any, url: any, _stream?: any) {
-      this.__url = null;
-      p.log('warn', `Sound.loadSound("${url}"): external sounds are not available offline`);
-      setTimeout(() => { if (typeof this.onLoad === 'function') p.guard('Sound.onLoad', () => this.onLoad(false)); p.runQueue(); }, 0);
+    loadSound(this: any, url: any, stream?: any) {
+      const u = String(url ?? '');
+      const found = p.opts.dependencyFiles?.objectUrl(u) ?? null;
+      this.__url = found;
+      this.__sound = null;
+      if (!found) p.dependencies.record({ url: u, api: 'Sound.loadSound', requestedBy: p.requester(), kind: 'audio' });
+      setTimeout(() => {
+        // A streaming sound starts playing as soon as it loads (Flash `isStreaming`).
+        if (found && stream) this.start();
+        if (typeof this.onLoad === 'function') p.guard('Sound.onLoad', () => this.onLoad(!!found));
+        p.runQueue();
+      }, 0);
     },
     start(this: any, offset?: any, loops?: any) {
       if (this.__sound == null && !this.__url) return;
@@ -778,17 +805,17 @@ export function installBuiltins(p: AS2Player): BuiltinState {
       return pairs.join('&');
     },
     decode(this: any, s: any) { decodeVars(this, String(s ?? '')); },
-    load(this: any, url: any) { return lvRequest(this, String(url), 'GET', null, this); },
+    load(this: any, url: any) { return lvRequest(this, String(url), 'GET', null, this, 'LoadVars.load'); },
     send(this: any, url: any, win?: any, method?: any) { p.log('info', `LoadVars.send(${url}${win ? `, ${win}` : ''}, ${method ?? 'POST'}) – not sent (offline)`); return true; },
-    sendAndLoad(this: any, url: any, target: any, method?: any) { return lvRequest(this, String(url), String(method ?? 'POST').toUpperCase(), this.toString(), target); },
+    sendAndLoad(this: any, url: any, target: any, method?: any) { return lvRequest(this, String(url), String(method ?? 'POST').toUpperCase(), this.toString(), target, 'LoadVars.sendAndLoad'); },
     getBytesLoaded(this: any) { return this.loaded ? 1 : 0; },
     getBytesTotal() { return 1; },
     addRequestHeader() {},
   });
-  function lvRequest(src: any, url: string, method: string, body: string | null, target: any) {
+  function lvRequest(src: any, url: string, method: string, body: string | null, target: any, api: string) {
     if (target == null) return false;
     target.loaded = false;
-    fetchText(url, method, body).then((txt) => {
+    fetchText(url, method, body, api).then((txt) => {
       const done = () => {
         if (typeof target.onData === 'function' && Object.prototype.hasOwnProperty.call(target, 'onData')) { target.onData(txt ?? undefined); return; }
         if (txt != null) { decodeVars(target, txt); target.loaded = true; }
@@ -813,6 +840,28 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     },
     unloadClip(this: any, target: any) { unloadMovie(N(target)); return true; },
     getProgress() { return { bytesLoaded: 1, bytesTotal: 1 }; },
+  });
+
+  // ------------------------------------------------------------ NetStream / TextField.StyleSheet
+  def(RT.NetStream.prototype, {
+    play(this: any, url: any) {
+      const u = String(url ?? '');
+      if (!u) return;
+      if (p.opts.dependencyFiles?.find(u)) p.log('warn', `NetStream.play("${u}"): the video is uploaded, but video playback is not implemented yet`);
+      else p.dependencies.record({ url: u, api: 'NetStream.play', requestedBy: p.requester(), kind: 'video' });
+    },
+    close() {}, pause() {}, seek() {}, setBufferTime() {},
+  });
+  def(RT.TextFieldStyleSheet.prototype, {
+    load(this: any, url: any) {
+      this.loaded = false;
+      fetchText(String(url), 'GET', null, 'StyleSheet.load').then((txt) => {
+        if (txt != null) { this.parseCSS(txt); this.loaded = true; }
+        if (typeof this.onLoad === 'function') p.guard('StyleSheet.onLoad', () => this.onLoad(txt != null));
+        p.runQueue();
+      });
+      return true;
+    },
   });
 
   // ------------------------------------------------------------ LocalConnection / XMLSocket / XML / ContextMenu
@@ -897,7 +946,7 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     parseXML(this: any, s: any) { parseXmlInto(this, String(s ?? '')); },
     load(this: any, url: any) {
       this.loaded = false;
-      fetchText(String(url), 'GET', null).then((txt) => {
+      fetchText(String(url), 'GET', null, 'XML.load').then((txt) => {
         if (txt != null) { parseXmlInto(this, txt); this.loaded = true; }
         if (typeof this.onLoad === 'function') p.guard('XML.onLoad', () => this.onLoad(txt != null));
         p.runQueue();
@@ -905,7 +954,7 @@ export function installBuiltins(p: AS2Player): BuiltinState {
       return true;
     },
     sendAndLoad(this: any, url: any, target: any) {
-      fetchText(String(url), 'POST', String(this)).then((txt) => {
+      fetchText(String(url), 'POST', String(this), 'XML.sendAndLoad').then((txt) => {
         if (txt != null && target) { parseXmlInto(target, txt); target.loaded = true; }
         if (typeof target?.onLoad === 'function') p.guard('XML.onLoad', () => target.onLoad(txt != null));
         p.runQueue();

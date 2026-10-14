@@ -16,6 +16,7 @@
 // getters are game code, so every property read is guarded and no check may
 // throw. The module works without a DOM (pixel probes are skipped).
 
+import { describeDependency, type DependencyTracker } from '../../engine/flash/dependencies';
 import type { Matrix, Rect } from '../../types';
 import type { DisplayNode } from '../../engine/as2/player';
 import { transformRect } from '../../engine/as2/geom';
@@ -193,7 +194,8 @@ export interface InspectablePlayer {
   renderTo?(ctx: CanvasRenderingContext2D, scale: number, ox: number, oy: number): void;
   highlightedIds?: Set<number> | null;
   errors?: number;
-  missingExternals?: Set<string>;
+  /** files the movies requested that nothing supplied (see engine/flash/dependencies) */
+  dependencies?: Pick<DependencyTracker, 'files' | 'services'>;
   logs?: readonly { level: string; message: string }[];
 }
 
@@ -666,10 +668,18 @@ export function scanStage(player: InspectablePlayer, options: ScanOptions = {}):
       'The player caught exceptions in frame/event callbacks; later UI updates may never have run.',
       { hint: 'Open the Console → Problems tab for the stack traces.', evidence: { errors: player.errors } }));
   }
-  if (player.missingExternals?.size) {
-    findings.push(finding('warn', 'data', 'stage/missing-externals', `${player.missingExternals.size} external SWF(s) were never loaded`,
-      `Requested but missing: ${[...player.missingExternals].slice(0, 5).join(', ')}`,
-      { hint: 'Add each SWF (FFDec export) to the loaded folder so that part of the UI exists.' }));
+  const missingFiles = player.dependencies?.files().filter((d) => !d.optional) ?? [];
+  if (missingFiles.length) {
+    findings.push(finding('warn', 'data', 'stage/missing-dependencies', `Missing Dependencies: ${missingFiles.length} requested file(s) are not in the load`,
+      missingFiles.slice(0, 6).map((d) => describeDependency(d)).join('; ') + (missingFiles.length > 6 ? '; …' : ''),
+      { hint: 'Upload each file together with the SWF (any type: SWF, MP3, XML, CSS, image, …) so that part of the game exists.',
+        evidence: { files: missingFiles.length, kinds: [...new Set(missingFiles.map((d) => d.kind))].join(', ') } }));
+  }
+  const services = player.dependencies?.services() ?? [];
+  if (services.length) {
+    findings.push(finding('info', 'data', 'stage/unanswered-services', `${services.length} service endpoint(s) were not answered`,
+      services.slice(0, 4).map((d) => `${d.url} (${d.apis.join(', ')})`).join('; '),
+      { hint: 'These are server calls, not files: they need the live server or a game adapter that answers them offline.' }));
   }
 
   const stageProbe = options.probe === false ? null : probeStage(ctx);

@@ -10,6 +10,7 @@ import * as media from './media';
 import * as misc from './misc';
 import * as text from './text';
 import * as utils from './utils';
+import { runtime } from './context';
 
 const pick = <T extends object>(mod: T, names: (keyof T)[]) =>
   Object.fromEntries(names.map((n) => [n, mod[n]])) as Record<string, unknown>;
@@ -33,7 +34,10 @@ export const PACKAGES: Record<string, Record<string, unknown>> = {
     Loader: class Loader extends display.DisplayObjectContainer {
       readonly contentLoaderInfo = new display.LoaderInfo();
       content: unknown = null;
-      load() {}
+      load(request: { url?: string } | null) {
+        const url = request?.url ?? '';
+        if (url) (runtime.player as unknown as { loaderLoad?: (info: unknown, url: string) => void } | null)?.loaderLoad?.(this.contentLoaderInfo, url);
+      }
       loadBytes() {}
       unload() {}
       unloadAndStop() {}

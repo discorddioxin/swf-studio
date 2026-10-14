@@ -24,6 +24,7 @@ import type { AS2Handler, AS2Program } from '../../runtime/as2';
 import type { ColorTransform, DisplayItem, Frame, Matrix, PlaceOp, Rect, SwfCharacter, SwfDocument, Timeline } from '../../types';
 import type { AssetSource, LogEntry, LogLevel, LogMetadata, NetworkEvent, NetworkObserver } from '../flash/player';
 import type { AudioBackend, AudioHandle } from '../flash/media';
+import { DependencyTracker, describeDependency, type DependencyFiles } from '../flash/dependencies';
 import {
   apply, compose, concat, concatCT, decompose, identity, inRect, invert, isColorIdentity, transformRect, unionRect,
   type Components,
@@ -255,6 +256,11 @@ export interface AS2PlayerOptions {
    * warning; everything else is reported as before.
    */
   isOptionalExternal?: (url: string) => boolean;
+  /**
+   * Non-SWF files uploaded with the movies (XML, CSS, MP3, …). A movie's request
+   * for one is answered from here; a request nothing answers is a missing dependency.
+   */
+  dependencyFiles?: DependencyFiles | null;
   /** In-process stand-in for the game's XMLSocket server. Supplied by an adapter. */
   gameServer?: GameServerBackend | null;
 }
@@ -329,8 +335,22 @@ export class AS2Player {
   errors = 0;
   private networkRequestSequence = 0;
   cursorHidden = false;
-  /** external SWFs the game asked for that could not be resolved */
-  readonly missingExternals = new Set<string>();
+  /**
+   * Every file the movies requested at run time that nothing could supply — SWFs,
+   * audio, XML, CSS, images, video, … — and the service endpoints nothing answered.
+   */
+  readonly dependencies = new DependencyTracker((entry, isNew) => {
+    if (isNew && !entry.optional) this.log('warn', `Missing dependency: ${describeDependency(entry)}`, undefined, { source: 'engine', context: 'Missing Dependencies' });
+  });
+  /** URLs of the SWFs among the missing dependencies (optional ones excluded). */
+  get missingExternals(): Set<string> {
+    return new Set(this.dependencies.files().filter((d) => d.kind === 'swf' && !d.optional).map((d) => d.url));
+  }
+  /** The movie whose code is running, for "requested by". */
+  requester(): string {
+    const movie = this.runningClip()?.movie ?? this.movie;
+    return movie.doc.header.fileName ?? (movie.url === 'root' ? 'main movie' : movie.url);
+  }
   /** ids of display nodes currently hovered in the inspector (highlight overlay) */
   highlightedIds: Set<number> | null = null;
   private readonly dbg: DebuggerStore;

@@ -4,6 +4,7 @@
 // the Execute tab actually hit: a List whose data provider holds the servers
 // while `__rowCount` is NaN — every row clip stays uncreated and the stage
 // shows a white rectangle.
+import { DependencyTracker } from '../../engine/flash/dependencies';
 import { describe, expect, it } from 'vitest';
 import type { Matrix, Rect } from '../../types';
 import { identity } from '../../engine/as2/geom';
@@ -408,14 +409,24 @@ describe('display-list diagnosis', () => {
     } finally { restore(); }
   });
 
-  it('reports missing external SWFs and engine errors', () => {
+  it('reports missing dependencies of every type, service endpoints apart, and engine errors', () => {
     const root = clip('_root', 0);
     const player = stubPlayer(root, new Map<DisplayNode, Rect>([[root, px(0, 0, 550, 400)]]));
     player.errors = 2;
-    player.missingExternals = new Set(['scene.swf']);
+    const tracker = new DependencyTracker();
+    tracker.record({ url: 'scene.swf', api: 'loadMovie', requestedBy: 'game.swf' });
+    tracker.record({ url: 'sfx/splash.mp3', api: 'Sound.loadSound', requestedBy: 'game.swf' });
+    tracker.record({ url: 'gameConfig.xml', api: 'XML.load', requestedBy: 'game.swf' });
+    tracker.record({ url: 'http://example.com/gateway.php', api: 'LoadVars.sendAndLoad', method: 'POST' });
+    player.dependencies = tracker;
     const result = scanStage(player, { probe: false });
     expect(byTitle(result.findings, 'runtime error(s) hit the engine')[0].severity).toBe('error');
-    expect(byTitle(result.findings, 'external SWF(s) were never loaded')[0].severity).toBe('warn');
+    const missing = byTitle(result.findings, 'Missing Dependencies: 3 requested file(s)')[0];
+    expect(missing.severity).toBe('warn');
+    expect(missing.detail).toContain('SWF scene.swf — loadMovie by game.swf');
+    expect(missing.detail).toContain('Audio sfx/splash.mp3 — Sound.loadSound');
+    expect(missing.detail).toContain('XML gameConfig.xml — XML.load');
+    expect(byTitle(result.findings, '1 service endpoint(s) were not answered')[0].detail).toContain('gateway.php');
   });
 });
 

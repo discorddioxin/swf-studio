@@ -1,6 +1,6 @@
 # Game checklist — what works, what fails, and why
 
-Measured 2026-10-14 at commit `a897aa8`+, on the six game sets uploaded to
+Measured 2026-10-14 (re-measured after the Missing Dependencies work), on the six game sets uploaded to
 `discorddioxin/swf-forge` (`swf-uploads` branch, `games-swfs/`, 43 SWFs).
 
 **How it was measured.** `debug/tools/vitest/zz_census.dev.test.ts` handles every SWF
@@ -27,12 +27,12 @@ The raw numbers are one JSON line per SWF, written to `/tmp/census.jsonl`:
 
 | Game | VM | Code → TypeScript | Boots | Gets as far as | Stopped by |
 |---|---|---|---|---|---|
-| Fishing (Bass'ken) | AVM1 | ✅ 0 errors | ✅ | **Whole tested flow**, with the Gaia Fishing adapter: server chooser → room → game → bait → cast → fishing | Nothing in the tested flow. ⚠️ The server chooser runs a committed AS2 override, not the SWF's own bytecode (see below). |
+| Fishing (Bass'ken) | AVM1 | ✅ 0 errors | ✅ | **Whole tested flow**, with the Gaia Fishing adapter: server chooser → room → game → bait → cast → fishing | Nothing in the tested flow. It runs from the original SWFs alone: no override, no exported files. |
 | Blackjack | AVM1 | ✅ 0 errors | ✅ | Game movie on screen with its login panel | ❌ No offline server: the login POST to `gateway.php` gets no answer (no adapter) |
 | Word Bump | AVM1 | ✅ 0 errors | ✅ | Game movie on screen (root frame 15/54) with its login panel | ❌ Same: no offline server for the login POST |
-| Pinball | AVM2 | ✅ 0 refusals, 0 errors (805 modules) | ✅ | Game shell, init step 1 of 11 | ❌ No server (the gateway host comes out as `null.gaiaonline.com`); ❌ `gameConfig.xml` not in the upload; ❌ `Loader` is a stub, so `game.swf` can't be loaded into the shell |
+| Pinball | AVM2 | ✅ 0 refusals, 0 errors (805 modules) | ✅ | Game shell, init step 1 of 11 | ❌ No server (the gateway host comes out as `null.gaiaonline.com`); ❌ Missing Dependency `games/pinball/gameConfig.xml`; ❌ `Loader` finds `game.swf` but cannot run loaded content yet |
 | Tiles | AVM2 | ⚠️ 1 refusal (508 modules) | ✅ | Game shell, init step 1 of 11 | Same as pinball. `game.swf` alone waits forever on its asset `Loader`. |
-| Towns 2 | AVM2 | ⚠️ 8 refusals, all E4X (975 modules) | ✅ 417 display objects, no runtime errors | Town UI built | ❌ No server for the 12 GSI calls; ❌ `Loader` stub (the map SWFs); ❌ no E4X `XML`/`XMLList`; ❌ `navPages/phone.css` not in the upload |
+| Towns 2 | AVM2 | ⚠️ 8 refusals, all E4X (975 modules) | ✅ 417 display objects, no runtime errors | Town UI built | ❌ No server for the 12 GSI calls; ❌ `Loader` cannot run loaded content yet (the map SWFs); ❌ no E4X `XML`/`XMLList`; ❌ Missing Dependency `navPages/phone.css` |
 
 **What applies to every set:**
 - All 43 SWFs parse.
@@ -43,6 +43,41 @@ The raw numbers are one JSON line per SWF, written to `/tmp/census.jsonl`:
 Every game except fishing stops at the same place: **its first call to Gaia's
 servers**. Only fishing has an offline server, which is the adapter in
 `src/adapters/gaiaFishing`.
+
+## Missing Dependencies
+
+The app runs from the uploaded SWFs alone. Everything else a movie needs it asks for
+while it plays: other SWFs (`loadMovie`, `MovieClipLoader`, `Loader`), audio
+(`Sound.loadSound`, `Sound.load`), XML and text (`XML.load`, `LoadVars`,
+`loadVariables`, `URLLoader`), CSS (`StyleSheet.load`), images and video
+(`NetStream.play`). Both players record every request the load cannot answer
+(`src/engine/flash/dependencies.ts`). The Execute tab lists them under **Missing
+Dependencies**: a notice above the stage, the full list in the Program panel (file
+type, path, the API that asked, the movie that asked), one Problem per file, and a
+troubleshooter finding. Server scripts (`gateway.php`, …) are listed apart as
+**Service endpoints**: no file can stand in for them, only a live server or a game
+adapter.
+
+Any non-SWF file uploaded with the SWFs (keeping its folder, or just the file name
+when that is unique) is served to those calls. An `.xml` is taken for an FFDec SWF
+export only when its root element is `<swf>`; any other XML is data for the movie.
+
+What the census finds missing (all 43 SWFs, offline, no adapter):
+
+| Set | Movie | Missing file | Type | Asked for by |
+|---|---|---|---|---|
+| pinball | `gameShell.swf` | `games/pinball/gameConfig.xml` | XML | `URLLoader.load` |
+| pinball | `game.swf` | `xml/scores.xml` | XML | `URLLoader.load` |
+| tiles | `gameShell.swf` | `games/tiles/gameConfig.xml` | XML | `URLLoader.load` |
+| towns 2 | `towns2.swf` | `navPages/phone.css` | CSS | `URLLoader.load` |
+| blackjack | `preloader1.1.swf` | `loadme01.swf`, `loadme02.swf` | SWF | `MovieClipLoader.loadClip` |
+| word bump | `preloader.swf` | `loadme01.swf`, `loadme02.swf` | SWF | `MovieClipLoader.loadClip` |
+
+The two preloaders are generic loaders booted on their own here; their game entry
+movies load the real SWFs, which are in the sets. Service endpoints: every set's
+`chat/gsi/gateway.php` (fishing's is answered by its adapter), plus `chat/gsi/` from
+Word Bump's `avatarPngLoader.swf`. The fishing set asks for nothing missing; its
+avatar images come from Gaia's CDN and are marked *optional live asset*.
 
 ---
 
@@ -58,20 +93,23 @@ servers**. Only fishing has an offline server, which is the adapter in
   `POST http://www.gaiaonline.com/chat/gsi/gateway.php`.
 - ✅ **Whole flow with the adapter.** `src/adapters/gaiaFishing/__tests__/game421.dev.test.ts`
   passes in the normal suite:
-  - server list loads (2 servers); Join stays disabled until a row is picked
+  - server list loads (2 servers); picking a row and pressing Join reaches the room chooser
   - room chooser lists the 2 rooms; joining enters the game (root frame 38)
   - bait counts read 95/0/2; choosing bait A puts the rod at frame 9
   - cast → `moveBack` → release → `fishing`
-  - no missing external SWFs at any point
-- ⚠️ **The server chooser is overridden.** Frame 61 of `gsecs2.9` is replaced at load
-  time by `game-files/fish-full/external/gsecs2.9/scripts/frame_61/DoAction.as`
-  (wired in by `generate-bundled.mjs` as a `scriptOverrides` entry).
-  - With the override switched off, the test fails at its first check: the SWF's own
-    chooser enables **Join before any server is picked**.
-  - Unknown: whether real Flash does the same (so the override changes game
-    behaviour) or the override hides an engine bug.
-  - This conflicts with the rule that the app works from the SWF alone, so it needs
-    your decision.
+  - no Missing Dependencies at any point
+  - the test drives the player with `advanceTime()` (→ `step()`), so the movie's
+    `setInterval`/`setTimeout` timers run as in the app
+- ✅ **From the SWFs alone.** The bundled set is the 8 original SWFs, nothing else.
+  - The committed AS2 override of `gsecs2.9` frame 61 is gone. Six bundled SWFs had
+    been rebuilt from FFDec exports; they are replaced by the uploaded originals.
+    In the SWF's own chooser Join is an ordinary button, enabled before a row is
+    picked; the "disabled until a server is picked" behaviour came from the
+    override, not from the game. The test asserts the SWF's behaviour.
+  - Fonts are built from the SWF's DefineFont glyphs (59 distinct, all pass the OTS
+    sanitizer); sounds are decoded from its DefineSound tags (MP3/ADPCM/PCM).
+  - The FFDec exports are kept under `fixtures/ffdec/gaia-fishing/` as test oracles
+    only; nothing in the app reads them.
 - ⬜ **Not tested:** hooking and reeling a fish, catch results, top-fishers list, chat
   with other players beyond the mock.
 - ⚠️ **Warnings.**
@@ -128,10 +166,13 @@ servers**. Only fishing has an offline server, which is the adapter in
     `null` because the page that embedded the shell passed its server name in
     FlashVars, and nothing supplies that offline.
   - It gets an `IOErrorEvent` → `onGSIIOError`, and the shell waits.
-- ❌ **`gameConfig.xml`.** It requests `file:///games/pinball/gameConfig.xml`, which is
-  not among the uploaded files.
-- ❌ **Loading the game into the shell.** `flash.display.Loader` is a stub (`load()`
-  does nothing). Even past init, the shell could not load `game.swf`.
+- ❌ **Missing Dependency `games/pinball/gameConfig.xml`.** Not among the uploaded
+  files; listed under Missing Dependencies. Upload it and `URLLoader` is answered
+  with it.
+- ❌ **Loading the game into the shell.** `flash.display.Loader` now finds `game.swf`
+  in the load (and reports a SWF that is not there as a Missing Dependency, with
+  `IOErrorEvent` #2035), but running loaded content inside the player is not
+  implemented yet.
 - ❌ **FlashVars in the app.** The Execute tab passes no FlashVars to the AVM2 player.
   `game=pinball` can only be set from the test harness (`SWF_VARS`) today.
 - ⚠️ **`game.swf` alone.** It constructs `Pinball` with no errors (6 display objects).
@@ -179,7 +220,7 @@ servers**. Only fishing has an offline server, which is the adapter in
     empty. It is fixed and covered by a test.
 - ❌ **Server.** 12 GSI calls to `www.gaiaonline.com/chat/gsi/gateway.php` fail with
   `#2032` (no towns adapter).
-- ❌ **`navPages/phone.css`** is not in the upload (`#2032`).
+- ❌ **Missing Dependency `navPages/phone.css`** (CSS, `URLLoader.load`, `#2032`).
 - ❌ **Maps.** `catCafe.swf` and `gambinoMarket.swf` are loaded by the town through
   `Loader`, which is a stub.
   - Booted on their own, their constructors fail because they expect the town's avatar
@@ -204,16 +245,16 @@ Ordered by how many games each item unblocks:
    pattern: an adapter answering the PHP-serialized gateway calls and the socket
    protocol. Each game needs its own adapter under `src/adapters/`, keeping
    game-specific code out of the engine.
-2. **A real `flash.display.Loader`** (pinball, tiles, towns 2). It must load a sibling
-   SWF from the set, lift and link its ABC into the same program, and fire
-   `contentLoaderInfo` events.
+2. **A real `flash.display.Loader`** (pinball, tiles, towns 2). It finds the sibling
+   SWF in the load and reports missing ones; it must still lift and link the loaded
+   ABC into the same program, and fire `contentLoaderInfo` `complete`.
 3. **FlashVars for AVM2 movies in the Execute tab** (pinball, tiles). Also, the
    shell's gateway host would then stop coming out as `null`.
 4. **E4X `XML`/`XMLList` in the engine** plus the `dxns` lift (towns 2; the 8
    refusals). `flash.xml.XMLDocument` is used by pinball's `game.swf`.
-5. **Files missing from the upload:** `games/<game>/gameConfig.xml` for the shell,
-   `navPages/phone.css` for towns 2. They are either supplied with the set or answered
-   by the game's adapter.
+5. **Missing Dependencies:** `games/<game>/gameConfig.xml` for the shell,
+   `xml/scores.xml` for pinball's `game.swf`, `navPages/phone.css` for towns 2. The
+   Execute tab lists them; uploading them with the SWFs serves them.
 6. **AVM1 interpreter fallbacks.** 211 of 1,059 AVM1 scripts in the 18 distinct AVM1
    SWFs keep a function in the bytecode interpreter:
 
@@ -235,12 +276,9 @@ Ordered by how many games each item unblocks:
    They run correctly; they are not yet clean TypeScript.
 7. **The tiles `try` shape** (`NameUtil::displayObjectToString`), the last non-E4X
    refusal.
-8. **The fishing chooser override.** Decide whether to keep it, or to find out why the
-   SWF's own frame 61 enables Join early and fix that at the root.
 
 **Test-harness note.** The AS2 player's `tick()` advances frames but **does not run
 `setInterval`/`setTimeout`**; only `step(now)` does, and that is what the app calls.
 - With `tick()`, both preloaders appeared stuck forever. With `step()`, both games
   load.
-- `game421.dev.test.ts` drives the player with `tick()`, so it never fires timers.
-- The census uses `step()`.
+- `game421.dev.test.ts` and the census drive it with `step()` (`advanceTime()`).
