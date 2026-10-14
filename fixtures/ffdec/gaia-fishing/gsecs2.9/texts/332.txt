@@ -1,1 +1,0 @@
-note:  room names are now always named after their creator.

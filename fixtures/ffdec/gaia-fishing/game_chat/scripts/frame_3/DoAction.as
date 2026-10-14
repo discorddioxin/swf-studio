@@ -1,2 +1,0 @@
-_root.welcomeMessage();
-stop();
