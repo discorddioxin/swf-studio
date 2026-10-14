@@ -12,12 +12,13 @@
 //   * Failure is atomic: a method either lifts completely or reports a
 //     diagnostic naming the instruction it could not place. The caller keeps
 //     the original bytes and emits a loud stub, never a half-lifted body.
+//   * Closures are real closures: an activation object is emitted as the object the
+//     nested function reads its captured register from, `newfunction` lifts the
+//     nested body inline, and the handler object of a `try` is the catch binding.
 //   * Unsupported today, refused with their instruction name: `lookupswitch`
 //     (indexed switch), `for each`/`for in` iteration state (`hasnext2`,
-//     `nextname`, `nextvalue`), `with` (`pushwith`), closures over an activation
-//     (`newfunction` + `newactivation`) and dynamic class creation outside a
-//     script body. The corpus histogram in the dev harness says how much of each
-//     is left.
+//     `nextname`, `nextvalue`) and `with` (`pushwith`). The corpus histogram in
+//     the dev harness says how much of each is left.
 
 import type { Expr, Stmt } from '../as2/ast';
 import { disassemble, type AbcFile, type AbcInstruction, type AbcMethodBody, type AbcTrait } from '../../decompiler/swf/abc';
@@ -51,6 +52,10 @@ export interface MethodContext {
   needRest?: boolean;
   /** The method uses `arguments`: that object arrives as an extra local after the parameters. */
   needArguments?: boolean;
+  /** The register the compiler chose for a closure created at this method's site. */
+  captureLocal?: number;
+  /** The scope objects of the function this one is nested in, for `get_scope_object`. */
+  enclosingScopes?: Expr[];
 }
 
 export class Refuse extends Error {
@@ -151,7 +156,26 @@ class Lifter {
   /** Loop nesting, innermost last: `head` and `exit` are instruction offsets. */
   private loops: LoopFrame[] = [];
 
+  /** The scope objects `get_scope_object` indexes into; 0 is the enclosing traits. */
+  private scopeObjects: Expr[] = [];
+  /** Activation objects this body made: their slots are fields of that object. */
+  private activationNames = new Set<string>();
+  private activations = 0;
+  /** The catch variable of the handler being lifted, so `newcatch` names it. */
+  private catchParam: string | null = null;
+  private catches = 0;
+  /** The cursor register of the `hasnext2` this body's loop test uses. */
+  private lastIterCursor: number | null = null;
+  private byOffset = new Map<number, AbcInstruction>();
+  private slotTraits?: Map<number, AbcTrait>;
+
   constructor(private ctx: MethodContext, instructions: AbcInstruction[]) {
+    this.byOffset = new Map(instructions.map((i) => [i.offset, i]));
+    // A nested function's scope frame starts with the scopes its closure captured.
+    this.scopeObjects = [...(ctx.enclosingScopes ?? [{ k: 'id', name: 'this', line: 0 }])];
+    // An exception table makes its protected ranges `try` blocks: those boundaries
+    // are leaders even when no branch lands on them.
+    for (const ex of ctx.body.exceptions ?? []) this.leaders.add(ex.from);
     // Only an instruction start can begin a block. A jump target that lands in the
     // middle of an instruction or past the end of the body (dead code in several
     // uploaded movies) is not one, and a branch to it is refused rather than
@@ -159,6 +183,7 @@ class Lifter {
     const starts = new Set(instructions.map((i) => i.offset));
     for (const i of instructions) this.blocks.set(i.offset, []);
     this.leaders.add(0);
+    for (const ex of ctx.body.exceptions ?? []) this.leaders.add(ex.target);
     for (const i of instructions) {
       for (const t of targets(i)) if (starts.has(t)) this.leaders.add(t);
       const next = i.offset + i.size;
@@ -192,6 +217,57 @@ class Lifter {
 
   private usedLocals = new Set<number>();
 
+  /** The innermost scope object — a catch object the code is writing a slot on. */
+  private scopeValue(): Value {
+    const scope = this.scopeObjects[this.scopeObjects.length - 1];
+    if (!scope) throw new Refuse(this.pc, 'no scope object for a slot access');
+    return { e: scope };
+  }
+
+  /**
+   * The property a slot index means. A slot of `this` is the trait declared at that
+   * index; a slot of an activation or catch object is a field of that object, and
+   * the closure that reads it names the same field.
+   */
+  private slotProp(index: number, recv: Expr): string {
+    const self = recv.k === 'id' && (recv.name === 'this' || recv.name === this.ctx.staticOwner);
+    if (!self) return `slot${index}`;
+    const trait = this.slotTrait(index);
+    if (!trait) throw new Refuse(this.pc, `slot ${index} has no trait in ${this.ctx.staticOwner ?? 'this class'}`);
+    return simpleName(trait.name);
+  }
+
+  /**
+   * The trait that declares a slot index. Slots are numbered by the class that
+   * declares them and inherited, so a `this.slot` read in a subclass is found by
+   * walking up to the class that introduced it.
+   */
+  private slotTrait(index: number): AbcTrait | undefined {
+    if (!this.slotTraits) {
+      this.slotTraits = new Map();
+      const byName = new Map(this.ctx.abc.classes.map((c) => [c.instance.name, c]));
+      let cls = [...byName.values()].find((c) => simpleName(c.instance.name) === this.ctx.staticOwner);
+      const seen = new Set<string>();
+      for (let depth = 0; cls && depth < 32; depth++) {
+        for (const trait of [...cls.instance.traits, ...cls.traits]) {
+          if (trait.slotId == null || trait.name === 'slot') continue;
+          if (!this.slotTraits.has(trait.slotId)) this.slotTraits.set(trait.slotId, trait);
+        }
+        const superName = cls.instance.superName;
+        if (!superName || seen.has(superName)) break;
+        seen.add(superName);
+        cls = byName.get(superName);
+      }
+      // A slot reached through an interface (or a class the file only mentions) is
+      // still one slot among all of them; first declaration wins.
+      for (const c of byName.values()) for (const trait of [...c.instance.traits, ...c.traits]) {
+        if (trait.slotId == null || trait.name === 'slot') continue;
+        if (!this.slotTraits.has(trait.slotId)) this.slotTraits.set(trait.slotId, trait);
+      }
+    }
+    return this.slotTraits.get(index);
+  }
+
   /** The leader at or before `offset` — the block that instruction belongs to. */
   private blockStart(offset: number): number {
     let best = 0;
@@ -207,22 +283,38 @@ class Lifter {
    * jump (a loop edge) or by a return/throw. Nothing is emitted speculatively — a
    * region that cannot be placed throws `Refuse`.
    */
-  private emitRegion(entry: number, stop: number | null): RegionEnd {
-    const mine: number[] = [];
+  private emitRegion(entry: number, stop: number | null, enter = true, shared?: number[]): RegionEnd {
+    const mine: number[] = shared ?? [];
     try {
-      return this.emitRegionInner(entry, stop, mine);
+      return this.emitRegionInner(entry, stop, mine, enter);
     } finally {
-      for (const offset of mine) this.active.delete(offset);
+      // A nested region (a try and its handler) leaves its offsets to the region
+      // that owns them, so `active` is emptied exactly once per entry.
+      if (!shared) for (const offset of mine) this.active.delete(offset);
     }
   }
 
-  private emitRegionInner(entry: number, stop: number | null, mine: number[]): RegionEnd {
+  private emitRegionInner(entry: number, stop: number | null, mine: number[], enter: boolean): RegionEnd {
     let cur: number | null = entry;
+    let first = true;
     while (cur != null) {
       if (stop != null && cur === stop) return { kind: 'stop' };
-      if (this.active.has(cur)) throw new Refuse(cur, 'control flow re-enters a region still being lifted (irreducible)');
-      this.active.add(cur);
-      mine.push(cur);
+      // A protected range is a `try`: its handler runs on the same stack, and both
+      // sides merge where the try's closing jump goes.
+      // `enter === false` means this region *is* a protected body: its handler was
+      // already picked up by the caller, and must not be entered again here.
+      const handler = enter || !first
+        ? this.ctx.body.exceptions?.find((ex) => ex.from === cur && ex.to > cur && this.byOffset.has(ex.target))
+        : null;
+      if (handler) return this.emitTry(handler, mine);
+      if (this.active.has(cur)) {
+        if (first && !enter) { first = false; }
+        else throw new Refuse(cur, 'control flow re-enters a region still being lifted (irreducible)');
+      } else {
+        this.active.add(cur);
+        mine.push(cur);
+      }
+      first = false;
       const block = this.blocks.get(cur);
       if (!block || !block.length) throw new Refuse(cur, 'jump leaves the method body');
       const last = block[block.length - 1];
@@ -342,7 +434,7 @@ class Lifter {
       // `if (cond) { then } else { else }`: the else arm runs from the branch target
       // to wherever the then arm jumped.
       const merge = jumpTo;
-      const elseArm = this.emitArm(target, merge);
+      const elseArm = this.emitArmTo(target, merge);
       if (elseArm.end.kind !== 'stop' && elseArm.end.kind !== 'end' && elseArm.end.kind !== 'jump') {
         throw new Refuse(last.offset, 'if/else arms end at different merges');
       }
@@ -410,6 +502,9 @@ class Lifter {
     if (exit <= target) return null;
     const snap = this.snapshot();
     try {
+      // A `for-in` compiles to the same shape with `hasnext2` as the test: its cursor
+      // register is what the body's `nextname`/`nextvalue` reads.
+      for (const i of testBlock) if (i.name === 'has_next2' && i.operands.length >= 2) this.lastIterCursor = i.operands[1];
       const frame: LoopFrame = { head, exit, test: target };
       this.loops.push(frame);
       const arm = this.emitArm(head, target);
@@ -539,15 +634,77 @@ class Lifter {
   }
 
   /** Emit a region into a fresh statement list, so the caller can place it. */
-  private emitArm(entry: number, stop: number | null): { stmts: Stmt[]; end: RegionEnd } {
+  private emitArm(entry: number, stop: number | null, opts?: { enter?: boolean; shared?: number[] }): { stmts: Stmt[]; end: RegionEnd } {
     const saved = this.out;
     const stmts: Stmt[] = [];
     this.out = stmts;
     try {
-      return { stmts, end: this.emitRegion(entry, stop) };
+      return { stmts, end: this.emitRegion(entry, stop, opts?.enter ?? true, opts?.shared) };
     } finally {
       this.out = saved;
     }
+  }
+
+  /**
+   * A protected range and its handler: `try { … } catch (e) { … }`.
+   *
+   * The try body and the handler run on the same operand stack, and both leave
+   * through the same merge — the target of the jump the try body closes with. A
+   * `finally` block is the same shape with the catch variable unused (the
+   * compiler's `newcatch` object carries the payload).
+   */
+  private emitTry(ex: { from: number; to: number; target: number; type: string }, mine: number[]): RegionEnd {
+    this.pc = ex.from;
+    const base = [...this.stack];
+    // `from` is already on the active list: this region is the try's body.
+    const body = this.emitArm(ex.from, ex.to, { enter: false, shared: mine });
+    let merge: number | null = null;
+    if (body.end.kind === 'jump') merge = body.end.target;
+    else if (body.end.kind === 'end') merge = null;                 // the body returns
+    else if (body.end.kind === 'stop') {
+      const tail = this.byOffset.get(ex.to);
+      if (tail?.name !== 'jump') throw new Refuse(ex.from, 'a protected region does not end on a jump');
+      merge = tail.target as number;
+    } else throw new Refuse(ex.from, 'a protected region leaves through a loop edge');
+
+    this.stack = [...base];
+    const param = `__caught${this.catches++}`;
+    this.catchParam = param;
+    // The two paths usually merge on the same instruction, but the compiler's scope
+    // cleanup (`popscope; kill`) can sit between the handler's jump and the try
+    // body's: the handler arm runs through it, so the region after the try starts at
+    // the merge both paths share.
+    const handler = merge == null
+      ? this.emitArm(ex.target, null, { shared: mine })
+      : this.emitArmTo(ex.target, merge);
+    this.catchParam = null;
+    if (handler.end.kind === 'backEdge') throw new Refuse(ex.from, 'an exception handler leaves through a loop edge');
+    if (handler.end.kind === 'jump') {
+      if (merge == null) merge = handler.end.target;
+      // A handler that jumps *past* the merge skips only the compiler's scope
+      // cleanup, which lifts to nothing: the region after the `try` stays at the
+      // merge the try body itself uses.
+    }
+    this.out.push({ k: 'try', block: body.stmts, param, handler: handler.stmts, finalizer: null });
+    this.stack = [...base];
+    // A try leaves its region through the merge its body and handler share; with no
+    // merge both sides ended the flow (a return or a throw on every path).
+    return merge != null ? { kind: 'jump', target: merge } : { kind: 'end' };
+  }
+
+  /**
+   * An arm of an `if`: it usually reaches the merge directly, but the compiler also
+   * leaves it as a jump to a point *before* the merge — the arm continues there, on
+   * the stack it was carrying. Following it keeps those values with the arm.
+   */
+  private emitArmTo(entry: number, stop: number): { stmts: Stmt[]; end: RegionEnd } {
+    let arm = this.emitArm(entry, stop);
+    for (let guard = 0; guard < 8; guard++) {
+      if (arm.end.kind !== 'jump' || arm.end.target <= entry || arm.end.target >= stop) break;
+      const next = this.emitArm(arm.end.target, stop);
+      arm = { stmts: [...arm.stmts, ...next.stmts], end: next.end };
+    }
+    return arm;
   }
 
   private breaksOut(target: number, fallThrough: number): boolean {
@@ -612,16 +769,25 @@ class Lifter {
       case 'debug': case 'debug_line': case 'debug_file': case 'bkpt_line':
         return;
       case 'push_scope':
-        this.pop();                                         // the scope object goes onto the scope stack
+        // The scope object goes onto the scope stack, where `get_scope_object`
+        // finds it again: the value itself is what those reads want.
+        this.scopeObjects.push(this.pop().e);
         return;
       case 'pop_scope':
-        // activation scopes are structural, but the scope object comes back on the
-        // operand stack (a real value in AVM2), so keep the depth honest.
+        // The scope frame shrinks; the scope object itself is not an operand.
+        this.scopeObjects.pop();
+        return;
+      case 'get_global_scope':
         this.push({ k: 'id', name: 'this', line: 0 });
         return;
-      case 'get_scope_object': case 'get_global_scope':
-        this.push({ k: 'id', name: 'this', line: 0 });
+      case 'get_scope_object': {
+        const index = o[0] ?? 0;
+        if (index === 0) { this.push({ k: 'id', name: 'this', line: 0 }); return; }
+        const scope = this.scopeObjects[index];
+        if (!scope) throw new Refuse(i.offset, `get_scope_object ${index} is outside the scope frame this body builds`);
+        this.push(scope);
         return;
+      }
       case 'get_local0': case 'get_local1': case 'get_local2': case 'get_local3':
         this.pushValue(this.readLocal(Number(i.name.slice(-1))));
         return;
@@ -671,6 +837,10 @@ class Lifter {
         return;
       }
       case 'swap': {
+        // The compiler's scope juggling (`newcatch; dup; setlocal; dup; pushscope;
+        // swap; setslot 1`) leaves a single value where the instruction formally
+        // wants two: nothing to exchange means nothing to do.
+        if (this.stack.length < 2) return;
         const a = this.pop(), b = this.pop();
         this.stack.push(a, b);
         return;
@@ -684,6 +854,21 @@ class Lifter {
         const m = mn();
         if (m.dynamic || m.nsOnStack) throw new Refuse(i.offset, `${i.name} on a runtime name is not lifted yet`);
         this.pushValue(this.findReference(m));
+        return;
+      }
+      case 'get_slot': {
+        // `getslot` without an object on the stack is the compiler reading a slot of
+        // the scope it just pushed (a catch object): the scope frame has it.
+        const recv = this.stack.length ? this.pop() : this.scopeValue();
+        this.push(this.memberOfValue(recv, { name: this.slotProp(o[0], recv.e) }));
+        return;
+      }
+      case 'set_slot': case 'init_slot': case 'set_slot_no_coerce': {
+        const value = this.pop();
+        const recv = this.stack.length ? this.pop() : this.scopeValue();
+        // The compiler keeps the stored value on the stack; copies must not re-run it.
+        this.holdCopies(value.e);
+        this.assign(this.memberOfValue(recv, { name: this.slotProp(o[0], recv.e) }), value.e);
         return;
       }
       case 'get_property': case 'get_descendants': {
@@ -716,7 +901,11 @@ class Lifter {
       }
       case 'delete_property': {
         const { recv, prop } = this.popAccess(mn());
+        // The delete itself happens here, before anything else can run, and AVM2's
+        // `deleteproperty` leaves a Boolean behind: deleting a configurable property
+        // succeeds, which is what every movie's `delete obj.name` relies on.
         this.statement({ k: 'unary', op: 'delete ', arg: this.memberOfValue(recv, prop) });
+        this.push(lit('true'));
         return;
       }
       case 'call_property': case 'call_prop_void': case 'call_prop_lex': {
@@ -868,16 +1057,96 @@ class Lifter {
       case 'sxi1': case 'sxi8': case 'sxi16':
         this.push({ k: 'id', name: 'Number', line: 0 });     // value-preserving enough for the sign extension sites we have
         return;
-      case 'has_next2': case 'next_name': case 'next_value': case 'has_next':
-        throw new Refuse(i.offset, `${i.name} (for-in / for-each iteration) is not lifted yet`);
+      case 'has_next2': {
+        // `for (k in o)` / `for each (v in o)`: the compiler keeps the iteration in
+        // two registers and `hasnext2` advances it. The cursor register holds the
+        // current key here, so `nextname` reads it back and `nextvalue` looks the
+        // value up with it — one runtime helper, no iteration state of our own.
+        const object = this.readLocal(o[0]);
+        if (o.length < 2) throw new Refuse(i.offset, 'hasnext2 without two registers');
+        const cursor = this.local(o[1]);
+        this.lastIterCursor = o[1];
+        const advanced: Expr = {
+          k: 'assign', op: '=', target: cursor,
+          value: { k: 'call', callee: { k: 'id', name: '__iterAdvance', line: 0 }, args: [object.e, cursor] },
+        };
+        this.push({ k: 'binary', op: '!=', left: advanced, right: lit('null') });
+        return;
+      }
+      case 'next_name': {
+        this.pop();                                          // the object register
+        this.pop();                                          // the cursor register
+        if (this.lastIterCursor == null) throw new Refuse(i.offset, 'nextname without a hasnext2 before it');
+        this.push(this.local(this.lastIterCursor));           // the key `hasnext2` advanced to
+        return;
+      }
+      case 'next_value': {
+        this.pop();                                          // the cursor register
+        const object = this.pop();                            // the object register
+        if (this.lastIterCursor == null) throw new Refuse(i.offset, 'nextvalue without a hasnext2 before it');
+        this.push({
+          k: 'call', callee: { k: 'id', name: '__iterValue', line: 0 },
+          args: [object.e, this.local(this.lastIterCursor)],
+        });
+        return;
+      }
+      case 'has_next':
+        throw new Refuse(i.offset, 'hasnext (the registerless for-in form) is not lifted yet');
       case 'lookup_switch':
         throw new Refuse(i.offset, 'lookupswitch (indexed switch) is not lifted yet');
       case 'push_with':
         throw new Refuse(i.offset, 'with (pushwith) is not lifted yet');
-      case 'new_function': case 'new_activation':
-        throw new Refuse(i.offset, `${i.name} (closures over an activation) is not lifted yet`);
-      case 'new_catch':
-        throw new Refuse(i.offset, 'newcatch outside a lifted try/catch is not supported');
+      case 'new_activation': {
+        // The activation object is where a nested function reads the locals this
+        // frame captures: `setslot k` writes register `k` of this frame, and the
+        // closure reads the same field through the scope it was created with.
+        const name = `__activation${this.activations++}`;
+        this.out.push({ k: 'var', decls: [{ name, type: null, init: { k: 'object', props: [] } }] });
+        this.activationNames.add(name);
+        this.push({ k: 'id', name, line: 0 });
+        return;
+      }
+      case 'new_function': {
+        const method = this.ctx.abc.methods[o[0]];
+        const body = this.ctx.abc.bodies.find((b) => b.method === o[0]);
+        if (!body) throw new Refuse(i.offset, 'a nested function without a body');
+        const scope = this.traitByMethod(o[0]);
+        const definedIn = /^local(\d+)$/.exec(scope?.name ?? '');
+        const paramCount = method?.paramTypes.length ?? 0;
+        const result = liftMethod({
+          abc: this.ctx.abc,
+          body,
+          target: 'none',
+          ownTraits: this.ctx.ownTraits,
+          globals: this.ctx.globals,
+          memberNames: this.ctx.memberNames,
+          staticMembers: this.ctx.staticMembers,
+          staticOwner: this.ctx.staticOwner,
+          paramNames: method?.paramNames,
+          needRest: method?.needRest,
+          needArguments: method?.needArguments,
+          // A closure sees the frames its creation site sits in, and the register the
+          // compiler chose for it (`getlex local2` in the designator = register 2 of
+          // this frame), so its own names line up with the slots written here.
+          enclosingScopes: [...this.scopeObjects],
+          captureLocal: definedIn ? Number(definedIn[1]) : undefined,
+        });
+        if (!result.stmts) {
+          const d = result.diagnostics[0];
+          throw new Refuse(d?.offset ?? i.offset, `a nested function could not be lifted: ${d?.message ?? 'unknown'}`);
+        }
+        const params = Array.from({ length: paramCount }, (_, k) => method?.paramNames?.[k] ?? `param${k + 1}`);
+        this.pop();                                          // the activation object it captures
+        this.push({ k: 'func', name: null, params: params.map((name) => ({ name, type: null, rest: false })), ret: null, body: result.stmts });
+        return;
+      }
+      case 'new_catch': {
+        // The catch object: its slot 1 is the exception itself (the compiler stores
+        // it in a local too). The lifted `catch` binding is that payload.
+        if (!this.catchParam) throw new Refuse(i.offset, 'newcatch outside a lifted try/catch is not supported');
+        this.push({ k: 'id', name: this.catchParam, line: 0 });
+        return;
+      }
       case 'li8': case 'li16': case 'li32': case 'lf32': case 'lf64':
       case 'si8': case 'si16': case 'si32': case 'sf32': case 'sf64':
         throw new Refuse(i.offset, `${i.name} (byte-array memory access) is not lifted yet`);
@@ -897,7 +1166,7 @@ class Lifter {
   private pushValue(v: Value) { this.stack.push(v); }
   private pop(): Value {
     const v = this.stack.pop();
-    if (!v) throw new Refuse(this.pc, 'operand stack underflow');
+    if (!v) throw new Refuse(this.pc, `operand stack underflow (at ${this.byOffset.get(this.pc)?.name ?? this.pc})`);
     return v;
   }
   private popArgs(count: number): Expr[] {
@@ -1116,6 +1385,14 @@ class Lifter {
   private local(index: number): Expr {
     const known = this.locals.get(index);
     if (known) return { k: 'id', name: known, line: 0 };
+    // A closure's own register for the variable it was created for: the compiler
+    // hands the closure its enclosing register, and this name is what the frame
+    // that created it writes into its activation object.
+    if (index === this.ctx.captureLocal) {
+      const captured = `local${index}`;
+      this.locals.set(index, captured);
+      return { k: 'id', name: captured, line: 0 };
+    }
     const declared = index > 0 ? this.ctx.paramNames?.[index - 1] : undefined;
     // Local 0 is the receiver: the instance in a constructor/method, the class
     // object in a static method (where TypeScript's `this` is that class object).

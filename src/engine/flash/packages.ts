@@ -69,6 +69,8 @@ export const TOP_LEVEL: Record<string, unknown> = {
   // Helpers a transpiled ABC module calls directly (see `engine/flash/utils.ts`).
   __applyType: utils.__applyType,
   __coerceObject: utils.__coerceObject,
+  __iterAdvance: utils.__iterAdvance,
+  __iterValue: utils.__iterValue,
 };
 
 /** Every class/function in the table by simple and qualified name. */

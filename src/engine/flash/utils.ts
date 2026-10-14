@@ -154,6 +154,28 @@ export class EOFError extends IOError { constructor(message = '', errorID = 0) {
 
 export function isXMLName(s: string) { return /^[A-Za-z_][\w.-]*$/.test(s); }
 
+// `Object.prototype.setPropertyIsEnumerable` is ActionScript-only (Flash's Object
+// class has it; JavaScript's does not). A movie calls it on any object — its own
+// class instances included — so it is installed once, here, as a non-enumerable
+// method, exactly where AS3 defines it.
+declare global {
+  interface Object {
+    setPropertyIsEnumerable(name: string, isEnum?: boolean): void;
+  }
+}
+if (!Object.prototype.setPropertyIsEnumerable) {
+  Object.defineProperty(Object.prototype, 'setPropertyIsEnumerable', {
+    value: function (this: Record<string, unknown>, name: string, isEnum = true) {
+      // `length` and other built-in properties cannot be re-declared; AS3 leaves
+      // them as they are rather than throwing.
+      if (name === 'length') return;
+      const value = this[name];
+      Object.defineProperty(this, name, { value, enumerable: isEnum, configurable: true, writable: true });
+    },
+    enumerable: false, configurable: true, writable: true,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Emitter helpers: the three bytecodes whose ActionScript semantics have no
 // JavaScript spelling. A transpiled module calls these by name — the loader puts
@@ -171,6 +193,25 @@ export function __applyType(base: unknown, ...types: unknown[]): unknown {
     return klass;
   }
   throw new TypeError('applytype of a non-class');
+}
+
+/**
+ * `hasnext2` + `nextname`: the cursor of a `for-in` is a key here, so advancing
+ * means "the key after this one". `null` means the object is exhausted.
+ */
+export function __iterAdvance(object: unknown, cursor: unknown): string | null {
+  if (object == null) return null;
+  const keys = Object.keys(object as Record<string, unknown>);
+  if (cursor == null) return keys.length ? keys[0] : null;
+  const at = keys.indexOf(String(cursor));
+  const next = at < 0 ? 0 : at + 1;
+  return next < keys.length ? keys[next] : null;
+}
+
+/** `nextvalue` — the value the cursor is standing on (`for each`). */
+export function __iterValue(object: unknown, cursor: unknown): unknown {
+  if (object == null || cursor == null) return undefined;
+  return (object as Record<string, unknown>)[String(cursor)];
 }
 
 /** `convert_o` — coercing to Object throws on null and undefined. */

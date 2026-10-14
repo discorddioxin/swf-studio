@@ -189,8 +189,8 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
   // another class): a body names one by its simple name and the import machinery
   // brings it in, instead of the body pointing at `this.RequestRetry`.
   for (const qualified of projectClasses) globals.add(simpleName(qualified));
-  const instanceScope: LiftScope = { target: 'instance', memberNames: instanceMembers, staticMembers, staticOwner: simple, globals };
-  const staticScope: LiftScope = { target: 'class', memberNames: staticMembers, staticMembers, staticOwner: simple, globals };
+  const instanceScope: LiftScope = { target: 'instance', memberNames: instanceMembers, staticMembers, staticOwner: simple, globals, ownTraits: instance.traits };
+  const staticScope: LiftScope = { target: 'class', memberNames: staticMembers, staticMembers, staticOwner: simple, globals, ownTraits: def.traits };
 
   // Bodies are lifted first and printed afterwards: which names need to be
   // required on first use (see `lazy` below) is only known once every body of the
@@ -235,9 +235,12 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
     pathOf: options.pathOf ?? new Map<string, string>(),
     self: qualifiedName,
     skip: new Set([simple, superName].filter(Boolean)),
-    // `T(x)` is a cast when T is a class, so the printer has to know the movie's and
-    // the engine's class names — not the function names that look like them.
-    classNames: new Set([...projectClasses, ...FLASH_DEFINITIONS.keys()].map(simpleName)),
+    // `T(x)` is a cast when T is a class, so the printer needs the class names of the
+    // movie and the engine — capitalized, because that is what tells a class from the
+    // utility functions (`getDefinitionByName(x)` is a call, not a cast).
+    classNames: new Set([...projectClasses, ...FLASH_DEFINITIONS.keys()]
+      .map(simpleName)
+      .filter((name) => /^[A-Z]/.test(name))),
   };
   const body = members.map((m) => {
     if (m.stmts === undefined) return m.open;
@@ -286,6 +289,8 @@ interface LiftScope {
   memberNames: Set<string>;
   staticMembers: Set<string>;
   staticOwner: string;
+  /** The class's own traits, so a `slot` index in a body can be named. */
+  ownTraits?: AbcTrait[];
   globals: Set<string>;
 }
 
