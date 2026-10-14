@@ -5,6 +5,7 @@
 
 import { runtime } from './context';
 import { EventDispatcher } from './events';
+import { IOError } from './utils';
 
 // ------------------------------------------------------------------ ui --
 
@@ -113,6 +114,61 @@ export class URLLoader extends EventDispatcher {
   }
   close() {}
 }
+/**
+ * flash.net.Socket. A browser cannot open raw TCP, so the offline player answers a
+ * `connect` the way Flash Player does when the host refuses: the attempt is logged
+ * as a network request and an `ioError` (#2031) follows. Until a connection exists,
+ * reads and writes throw IOError #2002, as they do in Flash Player.
+ */
+export class Socket extends EventDispatcher {
+  connected = false;
+  timeout = 20000;
+  endian = 'bigEndian';
+  objectEncoding = 3;
+  bytesAvailable = 0;
+  bytesPending = 0;
+  constructor(host: string | null = null, port = 0) {
+    super();
+    if (host && port) this.connect(host, port);
+  }
+  connect(host: string, port: number): void {
+    (runtime.player as unknown as { failSocket?: (t: EventDispatcher, host: string, port: number) => void } | null)
+      ?.failSocket?.(this, String(host), Number(port));
+  }
+  close(): void {
+    if (!this.connected) throw new IOError('Error #2002: Operation attempted on invalid socket.', 2002);
+    this.connected = false;
+  }
+  flush(): void { this.invalid(); }
+  private invalid(): never { throw new IOError('Error #2002: Operation attempted on invalid socket.', 2002); }
+  readBoolean(): boolean { return this.invalid(); }
+  readByte(): number { return this.invalid(); }
+  readBytes(_bytes: unknown, _offset = 0, _length = 0): void { this.invalid(); }
+  readDouble(): number { return this.invalid(); }
+  readFloat(): number { return this.invalid(); }
+  readInt(): number { return this.invalid(); }
+  readMultiByte(_length: number, _charSet: string): string { return this.invalid(); }
+  readObject(): unknown { return this.invalid(); }
+  readShort(): number { return this.invalid(); }
+  readUnsignedByte(): number { return this.invalid(); }
+  readUnsignedInt(): number { return this.invalid(); }
+  readUnsignedShort(): number { return this.invalid(); }
+  readUTF(): string { return this.invalid(); }
+  readUTFBytes(_length: number): string { return this.invalid(); }
+  writeBoolean(_value: boolean): void { this.invalid(); }
+  writeByte(_value: number): void { this.invalid(); }
+  writeBytes(_bytes: unknown, _offset = 0, _length = 0): void { this.invalid(); }
+  writeDouble(_value: number): void { this.invalid(); }
+  writeFloat(_value: number): void { this.invalid(); }
+  writeInt(_value: number): void { this.invalid(); }
+  writeMultiByte(_value: string, _charSet: string): void { this.invalid(); }
+  writeObject(_object: unknown): void { this.invalid(); }
+  writeShort(_value: number): void { this.invalid(); }
+  writeUnsignedInt(_value: number): void { this.invalid(); }
+  writeUTF(_value: string): void { this.invalid(); }
+  writeUTFBytes(_value: string): void { this.invalid(); }
+}
+
 export const URLLoaderDataFormat = { BINARY: 'binary', TEXT: 'text', VARIABLES: 'variables' } as const;
 
 // -------------------------------------------------------------- system --

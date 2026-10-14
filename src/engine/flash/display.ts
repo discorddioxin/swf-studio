@@ -21,6 +21,7 @@ import type { Frame, SwfDocument, Timeline } from '../../types';
 import { runtime, type PlayerContext } from './context';
 import { Event, EventDispatcher } from './events';
 import { ColorTransform, Matrix, Point, Rectangle, Transform } from './geom';
+import { definesBehaviour } from './utils';
 
 const TWIPS = 20;
 /** Timeline depths sit below script depths, as in Flash (-16384 + depth). */
@@ -430,14 +431,13 @@ export class DisplayObjectContainer extends InteractiveObject {
 }
 
 /** True when obj[name] may be assigned without clobbering a method/accessor. */
+/**
+ * May a named timeline child be stored under `name` on `obj`? Not when the class
+ * defines `name` as an accessor or method — but a declared slot is exactly where it
+ * goes, including one whose default (`null`) sits on the prototype.
+ */
 function isPlainSlot(obj: object, name: string) {
-  let proto: object | null = Object.getPrototypeOf(obj);
-  while (proto && proto !== Object.prototype) {
-    const desc = Object.getOwnPropertyDescriptor(proto, name);
-    if (desc) return false;
-    proto = Object.getPrototypeOf(proto);
-  }
-  return true;
+  return !definesBehaviour(Object.getPrototypeOf(obj), name);
 }
 
 // ---------------------------------------------------------------- Graphics --

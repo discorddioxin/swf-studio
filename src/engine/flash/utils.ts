@@ -99,6 +99,35 @@ export function isClassObject(value: unknown): boolean {
 Object.defineProperty(Class, Symbol.hasInstance, { value: (value: unknown) => isClassObject(value) });
 
 /**
+ * Instance slot defaults of a lifted class. In AVM2 an object holds every declared
+ * slot's default from the moment it is allocated, so a base-class constructor that
+ * calls an overridden method already sees the subclass's `_value = 1`. JavaScript
+ * runs field initializers only after `super()` returns; a default on the prototype
+ * is visible from the start, and the first write makes the instance's own copy.
+ *
+ * A name the engine (or a base class) already defines as an accessor or method is
+ * left alone: the lifted class named a slot in a namespace TypeScript cannot keep
+ * apart, and shadowing the accessor would cut the display object off from it.
+ */
+export function __slots(owner: { prototype: object }, defaults: Record<string, unknown>): void {
+  const proto = owner.prototype;
+  for (const [name, value] of Object.entries(defaults)) {
+    if (definesBehaviour(Object.getPrototypeOf(proto), name)) continue;
+    Object.defineProperty(proto, name, { value, writable: true, configurable: true, enumerable: false });
+  }
+}
+
+/** Is `name` an accessor or a method somewhere on the chain from `proto`? */
+export function definesBehaviour(proto: object | null, name: string): boolean {
+  for (let p = proto; p && p !== Object.prototype; p = Object.getPrototypeOf(p)) {
+    const desc = Object.getOwnPropertyDescriptor(p, name);
+    if (!desc) continue;
+    return !!(desc.get || desc.set || typeof desc.value === 'function');
+  }
+  return false;
+}
+
+/**
  * A method read as a value: `obj.method` in AVM2 is a closure bound to `obj`, not the
  * bare function. Emitted reads go through here so `addEventListener(..., this.onTick)`
  * keeps its receiver, and so adding and removing the same listener pair up (the bound

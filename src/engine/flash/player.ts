@@ -46,7 +46,7 @@ export interface ProgramLike {
 export type LogLevel = 'trace' | 'error' | 'warn' | 'info';
 export type LogSource = 'app' | 'engine' | 'forge' | 'network';
 export type LogKind = 'log' | 'problem' | 'request' | 'response';
-export type NetworkTransport = 'http' | 'xmlsocket' | 'url-loader' | 'external-swf' | 'navigation';
+export type NetworkTransport = 'http' | 'xmlsocket' | 'socket' | 'url-loader' | 'external-swf' | 'navigation';
 
 /** Structured request/response metadata shared by the engine and offline mocks. */
 export interface NetworkEvent {
@@ -329,6 +329,23 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
       const error = `Error #2032: Stream Error. URL: ${url}`;
       this.log('warn', error, undefined, {
         source: 'network', kind: 'response', transport: 'url-loader', direction: 'incoming', requestId, method, url,
+        status: 'blocked offline', payload: error,
+      });
+      target.dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, error));
+    }, false);
+  }
+
+  /** A `flash.net.Socket` connect: logged as a request, refused like an unreachable host. */
+  failSocket(target: EventDispatcher, host: string, port: number) {
+    const requestId = `socket-${++this.networkRequestSequence}`;
+    const url = `${host}:${port}`;
+    this.log('info', `Socket connect ${url}`, undefined, {
+      source: 'network', kind: 'request', transport: 'socket', direction: 'outgoing', requestId, method: 'CONNECT', url,
+    });
+    this.schedule(0, () => {
+      const error = `Error #2031: Socket Error. URL: ${host}`;
+      this.log('warn', error, undefined, {
+        source: 'network', kind: 'response', transport: 'socket', direction: 'incoming', requestId, method: 'CONNECT', url,
         status: 'blocked offline', payload: error,
       });
       target.dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, error));

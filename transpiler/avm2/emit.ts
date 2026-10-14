@@ -93,7 +93,7 @@ export function transpileAbc(options: AbcModuleOptions): EmitResult {
           const name = simpleName(trait.name);
           const where = `constants/${trait.name.replace(/[^\w$]+/g, '_').replace(/^_+|_+$/g, '')}.ts`;
           pathOf.set(name, where);
-          files.push({ path: where, text: `export const ${name} = ${JSON.stringify(trait.value)};\n` });
+          files.push({ path: where, text: `export const ${name} = ${literalOf(trait.value)};\n` });
         }
       }
     }
@@ -261,8 +261,9 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
     });
   }
 
+  const slotDefaults: string[] = [];
   for (const trait of instance.traits) {
-    const piece = memberPiece(abc, trait, instanceScope, diagnostics, qualifiedName, isInterface, false);
+    const piece = memberPiece(abc, trait, instanceScope, diagnostics, qualifiedName, isInterface, false, slotDefaults);
     if (piece) members.push(piece);
   }
   for (const trait of def.traits) {
@@ -318,7 +319,8 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
     if (!target) return name;
     return `require('${specifier(refs.self, target.replace(/\.ts$/, ''))}').${name}`;
   };
-  const cinitCall = hasCinit ? `${simple}.__cinit();\n` : '';
+  const slotsCall = slotDefaults.length ? `__slots(${simple}, { ${slotDefaults.join(', ')} });\n` : '';
+  const cinitCall = `${slotsCall}${hasCinit ? `${simple}.__cinit();\n` : ''}`;
   const tail = isInterface
     ? `\nexport const ${simple} = __interface('${qualifiedName}'${supers.length ? `, ${supers.map(refOf).join(', ')}` : ''});`
     : supers.length
@@ -401,14 +403,23 @@ function memberPiece(
   owner: string,
   isInterface: boolean,
   isStatic: boolean,
+  slotDefaults?: string[],
 ): MemberPiece | null {
   const name = simpleName(trait.name);
   const stat = isStatic ? 'static ' : '';
   const literal = (text: string): MemberPiece => ({ open: text, close: '', where: '' });
   if (trait.kind === 'slot' || trait.kind === 'const') {
-    const init = trait.value !== undefined && trait.value !== null ? ` = ${JSON.stringify(trait.value)}` : '';
-    if (isInterface) return literal(`  ${name}: ${trait.type ? typeName(trait.type) : 'any'};`);
-    return literal(`  public ${stat}${name}: ${trait.type ? typeName(trait.type) : 'any'}${init};`);
+    const type = trait.type ? typeName(trait.type) : 'any';
+    if (isInterface) return literal(`  ${name}: ${type};`);
+    const initial = slotDefault(trait);
+    // A static slot is set when the class is defined, before `cinit`: a field initializer.
+    if (isStatic) return literal(`  public static ${name}: ${type}${initial === 'undefined' ? '' : ` = ${initial}`};`);
+    // An instance slot holds its default from the moment the object exists — before
+    // any constructor in the chain runs (a base constructor calling an overridden
+    // method sees it). A JavaScript field initializer runs only after `super()`
+    // returns, so the default goes on the prototype (`__slots` below) instead.
+    if (initial !== 'undefined') slotDefaults?.push(`${JSON.stringify(name)}: ${initial}`);
+    return literal(`  public ${name}: ${type};`);
   }
   if (trait.kind !== 'method' && trait.kind !== 'getter' && trait.kind !== 'setter') return null;
   if (trait.method == null) return literal(`  public ${stat}${name}: any;`);
@@ -501,7 +512,13 @@ function emitFunctionModule(abc: AbcFile, trait: AbcTrait, pathOf?: Map<string, 
 function paramsOf(abc: AbcFile, method: number): string {
   const info = abc.methods[method];
   if (!info) return '';
-  const declared = info.paramTypes.map((t, i) => `${paramName(info, i)}: ${typeName(t)}`);
+  // The optional values belong to the last parameters, in order (AVM2 overview §4.5).
+  const firstOptional = info.paramTypes.length - info.optional.length;
+  const declared = info.paramTypes.map((t, i) => {
+    const option = i >= firstOptional ? info.optional[i - firstOptional] : undefined;
+    const initial = option ? literalOf(option.kind === 'undefined' ? undefined : option.value) : '';
+    return `${paramName(info, i)}: ${typeName(t)}${option ? ` = ${initial}` : ''}`;
+  });
   if (info.needRest) declared.push('...rest: any[]');
   return declared.join(', ');
 }
@@ -522,6 +539,34 @@ function paramNamesOf(abc: AbcFile, method: number): string[] | undefined {
 function abiFlags(abc: AbcFile, method: number): { needRest?: boolean; needArguments?: boolean } {
   const info = abc.methods[method];
   return { needRest: info?.needRest, needArguments: info?.needArguments };
+}
+
+/** A constant as TypeScript source; JSON has no spelling for NaN, the infinities or -0. */
+function literalOf(value: string | number | boolean | null | undefined): string {
+  if (value === undefined) return 'undefined';
+  if (typeof value === 'number') {
+    if (Number.isNaN(value)) return 'NaN';
+    if (value === Infinity) return 'Infinity';
+    if (value === -Infinity) return '-Infinity';
+    if (Object.is(value, -0)) return '-0';
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * The value a slot starts with: the trait's own constant when it has one, else the
+ * default of its declared type — Boolean false, Number NaN, int/uint 0, `*`
+ * undefined, anything else null (Ruffle `default_value_for_type`).
+ */
+function slotDefault(trait: AbcTrait): string {
+  if (trait.valueKind != null) return literalOf(trait.value);
+  switch (trait.type ?? '') {
+    case 'Boolean': return 'false';
+    case 'Number': return 'NaN';
+    case 'int': case 'uint': return '0';
+    case '': case '*': return 'undefined';
+    default: return 'null';
+  }
 }
 
 /** AS3 type names fold onto TypeScript's for the primitives, stay bare otherwise. */

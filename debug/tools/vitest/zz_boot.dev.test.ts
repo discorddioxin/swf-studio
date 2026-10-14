@@ -57,7 +57,8 @@ describe.skipIf(!CORPUS_OK)('corpus harness', () => {
         const modules = compiled.modules.filter((m) => m.path === frame[1]);
         if (process.env.SWF_RAW) console.log(`    (${modules.length} module(s) named ${frame[1]})`);
         const module = modules.find((m) => m.code?.split('\n').length > Number(frame[2])) ?? modules[0];
-        const line = Number(frame[2]);
+        // `new Function` puts two header lines (`function anonymous(…` and `) {`) before the body.
+        const line = Number(frame[2]) - 2;
         if (module?.code) {
           const total = module.code.split('\n').length;
           console.log(`    -- ${frame[1]} (compiled, ${total} lines) around line ${line}`);
@@ -66,5 +67,12 @@ describe.skipIf(!CORPUS_OK)('corpus harness', () => {
       }
     }
     console.log(`(${shown} shown of ${logs.length} entries)`);
+    // What is on stage after the run: proof the movie did something, not just that it was quiet.
+    const count = (o: unknown): number => {
+      const kids = (o as { _children?: unknown[] })._children ?? [];
+      return 1 + kids.reduce<number>((n, k) => n + count(k), 0);
+    };
+    const root = player.root as unknown as { constructor: { name: string }; _children?: unknown[] } | null;
+    console.log(`document=${player.documentClassName} root=${root?.constructor.name ?? 'none'} rootChildren=${root?._children?.length ?? 0} displayObjects=${root ? count(root) : 0}`);
   }, 600_000);
 });

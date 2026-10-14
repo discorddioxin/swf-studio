@@ -98,7 +98,8 @@ export interface AbcMethodInfo {
 export interface AbcTrait {
   name: string; kind: string; attr: { final: boolean; override: boolean; metadata: boolean };
   type?: string; slotId?: number; method?: number; classIndex?: number;
-  value?: string | number | boolean | null; metadata: string[];
+  /** A slot/const default (`vkind` + `vindex`): absent when the trait gives none. */
+  value?: string | number | boolean | null; valueKind?: number; metadata: string[];
 }
 export interface AbcInstance {
   name: string; superName: string; interfaces: string[]; iinit: number; traits: AbcTrait[];
@@ -177,6 +178,24 @@ export function parseAbc(data: Uint8Array): AbcFile {
     nsSets.push(set);
   }
 
+  /**
+   * A constant from the pools by its `vkind` (AVM2 overview §4.5.1): Int 0x03, UInt
+   * 0x04, Double 0x06, Utf8 0x01, True 0x0B, False 0x0A, Null 0x0C, Undefined 0x00,
+   * and the namespace kinds, which carry a namespace index (read as its URI).
+   */
+  const defaultValue = (vkind: number, vindex: number): string | number | boolean | null | undefined => {
+    switch (vkind) {
+      case 0x01: return strings[vindex] ?? '';
+      case 0x03: return ints[vindex] ?? 0;
+      case 0x04: return uints[vindex] ?? 0;
+      case 0x06: return vindex === 0 ? NaN : doubles[vindex] ?? NaN;
+      case 0x0a: return false;
+      case 0x0b: return true;
+      case 0x0c: return null;
+      case 0x00: return undefined;
+      default: return namespaces[vindex]?.name ?? '';
+    }
+  };
   const multinames: AbcMultiname[] = [{ kind: '?', name: '' }];
   for (let i = 1, n = r.u30(); i < n; i++) {
     const kind = r.u8();
@@ -225,13 +244,7 @@ export function parseAbc(data: Uint8Array): AbcFile {
       for (let j = 0, c = r.u30(); j < c; j++) {
         const valueIndex = r.u30();
         const kind = r.u8();
-        const shape = VALUE_KIND[kind] ?? 'raw';
-        optional.push({
-          kind: shape,
-          value: shape === 'string' ? strings[valueIndex] ?? '' : shape === 'number'
-            ? (kind === 0x03 ? ints[valueIndex] ?? 0 : kind === 0x04 ? uints[valueIndex] ?? 0 : doubles[valueIndex] ?? 0)
-            : shape === 'bool' ? kind === 0x0b : shape === 'null' ? null : valueIndex,
-        });
+        optional.push({ kind: VALUE_KIND[kind] ?? (kind === 0x00 ? 'undefined' : 'namespace'), value: defaultValue(kind, valueIndex) ?? null });
       }
     }
     const paramNames: string[] = [];
@@ -270,14 +283,14 @@ export function parseAbc(data: Uint8Array): AbcFile {
       switch (kind) {
         case 0: case 6: {
           trait.slotId = r.u30();
-          trait.type = `${r.u30()}`;
+          // The declared type is a multiname (0 = `*`); it decides the slot's default
+          // when no value is given (Boolean false, Number NaN, int/uint 0, else null).
+          trait.type = multinameName({ multinames } as AbcFile, r.u30());
           const vindex = r.u30();
           if (vindex !== 0) {
             const vkind = r.u8();
-            const shape = VALUE_KIND[vkind] ?? 'raw';
-            trait.value = shape === 'string' ? strings[vindex] ?? ''
-              : shape === 'number' ? (vkind === 0x03 ? ints[vindex] ?? 0 : vkind === 0x04 ? uints[vindex] ?? 0 : doubles[vindex] ?? 0)
-                : shape === 'bool' ? vkind === 0x0b : shape === 'null' ? null : vindex;
+            trait.valueKind = vkind;
+            trait.value = defaultValue(vkind, vindex);
           }
           break;
         }
