@@ -119,7 +119,7 @@ byte. Nothing is silently dropped: a body either lifts or is refused.
   member, in `transpiler/avm2/__tests__` and `zz_proof`. The oracle is a check,
   never an input: it is not in the repo and nothing reads it at runtime.
 * **Specification**: the ABC layout and opcode table are taken from the AVM2
-  overview and cross-checked against Ruffle's reader (`swf/src/avm2/read.rs`,
+  overview, with Ruffle's reader studied as a reference only (`swf/src/avm2/read.rs`,
   `opcode.rs`) and verifier (`core/src/avm2/verify.rs`) — including the details
   that bite: branches are end-relative, `lookupswitch` targets start-relative,
   metadata is `key,value` pairs, a `trait`'s kind is `flags & 0xF`.

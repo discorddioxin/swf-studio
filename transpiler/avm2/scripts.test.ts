@@ -3,7 +3,7 @@
 //
 //  - `call` pops `…, function, receiver, args` — the receiver is the `this`;
 //  - `newclass` pops the base class, and a script init's own statements (statics a
-//    compiler set there, haXe's `Boot`) run once the program is linked;
+//    compiler set there) run once the program is linked;
 //  - a private/protected name is the class's own member even when a global is
 //    spelt the same (`getTimer`);
 //  - a superclass's static named bare is `Base.name`.

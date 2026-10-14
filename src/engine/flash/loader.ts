@@ -206,7 +206,7 @@ const SHARED_BUILTINS: { prototype: object }[] = [Object, Array, String, Number,
  * before its definitions are first touched; every module is linked eagerly here,
  * so after linking and before any movie code runs is that moment for all of them.
  *
- * A script init may install methods on a builtin's prototype (haXe's `Boot` adds
+ * A script init may install methods on a builtin's prototype (towns2 adds
  * `Array.prototype.copy` and wraps `String.prototype.charCodeAt`). New names are
  * kept, exactly as in AS3. A *native* method is put back: in AVM2 a builtin's
  * sealed methods are traits that typed code calls past the prototype — the

@@ -22,6 +22,7 @@
 
 import type { Expr, Stmt } from '../as2/ast';
 import { disassemble, type AbcFile, type AbcInstruction, type AbcMethodBody, type AbcTrait } from '../../decompiler/swf/abc';
+import { FLASH_DEFINITIONS } from '../../src/engine/flash/packages';
 
 export interface LiftDiagnostic { offset: number; message: string }
 
@@ -90,7 +91,7 @@ export class Refuse extends Error {
   constructor(readonly offset: number, message: string) { super(message); }
 }
 
-interface MnInfo { name: string; ns: string; nsKind?: string; dynamic: boolean; nsOnStack: boolean }
+interface MnInfo { name: string; ns: string; nsKind?: string; dynamic: boolean; nsOnStack: boolean; nsSet?: string[] }
 
 /** A conditional branch: the condition it jumps on, and the test for the arm that stays. */
 /** A loop being lifted: its head, its exit, and (bottom-tested loops) its test. */
@@ -218,9 +219,9 @@ export function liftMethod(ctx: MethodContext): LiftResult {
 
 /**
  * `label` (and `nop`) do nothing, so a branch onto one and a branch past it go to
- * the same place. haXe enters a bottom-tested loop past its `label` and jumps back
- * onto the `label` (`jump L+1; L: label; body; iftrue L`); taken literally that is
- * a loop with two entries. Each run of markers is absorbed into the instruction
+ * the same place. A bottom-tested loop may be entered just past its `label` while
+ * its latch jumps onto the `label` (`jump L+1; L: label; body; iftrue L`); taken
+ * literally that is a loop with two entries. Each run of markers is absorbed into the instruction
  * after it — which takes the run's offset — so every way of reaching it (a branch
  * to the marker, a branch past it, falling into it, a switch's end, a protected
  * range) names one offset. A `jump` to the instruction after it is a marker too.
@@ -303,6 +304,11 @@ class Lifter {
   private selfAlias: { name: string; used: boolean } | null = null;
   /** The catch variable of the handler being lifted, so `newcatch` names it. */
   private catchParam: string | null = null;
+  /**
+   * Catch scopes (`newcatch`) and the locals that hold one → the catch variable
+   * that is their only slot. Like an activation, the scope is no value of its own.
+   */
+  private catchScopes = new Map<string, string>();
   private catches = 0;
   /** The cursor register of the `hasnext2` this body's loop test uses. */
   private lastIterCursor: number | null = null;
@@ -317,7 +323,7 @@ class Lifter {
     for (let k = 0; k + 1 < instructions.length; k++) this.nextAt.set(instructions[k].offset, instructions[k + 1].offset);
     // `getscopeobject n` indexes the *local* scope stack of this frame (AVM2 overview,
     // `getscopeobject`: "the index of the scope object to retrieve from the local scope
-    // stack"; Ruffle `op_get_scope_object` reads `scope_frame[n]`). It starts empty in
+    // stack"). It starts empty in
     // every frame — a method's `getlocal0; pushscope` makes `this` index 0, and its
     // activation index 1. The closure's captured chain is the *outer* scope, reached by
     // name or `getouterscope`, never by these indices.
@@ -496,6 +502,7 @@ class Lifter {
       if (!block || !block.length) throw new Refuse(cur, 'jump leaves the method body');
       const last = block[block.length - 1];
       this.enterScopes(cur);
+      this.blockMark = { at: cur, out: this.out.length, stack: this.stack.length };
       this.pc = last.offset + last.size;
       for (const i of block) {
         if (i === last && (branch(i) || i.name === 'jump' || i.name === 'lookup_switch' || TERMINATORS.has(i.name))) continue;
@@ -537,6 +544,9 @@ class Lifter {
     this.scopeObjects = [...known.objects];
     this.withFlags = [...known.withFlags];
   }
+
+  /** Where the block being lifted started, and what it found: a pure condition block emits nothing. */
+  private blockMark: { at: number; out: number; stack: number } | null = null;
 
   /** Offsets on the path currently being lifted, so nothing re-enters itself. */
   private active = new Set<number>();
@@ -590,13 +600,17 @@ class Lifter {
           : { done: false, end: { kind: 'stop' }, next: fallThrough };
       }
       // while (cond) { body }
-      if (this.isWhileHead(last, target, fallThrough)) {
+      const head = this.whileHead(last, target, fallThrough);
+      if (head != null) {
         const cond = this.branchTest(last);
-        this.loops.push({ head: last.offset, exit: target });
+        this.loops.push({ head, exit: target });
         const arm = this.emitArm(fallThrough, target);
         this.loops.pop();
         if (arm.end.kind === 'jump') throw new Refuse(last.offset, 'loop body jumps past the loop');
-        if (arm.end.kind === 'backEdge' && arm.end.target !== last.offset) throw new Refuse(last.offset, 'loop body jumps to another loop head');
+        if (arm.end.kind === 'backEdge' && arm.end.target !== head) throw new Refuse(last.offset, 'loop body jumps to another loop head');
+        // The trip back to the head that ends the body is the loop itself.
+        const tail = arm.stmts[arm.stmts.length - 1];
+        if (tail?.k === 'continue' && !tail.label) arm.stmts.pop();
         this.out.push({ k: 'while', test: cond, body: block(arm.stmts) });
         return { done: false, end: { kind: 'stop' }, next: target };
       }
@@ -774,8 +788,7 @@ class Lifter {
 
   /**
    * `do { body } while (test)`: the head is reached by falling into it, and a
-   * conditional branch further down jumps back to it — the loop's latch. haXe
-   * compiles every `do … while` this way, and ASC does too. The test is the latch's
+   * conditional branch further down jumps back to it — the loop's latch. The test is the latch's
    * own block (folded with the blocks a compound condition spans); a jump there
    * from the body is `continue`, which in a `do` evaluates the test, exactly as the
    * bytecode does. Speculative: anything else is rolled back.
@@ -1188,15 +1201,17 @@ class Lifter {
     else throw new Refuse(ex.from, 'a protected region leaves through a loop edge');
 
     this.stack = [...base];
-    // A handler is entered with the scope stack emptied (AVM2 overview §3.3.1, the
-    // exception handler; Ruffle `handle_err` calls `clear_scope` before jumping there):
-    // its code pushes `this`, the activation and the catch scope again, so its
-    // `getscopeobject` indices count from zero.
+    // A handler is entered with the scope stack emptied (AVM2 overview, exception
+    // handling): its code pushes `this`, the activation and the catch scope again,
+    // so its `getscopeobject` indices count from zero.
     this.scopeObjects = [];
     this.withFlags = [];
     this.recordScopes(ex.target, [], []);
     const param = `__caught${this.catches++}`;
     this.catchParam = param;
+    // …and with the operand stack cleared but for the thrown value (same section),
+    // which the handler stores, coerces or drops.
+    this.stack = [{ e: id(param) }];
     // The two paths usually merge on the same instruction, but the compiler's scope
     // cleanup (`popscope; kill`) can sit between the handler's jump and the try
     // body's: the handler arm runs through it, so the region after the try starts at
@@ -1244,7 +1259,7 @@ class Lifter {
     const cases = all.slice(0, count);
     const fallback = i.target ?? all[all.length - 1];
     if (!cases.length || fallback == null) throw new Refuse(i.offset, 'a switch table with nothing to dispatch to');
-    const merge = i.offset + i.size;
+    const merge = this.switchMerge(i, [...cases, fallback]);
     const structured = this.tryStructuredSwitch(i, cases, fallback, merge);
     if (structured) return structured;
     const index = this.pop();
@@ -1300,6 +1315,27 @@ class Lifter {
     this.out.push({ k: 'switch', disc: index.e, cases: clauses.map((c) => ({ test: c.test, body: c.body })) });
     this.stack = pushed ? [...base, { e: pushed }] : [...base];
     return { done: false, end: { kind: 'stop' }, next: merge };
+  }
+
+  /**
+   * Where a switch's cases meet. ASC dispatches at the end (`jump DISPATCH; cases;
+   * DISPATCH: lookupswitch`), so the cases jump to the instruction after the table.
+   * A table that dispatches first has its cases after it, and they jump past the
+   * last one: the merge is the one place every jumping case body goes beyond
+   * all the case starts.
+   */
+  private switchMerge(i: AbcInstruction, targets: number[]): number {
+    const after = i.offset + i.size;
+    const hi = Math.max(...targets);
+    const lo = Math.min(...targets);
+    if (lo < after) return after;
+    const outs = new Set<number>();
+    for (const [at, block] of this.blocks) {
+      const last = block.at(-1);
+      if (at < lo || at > hi || last?.name !== 'jump') continue;
+      if ((last.target as number) > hi) outs.add(last.target as number);
+    }
+    return outs.size === 1 ? [...outs][0] : after;
   }
 
   /**
@@ -1451,10 +1487,19 @@ class Lifter {
     this.out.push({ k: 'if', test: cond, then: { k: kind, label: null }, else: null });
   }
 
-  /** `while (cond) { … }`: the branch leaves the loop forward and the body heads back to it. */
-  private isWhileHead(last: AbcInstruction, target: number, fallThrough: number): boolean {
-    if (target <= last.offset) return false;
-    return this.reachesBackTo(fallThrough, last.offset, target);
+  /**
+   * `while (cond) { … }`: the branch leaves the loop forward and the body heads back
+   * to it — to the branch itself, or (`L: label; <cond>; iffalse END; body;
+   * jump L`) to the start of a block that computes nothing but the condition, which
+   * then runs again on every trip. The head is where the body goes back to.
+   */
+  private whileHead(last: AbcInstruction, target: number, fallThrough: number): number | null {
+    if (target <= last.offset) return null;
+    if (this.reachesBackTo(fallThrough, last.offset, target)) return last.offset;
+    const mark = this.blockMark;
+    if (!mark || mark.at >= last.offset || mark.stack !== 0 || this.out.length !== mark.out) return null;
+    if (this.loops.some((f) => f.head === mark.at)) return null;
+    return this.reachesBackTo(fallThrough, mark.at, target) ? mark.at : null;
   }
 
   /** Does the region [from, stop) reach `head`? */
@@ -1623,6 +1668,8 @@ class Lifter {
         }
         const variable = this.activationVar(recv.e, o[0]);
         if (variable) { this.push(id(variable)); return; }
+        const caught = recv.e.k === 'id' && o[0] === 1 ? this.catchScopes.get(recv.e.name) : undefined;
+        if (caught) { this.push(id(caught)); return; }
         this.push(this.memberOfValue(recv, { name: this.slotProp(o[0], recv.e) }));
         return;
       }
@@ -1631,9 +1678,10 @@ class Lifter {
         const recv = this.stack.length ? this.pop() : this.scopeValue();
         // The compiler keeps the stored value on the stack; copies must not re-run it.
         this.holdCopies(value.e);
-        const variable = this.activationVar(recv.e, o[0]);
+        const variable = this.activationVar(recv.e, o[0]) ?? (recv.e.k === 'id' && o[0] === 1 ? this.catchScopes.get(recv.e.name) : undefined);
         if (variable) {
-          // ASC copies each captured parameter into its slot: `x = x` says nothing.
+          // ASC copies each captured parameter into its slot, and the thrown value
+          // into the catch scope's: `x = x` says nothing.
           if (!isId(value.e, variable)) this.assign(id(variable), value.e);
           return;
         }
@@ -1927,8 +1975,7 @@ class Lifter {
         const names = parameterNames(method);
         const params = Array.from({ length: paramCount }, (_, k) => names[k] ?? `param${k + 1}`);
         // `newfunction` takes nothing off the operand stack: the closure captures the
-        // *scope chain* (AVM2 overview, `newfunction`: "… => …, function_obj"; Ruffle
-        // `op_new_function` only pushes).
+        // *scope chain* (AVM2 overview, `newfunction`: "… => …, function_obj").
         this.push({ k: 'func', name: null, params: params.map((name) => ({ name, type: null, rest: false })), ret: null, body: result.stmts });
         return;
       }
@@ -1936,7 +1983,9 @@ class Lifter {
         // The catch object: its slot 1 is the exception itself (the compiler stores
         // it in a local too). The lifted `catch` binding is that payload.
         if (!this.catchParam) throw new Refuse(i.offset, 'newcatch outside a lifted try/catch is not supported');
-        this.push({ k: 'id', name: this.catchParam, line: 0 });
+        const scope = `${this.catchParam}$scope`;
+        this.catchScopes.set(scope, this.catchParam);
+        this.push(id(scope));
         return;
       }
       case 'li8': case 'li16': case 'li32': case 'lf32': case 'lf64':
@@ -2014,6 +2063,14 @@ class Lifter {
   private storeLocal(index: number) {
     const v = this.pop();
     const name = (this.local(index) as { name: string }).name;
+    const caught = v.e.k === 'id' ? this.catchScopes.get(v.e.name) : undefined;
+    if (caught) {
+      // A local holding the catch scope is that scope, under another name.
+      this.catchScopes.set(name, caught);
+      this.usedLocals.delete(index);
+      for (let k = 0; k < this.stack.length; k++) if (this.stack[k].e === v.e) this.stack[k] = { e: id(name) };
+      return;
+    }
     if (v.e.k === 'id' && this.activationNames.has(v.e.name)) {
       // The register only ever holds the activation: it is an alias, not a value.
       this.activationNames.add(name);
@@ -2092,7 +2149,7 @@ class Lifter {
     if (!m) throw new Refuse(this.pc, `multiname ${index} is out of range`);
     const dynamic = m.kind === 'MultinameL' || m.kind === 'MultinameLA' || m.kind === 'RTQNameL' || m.kind === 'RTQNameLA';
     const nsOnStack = m.kind === 'RTQName' || m.kind === 'RTQNameA';
-    return { name: m.name || `__mn${index}`, ns: m.ns ?? '', nsKind: m.nsKind, dynamic, nsOnStack };
+    return { name: m.name || `__mn${index}`, ns: m.ns ?? '', nsKind: m.nsKind, dynamic, nsOnStack, nsSet: m.nsSet };
   }
   /**
    * Pop a member access in AVM2 order: the property operand (a runtime name, or a
@@ -2315,6 +2372,19 @@ class Lifter {
     return null;
   }
 
+  /**
+   * A name looked up through a namespace *set* (`findpropstrict` with a Multiname)
+   * is searched along the scope chain: the instance first, then the global scope,
+   * where a package-level definition in one of the set's namespaces is found
+   * (AVM2 overview, `findpropstrict` and multiname resolution). Unless the class
+   * declares the name itself, a player class such as `flash.media.SoundTransform`
+   * in one of those packages is the global, not a member of `this`.
+   */
+  private playerDefinitionInSet(m: MnInfo): boolean {
+    if (!m.nsSet?.length || this.ctx.memberNames?.has(m.name) || this.knownLocal(m.name)) return false;
+    return m.nsSet.some((ns) => !!ns && FLASH_DEFINITIONS.has(`${ns}.${m.name}`));
+  }
+
   /** A private/protected multiname for a member this class declares. */
   private classPrivate(name: string, nsKind?: string): boolean {
     if (nsKind !== 'private' && nsKind !== 'protected' && nsKind !== 'staticProtected') return false;
@@ -2347,7 +2417,8 @@ class Lifter {
     }
     // A private/protected name is the class's own however a global would be spelt
     // (SushiAPI's private `getTimer()` is no flash.utils.getTimer).
-    const global = (GLOBALS.has(name) || !!this.ctx.globals?.has(name)) && !this.classPrivate(name, m.nsKind);
+    const global = ((GLOBALS.has(name) || !!this.ctx.globals?.has(name)) && !this.classPrivate(name, m.nsKind)) ||
+      this.playerDefinitionInSet(m);
     if ((ownNamespace || declared === 'instance') && this.selfTarget() === 'instance' && !global && !this.knownLocal(name)) {
       const owner = this.selfRef();
       return { e: owner, find: name, owner };
@@ -2442,7 +2513,13 @@ class Lifter {
 
   private local(index: number): Expr {
     const known = this.locals.get(index);
-    if (known) return { k: 'id', name: known, line: 0 };
+    if (known) {
+      // Every use of a plain register asks for its declaration again: a register that
+      // once only aliased the activation or a catch scope (which needs none) may be
+      // reused later for an ordinary value.
+      if (known === `local${index}` && index !== this.ctx.captureLocal && !this.extraArgName(index)) this.usedLocals.add(index);
+      return { k: 'id', name: known, line: 0 };
+    }
     // A closure's own register for the variable it was created for: the compiler
     // hands the closure its enclosing register, and this name is what the frame
     // that created it writes into its activation object.

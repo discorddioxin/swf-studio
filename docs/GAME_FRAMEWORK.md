@@ -11,7 +11,7 @@ A SWF can be transcribed two ways, and both are wanted:
 | What it is | the movie, as written | the game, restructured |
 | Where it lives | `transpiler/` → `src/engine/flash/*` | `src/game-framework/*` |
 | Vocabulary | `MovieClip`, `gotoAndPlay`, `addEventListener('enterFrame')`, timelines, `_root` | actors, materials, behaviours, signals, systems |
-| Why | fidelity: it *is* the Flash semantics, so behaviour is preserved exactly and can be diffed against Ruffle | ownership: one place per concern, no display list, no frame scripts, no globals |
+| Why | fidelity: it *is* the Flash semantics, so behaviour is preserved exactly as the specifications define it | ownership: one place per concern, no display list, no frame scripts, no globals |
 | Use | running a shipped SWF | porting a game, extending it, testing it without a timeline |
 
 Tier 1 already works: pinball (435 classes) and tiles (35) boot through `FlashPlayer`

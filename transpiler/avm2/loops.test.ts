@@ -1,5 +1,5 @@
 // Bottom-tested loops and stack copies of locals, on hand-assembled ABC in the
-// layouts haXe and ASC emit, checked by running the linked program.
+// layouts compilers emit, checked by running the linked program.
 //
 //   do { body } while (n-- > 0)   jump L+1; L: label; body; getlocal n; declocal n; pushbyte 0; ifgt L
 //   while (n-- > 0) {}            jump T; L: label; T: <the same test>; ifgt L

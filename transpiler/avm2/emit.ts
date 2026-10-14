@@ -567,7 +567,8 @@ function literalOf(value: string | number | boolean | null | undefined): string 
 /**
  * The value a slot starts with: the trait's own constant when it has one, else the
  * default of its declared type — Boolean false, Number NaN, int/uint 0, `*`
- * undefined, anything else null (Ruffle `default_value_for_type`).
+ * undefined, anything else null (AVM2 overview, traits: a slot without a value
+ * holds its type's default).
  */
 function slotDefault(trait: AbcTrait): string {
   if (trait.valueKind != null) return literalOf(trait.value);
