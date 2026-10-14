@@ -31,11 +31,16 @@ describe.skipIf(!available)('AVM2 movie → running program', () => {
    * Every AS3 movie in the uploaded corpus, with the numbers this pipeline is
    * allowed to have: refusals may fall, never rise; the linked program must carry
    * the classes and have no errors at all.
+   *
+   * The pinball/towns2 refusal counts moved *up* when the lifter stopped dropping
+   * the tail of a body that opens with a jump: those bodies now lift the rest of
+   * their code, and where that code is still unsupported they refuse (`for-in`,
+   * `switch`, mixed-value joins) instead of silently running half a method.
    */
   const MOVIES = [
-    { name: 'pinball', file: 'pinball-swfs/game.swf', refusals: 194, classes: 435 },
+    { name: 'pinball', file: 'pinball-swfs/game.swf', refusals: 235, classes: 435 },
     { name: 'tiles', file: 'tiles-swfs/assets.swf', refusals: 0, classes: 35 },
-    { name: 'towns2', file: 'towns2-swfs/towns2.swf', refusals: 180, classes: 762 },
+    { name: 'towns2', file: 'towns2-swfs/towns2.swf', refusals: 397, classes: 762 },
   ];
 
   for (const movie of MOVIES) {

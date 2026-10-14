@@ -172,7 +172,16 @@ class Lifter {
   }
 
   run(): Stmt[] {
-    this.emitRegion(0, null);
+    // A body that opens with a jump (every `for` / pre-tested `while` does: the
+    // compiler jumps to the test first) still has code after the jump. The region
+    // ends there, so follow it — never leave the rest of the body on the floor.
+    let at: number | undefined = 0;
+    const seen = new Set<number>();
+    while (at != null && !seen.has(at)) {
+      seen.add(at);
+      const end = this.emitRegion(at, null);
+      at = end.kind === 'jump' ? end.target : undefined;
+    }
     // AS3 locals have no declarations in the bytecode; TypeScript needs them, and a
     // local may be first assigned inside a branch that the emitted code then reads.
     const decls: Stmt[] = [...this.usedLocals]
@@ -250,9 +259,13 @@ class Lifter {
       this.step(last);
       return { done: true, end: { kind: 'end' }, next: null };
     }
-    if (last.name === 'jump' || last.name === 'lookup_switch') {
+    if (last.name === 'lookup_switch') {
+      // Emitting nothing here silently drops the body; the table is a `switch`.
+      throw new Refuse(last.offset, 'lookup_switch (a `switch` statement) is not lifted yet');
+    }
+    if (last.name === 'jump') {
       const target = last.target as number;
-      if (last.name === 'jump') {
+      {
         // a `continue` from inside the loop's body: the branch to the test is the edge
         const frame = this.loops[this.loops.length - 1];
         if (frame && frame.test === target) {
