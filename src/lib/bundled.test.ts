@@ -1,14 +1,13 @@
 // @vitest-environment jsdom
 // Bundled game sets: the public index (manifest.json) → one JSON per game →
-// the .swf files of that game, each parsed and completed with its committed
-// fonts / readable script overrides. The shipped data is the fixture and the
+// the .swf files of that game, each parsed into everything it carries (scripts,
+// shapes, bitmaps, fonts, sounds). The shipped data is the fixture and the
 // subject: nothing here knows a game's name.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { bundledFilePath, fetchBundledManifest, fetchBundledSwf, fetchGameIndex } from './bundled';
+import { fetchBundledManifest, fetchBundledSwf, fetchGameIndex } from './bundled';
 import { ingestFiles } from './assets';
-import { readAS2Text } from '../engine/as2/useAS2Build';
 import { BUNDLED_DIR, bundledSet, bundledSwfNames } from './__tests__/bundledSet';
 
 const ROOT = BUNDLED_DIR;
@@ -41,13 +40,7 @@ describe('bundled game sets', () => {
     for (const entry of set!.swfs) expect(entry.path.split('/').pop()).toBe(`${entry.name}.swf`);
   });
 
-  it('normalises extra-file paths from the manifest (fileBase or /<name>/)', () => {
-    expect(bundledFilePath({ name: 'chat', path: 'x/chat.swf', fileBase: 'x/ext/chat' }, 'x/ext/chat/fonts/f.ttf')).toBe('fonts/f.ttf');
-    expect(bundledFilePath({ name: 'chat', path: 'x/chat.swf' }, 'x/external/chat/fonts/f.ttf')).toBe('fonts/f.ttf');
-    expect(bundledFilePath({ name: 'chat', path: 'x/chat.swf' }, 'elsewhere/f.ttf')).toBe('f.ttf');
-  });
-
-  it('parses every SWF of the set, ingests it, and completes fonts + script overrides', async () => {
+  it('parses every SWF of the set into its scripts, fonts and sounds, and ingests it', async () => {
     const entries = await fetchBundledManifest();
     expect(entries.length).toBe(bundledSwfNames().length);
 
@@ -56,18 +49,11 @@ describe('bundled game sets', () => {
       expect(doc.header.fileName, `${entry.name} fileName`).toBe(`${entry.name}.swf`);
       expect(doc.timelines.size, `${entry.name} timelines`).toBeGreaterThan(0);
 
-      // committed ttf fonts land in the package under the path the manifest implies
-      for (const fontPath of entry.fonts ?? []) {
-        const relative = `${entry.name}/${bundledFilePath(entry, fontPath)}`;
-        expect(files.some((f) => f.webkitRelativePath === relative), `${entry.name}: ${relative}`).toBe(true);
-      }
-      // readable script overrides replace the synthetic bytecode source verbatim
-      for (const override of entry.scriptOverrides ?? []) {
-        const target = override.target.replace(/\\/g, '/');
-        const file = files.find((f) => f.webkitRelativePath === `${entry.name}/${target}`);
-        expect(file, `${entry.name} carries ${target}`).toBeTruthy();
-        expect(await readAS2Text(file!), `${entry.name} ${target} content`).toBe(readFileSync(resolve(ROOT, override.path), 'utf8'));
-      }
+      // every embedded font and sound comes out of the SWF itself
+      const fonts = [...doc.characters.values()].filter((c) => c.kind === 'font' && c.font);
+      for (const c of fonts) expect(files.some((f) => f.webkitRelativePath === `${entry.name}/fonts/${c.id}.ttf`), `${entry.name} font ${c.id}`).toBe(true);
+      const sounds = [...doc.characters.values()].filter((c) => c.kind === 'sound');
+      for (const c of sounds) expect(files.some((f) => new RegExp(`^${entry.name.replace(/\./g, '\\.')}/sounds/${c.id}\\.(mp3|wav)$`).test(f.webkitRelativePath)), `${entry.name} sound ${c.id}`).toBe(true);
 
       const bundle = ingestFiles(files);
       // asset categories survive the synthetic-File bridge

@@ -3,8 +3,11 @@
 // The public root holds an index (`manifest.json`) listing *game sets* — one
 // JSON file per bundled game under `games/`, each naming the .swf files that
 // belong to it and (optionally) the adapter that knows how to run it offline
-// (see src/adapters). Keeping the sets apart is what stops one game's SWFs,
-// fonts and script overrides leaking into an unrelated game's session.
+// (see src/adapters). Keeping the sets apart is what stops one game's SWFs
+// leaking into an unrelated game's session.
+//
+// A set names SWFs and nothing else: fonts, sounds, bitmaps and scripts all come
+// out of the SWFs themselves (see swf/binary), exactly as for an upload.
 //
 // Everything is fetched relative to the page so it works behind any dev-server
 // or preview origin without hard-coded hosts.
@@ -17,16 +20,6 @@ export interface BundledSwf {
   name: string;
   /** path relative to the public root, e.g. "mygame/swfs/overview.swf" */
   path: string;
-  /**
-   * Sub-folder inside the set that this entry's extra files (fonts) are
-   * relative to, e.g. "mygame/external/chat". Paths already containing
-   * `/<name>/` are normalised to it without this field.
-   */
-  fileBase?: string;
-  /** committed FFDec font exports (ttf cannot be synthesized from binary) */
-  fonts?: string[];
-  /** Optional source files which replace the matching synthetic AVM1 script. */
-  scriptOverrides?: { path: string; target: string }[];
 }
 
 /** One bundled game: the SWFs that make it up plus how to run it offline. */
@@ -54,19 +47,9 @@ function parseSwfEntries(list: unknown[]): BundledSwf[] {
       const obj = raw as Record<string, unknown>;
       const rawPath = (raw as { path: string }).path;
       const base = rawPath.split('/').pop() ?? rawPath;
-      const fonts = Array.isArray(obj.fonts) ? obj.fonts.filter((f: unknown): f is string => typeof f === 'string') : undefined;
-      const scriptOverrides = Array.isArray(obj.scriptOverrides)
-        ? obj.scriptOverrides.filter((override: unknown): override is { path: string; target: string } =>
-            !!override && typeof override === 'object'
-            && typeof (override as { path?: unknown }).path === 'string'
-            && typeof (override as { target?: unknown }).target === 'string')
-        : undefined;
       out.push({
         name: typeof obj.name === 'string' && obj.name ? obj.name : base.replace(/\.swf$/i, ''),
         path: rawPath,
-        ...(typeof obj.fileBase === 'string' && obj.fileBase ? { fileBase: obj.fileBase } : {}),
-        ...(fonts?.length ? { fonts } : {}),
-        ...(scriptOverrides?.length ? { scriptOverrides } : {}),
       });
     }
   }
@@ -160,20 +143,6 @@ export function swfFilesToFiles(files: SwfFile[], prefix: string): File[] {
   });
 }
 
-/**
- * Where inside the package an entry's extra file lives: the manifest's
- * `fileBase` when declared, otherwise the path after `…/<name>/`, otherwise the
- * bare file name. No game-specific path needs to be known.
- */
-export function bundledFilePath(entry: BundledSwf, fullPath: string): string {
-  const base = entry.fileBase?.replace(/\/+$/, '');
-  if (base && fullPath.startsWith(`${base}/`)) return fullPath.slice(base.length + 1);
-  const marker = `/${entry.name}/`;
-  const index = fullPath.indexOf(marker);
-  if (index >= 0) return fullPath.slice(index + marker.length);
-  return fullPath.split('/').pop() ?? fullPath;
-}
-
 /** Fetch one bundled .swf and parse it with the binary SWF parser. */
 export async function fetchBundledSwf(
   entry: BundledSwf,
@@ -186,43 +155,5 @@ export async function fetchBundledSwf(
   onProgress?.(`Parsing bundled ${entry.name}.swf…`);
   const fileName = entry.path.split('/').pop() ?? `${entry.name}.swf`;
   const { doc, files } = await parseSwfBinary(buffer, fileName);
-  const asFiles = swfFilesToFiles(files, entry.name);
-  for (const override of entry.scriptOverrides ?? []) {
-    try {
-      const source = await fetch(override.path);
-      if (!source.ok) throw new Error(`${override.path}: HTTP ${source.status}`);
-      const sourceText = await source.text();
-      const relativePath = `${entry.name}/${override.target.replace(/\\/g, '/').replace(/^\/+/, '')}`;
-      const index = asFiles.findIndex((file) => (file as File & { webkitRelativePath?: string }).webkitRelativePath === relativePath);
-      if (index < 0) {
-        console.warn(`bundled script override target not found: ${relativePath}`);
-        continue;
-      }
-      const replacement = new File([sourceText], override.target.split(/[\\/]/).pop() ?? 'DoAction.as', { type: 'text/plain' });
-      Object.defineProperty(replacement, 'webkitRelativePath', { value: relativePath, configurable: true });
-      const original = asFiles[index] as File & { __swfTagOrder?: number; __swfTargetSpriteId?: number };
-      if (original.__swfTagOrder != null) Object.defineProperty(replacement, '__swfTagOrder', { value: original.__swfTagOrder, configurable: true });
-      if (original.__swfTargetSpriteId != null) Object.defineProperty(replacement, '__swfTargetSpriteId', { value: original.__swfTargetSpriteId, configurable: true });
-      asFiles[index] = replacement;
-    } catch (e) {
-      console.warn(`bundled script override unavailable (${override.path}):`, e);
-    }
-  }
-  // ttf fonts from the committed FFDec export
-  for (const fontPath of entry.fonts ?? []) {
-    try {
-      const res = await fetch(fontPath);
-      if (!res.ok) continue;
-      const copy = new Uint8Array(await res.arrayBuffer());
-      const file = new File([copy.buffer as ArrayBuffer], fontPath.split('/').pop() ?? 'font.ttf');
-      Object.defineProperty(file, 'webkitRelativePath', {
-        value: `${entry.name}/${bundledFilePath(entry, fontPath)}`,
-        configurable: true,
-      });
-      asFiles.push(file);
-    } catch (e) {
-      console.warn(`bundled font ${fontPath} unavailable:`, e);
-    }
-  }
-  return { doc, files: asFiles };
+  return { doc, files: swfFilesToFiles(files, entry.name) };
 }

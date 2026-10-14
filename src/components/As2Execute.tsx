@@ -17,6 +17,8 @@ import { createExternalResolver, swfNameOf, type ExternalSwf } from '../engine/a
 import { readAS2Text, useAS2Build } from '../engine/as2/useAS2Build';
 import { buildWorkbenchTimelineMetadata } from '../engine/as2/workbenchMetadata';
 import { _global as as2Global } from '../runtime/as2';
+import { MissingDependenciesBanner, MissingDependenciesPanel, dependencyProblems, useMissingDependencies } from './MissingDependencies';
+import type { DependencyFiles } from '../engine/flash/dependencies';
 import { AS2AudioBackend, embeddedFontFamily, registerFonts, soundFilesOf } from '../engine/as2/audio';
 import { GAME_ADAPTERS, resolveAdapter, type AdapterSwf, type GameAdapter, type GameContext } from '../adapters';
 import { useDebugger, useDebuggerState } from '../debug/store';
@@ -61,8 +63,10 @@ export const isAs2Bundle = (doc: SwfDocument, assets: AssetBundle | null) =>
 /** An external SWF export with its key (used for its fonts). */
 interface ExternalEntry { pkg: SwfPackage; name: string; key: string }
 
-export function As2Execute({ doc, cache, assets, project, externals = [], adapterId = null, gameSetId = null, onAdapterChange }: {
+export function As2Execute({ doc, cache, assets, project, externals = [], adapterId = null, gameSetId = null, onAdapterChange, dependencyFiles = null }: {
   doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
+  /** non-SWF files uploaded with the movies, which they may request at run time */
+  dependencyFiles?: DependencyFiles | null;
   /** adapter id picked by the user ("auto"/null = detect from the loaded SWFs) */
   adapterId?: string | null;
   /** bundled game set this load came from, if any (supplies the adapter hint) */
@@ -91,7 +95,8 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
   const [showDebugger, setShowDebugger] = useState(false);
   const [hud, setHud] = useState({ frame: 1, total: 1, label: null as string | null, time: 0 });
   const [tree, setTree] = useState<string[]>([]);
-  const [missing, setMissing] = useState<string[]>([]);
+  const dependencies = useMissingDependencies(useCallback(() => playerRef.current?.dependencies, []));
+  const missingFiles = dependencies.filter((d) => !d.service && !d.optional);
   const [size, setSize] = useState({ w: 800, h: 500 });
   const [boot, setBoot] = useState<string>(() => { try { return localStorage.getItem(BOOT_KEY) ?? ''; } catch { return ''; } });
   const [fontIds, setFontIds] = useState<Set<number>>(new Set());
@@ -292,6 +297,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
       fontFamily,
       resolveExternal,
       missingExternal: 'empty',
+      dependencyFiles,
       onLog: (entry) => {
         pendingLogs.current.push(entry);
         if (entry.level === 'error') console.error('[game]', entry.message, entry.detail ?? '');
@@ -332,7 +338,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
       if (playerRef.current === player) playerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, cache, build, session, fontFamily, extEntries]);
+  }, [doc, cache, build, session, fontFamily, extEntries, dependencyFiles]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.muted = muted;
@@ -408,7 +414,6 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
               }
             } catch {}
             if (panelRef.current === 'program') setTree(player.tree());
-            setMissing((m) => (m.length === player.missingExternals.size ? m : [...player.missingExternals]));
             if (pendingLogs.current.length) {
               const batch = pendingLogs.current;
               pendingLogs.current = [];
@@ -514,10 +519,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
       context: issue.file, message: `${issue.file}: ${issue.message}`, time: 0,
     })),
     ...AVM1_SUMMARY(build.build.warnings),
-    ...missing.map((path) => ({
-      level: 'warn' as const, kind: 'problem' as const, source: 'forge' as const,
-      context: 'external SWF', message: `Missing bundled external SWF: ${path}`, time: 0,
-    })),
+    ...dependencyProblems(dependencies),
   ] : [];
   const consoleEntries = [...forgeProblems, ...logs];
   const errorCount = consoleEntries.filter((entry) => entry.level === 'error').length;
@@ -588,7 +590,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
             🔎 Troubleshoot
           </Button>
           <Button variant={panel === 'program' ? 'primary' : 'ghost'} onClick={() => setPanel((p) => (p === 'program' ? null : 'program'))}>
-            Program{missing.length || b?.errors.length ? ' ⚠' : ''}
+            Program{missingFiles.length || b?.errors.length ? ' ⚠' : ''}
           </Button>
           <Button variant={panel === 'console' ? 'primary' : 'ghost'} onClick={() => setPanel((p) => (p === 'console' ? null : 'console'))}>
             Console{errorCount ? ` (${errorCount} ⚠)` : ''}
@@ -621,12 +623,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
         </div>
       )}
 
-      {missing.length > 0 && (
-        <div className="shrink-0 border-b border-amber-900/60 bg-amber-950/40 px-3 py-1.5 text-[11px] text-amber-200">
-          The game loads {missing.length} external SWF{missing.length > 1 ? 's' : ''} that {missing.length > 1 ? 'are' : 'is'} not in the loaded folder
-          ({missing.slice(0, 4).map((m) => m.split('/').pop()).join(', ')}{missing.length > 4 ? ', …' : ''}). Those parts stay empty. See Program for details.
-        </div>
-      )}
+      <MissingDependenciesBanner list={dependencies} />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
       <div ref={wrapRef} className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -713,7 +710,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
               </div>
               <div>
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">External SWFs</div>
-                {extEntries.length === 0 && <div className="mb-2 text-zinc-500">Only the main movie is loaded. Put the FFDec export of every SWF the game loads in the same folder (one sub-folder each).</div>}
+                {extEntries.length === 0 && <div className="mb-2 text-zinc-500">Only the main movie is loaded. Upload every SWF the game loads together with it.</div>}
                 {extEntries.map((e) => {
                   const l = loadedExternals.find((x) => x.name === e.name);
                   return (
@@ -723,14 +720,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
                     </div>
                   );
                 })}
-                <div className="mt-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Missing external SWFs</div>
-                {missing.length === 0 && <div className="text-zinc-500">None requested so far.</div>}
-                {missing.map((m) => <div key={m} className="font-mono text-[10px] text-amber-300">{m}</div>)}
-                {missing.length > 0 && (
-                  <div className="mt-1 text-[10px] text-zinc-500">
-                    These are loaded at runtime by loadMovie / MovieClipLoader. Export each with FFDec and add it to play those parts.
-                  </div>
-                )}
+                <div className="mt-3"><MissingDependenciesPanel list={dependencies} /></div>
                 <div className="mt-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Generated TypeScript</div>
                 <select
                   aria-label="Generated module"

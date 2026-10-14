@@ -1,6 +1,6 @@
 // flash.text: TextField (dynamic + input), TextFormat and the enums.
 
-import { Event } from './events';
+import { Event, EventDispatcher } from './events';
 import { Rectangle } from './geom';
 import { characterBounds, host, InteractiveObject, registerTextField } from './display';
 
@@ -16,6 +16,74 @@ export class TextFormat {
     this.font = font; this.size = size; this.color = color; this.bold = bold; this.italic = italic; this.underline = underline;
     this.url = url; this.target = target; this.align = align; this.leftMargin = leftMargin; this.rightMargin = rightMargin;
     this.indent = indent; this.leading = leading;
+  }
+}
+
+/**
+ * flash.text.StyleSheet: CSS for `htmlText`. `parseCSS` reads `selector { prop: value }`
+ * rules; property names become camelCase (`font-size` → `fontSize`) and selector
+ * names are case-insensitive, as in Flash Player. `transform` turns a style object
+ * into the TextFormat it stands for.
+ */
+export class StyleSheet extends EventDispatcher {
+  private _styles = new Map<string, Record<string, string>>();
+
+  get styleNames(): string[] { return [...this._styles.keys()]; }
+
+  clear(): void { this._styles.clear(); }
+
+  getStyle(styleName: string): Record<string, string> {
+    // Flash returns a copy; an unknown name gives an empty object, never null.
+    return { ...(this._styles.get(String(styleName).toLowerCase()) ?? {}) };
+  }
+
+  setStyle(styleName: string, styleObject: Record<string, unknown> | null): void {
+    const key = String(styleName).toLowerCase();
+    if (styleObject == null) { this._styles.delete(key); return; }
+    const style: Record<string, string> = {};
+    for (const [name, value] of Object.entries(styleObject)) style[name] = String(value);
+    this._styles.set(key, style);
+  }
+
+  parseCSS(cssText: string): void {
+    const text = String(cssText ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const rule of text.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const declarations: Record<string, string> = {};
+      for (const part of rule[2].split(';')) {
+        const colon = part.indexOf(':');
+        if (colon < 0) continue;
+        const name = part.slice(0, colon).trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+        const value = part.slice(colon + 1).trim().replace(/^(["'])(.*)\1$/, '$2');
+        if (name) declarations[name] = value;
+      }
+      for (const selector of rule[1].split(',')) {
+        const key = selector.trim().toLowerCase();
+        if (!key) continue;
+        this._styles.set(key, { ...(this._styles.get(key) ?? {}), ...declarations });
+      }
+    }
+  }
+
+  transform(formatObject: Record<string, unknown> | null): TextFormat | null {
+    if (!formatObject) return null;
+    const f = new TextFormat();
+    const get = (name: string) => (formatObject[name] == null ? undefined : String(formatObject[name]));
+    const px = (value: string | undefined) => (value === undefined ? null : parseFloat(value));
+    const color = get('color');
+    if (color !== undefined) f.color = parseInt(color.replace(/^#/, ''), 16);
+    if (get('fontFamily') !== undefined) f.font = get('fontFamily')!.split(',')[0].trim();
+    if (get('fontSize') !== undefined) f.size = px(get('fontSize'));
+    if (get('fontWeight') !== undefined) f.bold = get('fontWeight') === 'bold';
+    if (get('fontStyle') !== undefined) f.italic = get('fontStyle') === 'italic';
+    if (get('textDecoration') !== undefined) f.underline = get('textDecoration') === 'underline';
+    if (get('textAlign') !== undefined) f.align = get('textAlign')!;
+    if (get('marginLeft') !== undefined) f.leftMargin = px(get('marginLeft'));
+    if (get('marginRight') !== undefined) f.rightMargin = px(get('marginRight'));
+    if (get('textIndent') !== undefined) f.indent = px(get('textIndent'));
+    if (get('leading') !== undefined) f.leading = px(get('leading'));
+    if (get('letterSpacing') !== undefined) f.letterSpacing = px(get('letterSpacing'));
+    if (get('kerning') !== undefined) f.kerning = get('kerning') === 'true';
+    return f;
   }
 }
 

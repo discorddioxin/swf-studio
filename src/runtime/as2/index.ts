@@ -535,7 +535,44 @@ export class TextField {
   }
   static _clearConstructStack() { this._constructStack.length = 0; }
   constructor() { const c = TextField.__construct; TextField.__construct = null; c?.(this); }
+  /** `TextField.StyleSheet` (Flash Player 7): CSS rules by selector. */
+  static StyleSheet: typeof TextFieldStyleSheet;
 }
+/** TextField.StyleSheet: parseCSS / getStyle / setStyle; `load` is installed by the player. */
+export class TextFieldStyleSheet {
+  [key: string]: any;
+  private _styles: Record<string, Record<string, string>> = {};
+  /** Parses `selector { name: value; … }` rules; property names become camelCase, as in Flash. */
+  parseCSS(css: string): boolean {
+    const text = String(css ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rule = /([^{}]+)\{([^{}]*)\}/g;
+    let m: RegExpExecArray | null;
+    let any = false;
+    while ((m = rule.exec(text))) {
+      const style: Record<string, string> = {};
+      for (const decl of m[2].split(';')) {
+        const i = decl.indexOf(':');
+        if (i < 0) continue;
+        const name = decl.slice(0, i).trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+        if (name) style[name] = decl.slice(i + 1).trim();
+      }
+      for (const sel of m[1].split(',')) {
+        const key = sel.trim().toLowerCase();
+        if (key) { this._styles[key] = { ...(this._styles[key] ?? {}), ...style }; any = true; }
+      }
+    }
+    return any || !text.trim();
+  }
+  getStyle(name: string) { const s = this._styles[String(name).toLowerCase()]; return s ? { ...s } : null; }
+  setStyle(name: string, style: Record<string, string> | null) {
+    const key = String(name).toLowerCase();
+    if (style == null) delete this._styles[key]; else this._styles[key] = { ...style };
+  }
+  getStyleNames() { return Object.keys(this._styles); }
+  clear() { this._styles = {}; }
+  transform(style: Record<string, string>) { return style ? new TextFormat(style.fontFamily, style.fontSize ? parseFloat(style.fontSize) : undefined) : null; }
+}
+TextField.StyleSheet = TextFieldStyleSheet;
 export class TextFormat {
   [key: string]: any;
   constructor(font?: string, size?: number, color?: number, bold?: boolean, italic?: boolean, underline?: boolean, url?: string, target?: string, align?: string, leftMargin?: number, rightMargin?: number, indent?: number, leading?: number) {

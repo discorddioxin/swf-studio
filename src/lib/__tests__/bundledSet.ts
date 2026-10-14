@@ -5,7 +5,7 @@
 // the real resolution path and never need to know a game's name. A different
 // bundled set changes the data, not these tests.
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 /** `game-files/` — the public root the Loader fetches from. */
 export const BUNDLED_DIR = resolve(__dirname, '../../../game-files');
@@ -13,9 +13,6 @@ export const BUNDLED_DIR = resolve(__dirname, '../../../game-files');
 export interface BundledSwfEntry {
   name: string;
   path: string;
-  fileBase?: string;
-  fonts?: string[];
-  scriptOverrides?: { path: string; target: string }[];
 }
 
 export interface BundledGameSet {
@@ -70,10 +67,12 @@ export const bundledMainName = (): string => bundledSet().main ?? bundledSwfName
 /** Absolute path of one bundled SWF. */
 export const bundledSwfFile = (name: string): string => resolve(BUNDLED_DIR, entry(name).path);
 
-/** Absolute folder holding the set's FFDec exports (`<set root>/external`). */
+/**
+ * Absolute folder holding the set's FFDec exports (`fixtures/ffdec/<set id>`):
+ * parser oracles, kept outside the served root because the app never reads them.
+ */
 export function bundledExternalDir(): string {
-  const first = resolve(BUNDLED_DIR, bundledSet().swfs[0].path);
-  return resolve(dirname(dirname(first)), 'external');
+  return resolve(BUNDLED_DIR, '../fixtures/ffdec', bundledSet().id);
 }
 
 /** Absolute FFDec export folder of one SWF. */

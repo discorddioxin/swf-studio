@@ -29,8 +29,11 @@ export interface ClassInfo { name: string; qualifiedName: string; path: string }
 export interface LinkedProgram {
   getDefinition(name: string): unknown;
   classes: ClassInfo[];
-  errors: { path: string; message: string }[];
+  errors: { path: string; message: string; detail?: string }[];
 }
+
+/** Thrown while loading a module: the module that threw is the one that reports it. */
+class LoadFailure extends Error {}
 
 const CODE_EXT = /\.(tsx?|mts|cts|jsx?|mjs|cjs)$/i;
 const SKIP = /(^|\/)(node_modules|\.git)\/|\.d\.ts$/i;
@@ -62,27 +65,45 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
     const key = stripExt(m.path).toLowerCase();
     noExt.set(key, [...(noExt.get(key) ?? []), m]);
   }
-  const cache = new Map<string, { exports: Record<string, unknown>; loaded: boolean }>();
-  const errors: { path: string; message: string }[] = [];
+  const cache = new Map<string, { exports: Record<string, unknown>; loaded: boolean; error?: string; detail?: string }>();
+  const errors: { path: string; message: string; detail?: string }[] = [];
   for (const m of compiled.modules) if (m.error) errors.push({ path: m.path, message: `Compile error: ${m.error}` });
 
   const globalNames = Object.keys(TOP_LEVEL);
   const globalValues = globalNames.map((n) => TOP_LEVEL[n]);
 
+  // A module that throws is retried after the first pass: classes in this code are
+  // defined eagerly, so a cyclic `class A extends B` can only link once B exists.
+  const retries: CompiledModule[] = [];
   const load = (m: CompiledModule): Record<string, unknown> => {
     const hit = cache.get(m.path);
-    if (hit) return hit.exports;
-    const module = { exports: {} as Record<string, unknown>, loaded: false };
+    if (hit) {
+      if (hit.error) throw new LoadFailure(hit.error);
+      return hit.exports;
+    }
+    const module = { exports: {} as Record<string, unknown>, loaded: false, error: undefined as string | undefined, detail: undefined as string | undefined };
     cache.set(m.path, module);
-    if (m.code == null) throw new Error(`${m.path} failed to compile: ${m.error}`);
+    if (m.code == null) throw new LoadFailure(`${m.path} failed to compile: ${m.error}`);
     const dir = m.path.includes('/') ? m.path.slice(0, m.path.lastIndexOf('/')) : '';
     const require = (spec: string) => resolve(spec, m.path, dir);
     const fn = new Function('exports', 'require', 'module', '__filename', '__dirname', ...globalNames,
       `${m.code}\n//# sourceURL=swf-code:///${m.path}`);
-    fn.call(module.exports, module.exports, require, module, m.path, dir, ...globalValues);
+    try {
+      fn.call(module.exports, module.exports, require, module, m.path, dir, ...globalValues);
+    } catch (e) {
+      if (e instanceof LoadFailure) throw e;               // the module that threw already reported
+      const message = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      module.error = message;
+      failures.set(m.path, message);
+      module.detail = e instanceof Error ? e.stack : undefined;
+      throw new LoadFailure(message);
+    }
     module.loaded = true;
     return module.exports;
   };
+
+  /** The module that actually threw, so an error is never blamed on its importer. */
+  const failures = new Map<string, string>();
 
   const resolve = (spec: string, from: string, dir: string): unknown => {
     const flash = resolveFlash(spec);
@@ -95,8 +116,29 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
   for (const m of compiled.modules) {
     if (cache.has(m.path) || m.code == null) continue;
     try { load(m); } catch (e) {
-      errors.push({ path: m.path, message: e instanceof Error ? `${e.name}: ${e.message}` : String(e) });
+      if (e instanceof LoadFailure) retries.push(m);
+      else errors.push({ path: m.path, message: e instanceof Error ? `${e.name}: ${e.message}` : String(e) });
     }
+  }
+  // Retry what a cycle held back, as long as each pass makes progress.
+  for (let pass = 0; pass < 4 && retries.length; pass++) {
+    const pending = retries.splice(0, retries.length);
+    let progress = false;
+    for (const m of pending) {
+      cache.delete(m.path);
+      failures.delete(m.path);
+      try { load(m); progress = true; } catch { retries.push(m); }
+    }
+    if (!progress) break;
+  }
+  for (const m of retries) {
+    const message = failures.get(m.path) ?? `${m.path} could not be linked`;
+    if (!errors.some((e) => e.path === m.path)) errors.push({ path: m.path, message, detail: cache.get(m.path)?.detail });
+  }
+  for (const [path, message] of failures) {
+    if (errors.some((e) => e.path === path)) continue;
+    const detail = cache.get(path)?.detail;
+    errors.push({ path, message, detail });
   }
 
   // Index classes: `com/game/Enemy.ts` exporting Enemy → Enemy, game.Enemy, com.game.Enemy, …
@@ -114,8 +156,11 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
     const fileBase = segments[segments.length - 1];
     const pkgSegments = segments.slice(0, -1);
     for (const [exportName, value] of Object.entries(mod.exports)) {
-      if (typeof value !== 'function' || !/^[A-Z_$]/.test(exportName === 'default' ? fileBase : exportName)) continue;
       const name = exportName === 'default' ? fileBase : exportName;
+      // A class is an exported function named like its file, or capitalised. Timeline
+      // symbol classes are lower-case (`mcRampBank_Gate_113`), so the file name counts.
+      // `__`-prefixed exports are a module's own helpers (`__scriptInit`), never a game class.
+      if (typeof value !== 'function' || name.startsWith('__') || (!/^[A-Z_$]/.test(name) && name !== fileBase)) continue;
       const qualifiedName = qualify(pkgSegments, name);
       if (!byQualified.has(qualifiedName)) { classes.push({ name, qualifiedName, path }); byQualified.set(qualifiedName, value); }
       setQualifiedName(value, qualifiedName);
@@ -123,6 +168,8 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
       for (let i = pkgSegments.length - 1; i >= 0; i--) add(`${pkgSegments.slice(i).join('.')}.${name}`, value);
     }
   }
+
+  runScriptInits(cache, errors);
 
   return {
     classes,
@@ -132,9 +179,13 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
       if (!n) return undefined;
       // 1. unambiguous name / package-qualified suffix of a loaded class
       if (index.has(n) && !ambiguous.has(n)) return index.get(n);
-      // 2. ambiguous: prefer the class whose qualified name matches exactly
-      const exact = classes.filter((c) => c.qualifiedName === n || c.qualifiedName.endsWith(`.${n}`));
+      // 2. ambiguous: the qualified name decides — exactly first, then by package
+      // suffix. A default-package `starBurst` and a packaged `….flowerJong.starBurst`
+      // both answer to the simple name; the SWF's SymbolClass named one of them.
+      const exact = classes.filter((c) => c.qualifiedName === n);
       if (exact.length === 1) return byQualified.get(exact[0].qualifiedName);
+      const suffix = classes.filter((c) => c.qualifiedName.endsWith(`.${n}`));
+      if (suffix.length === 1) return byQualified.get(suffix[0].qualifiedName);
       // 3. flash.* / fl.* / AS3 top level
       const flash = FLASH_DEFINITIONS.get(n);
       if (flash !== undefined) return flash;
@@ -144,6 +195,48 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
       return undefined;
     },
   };
+}
+
+/** The builtins whose prototypes the engine's own code shares with a movie. */
+const SHARED_BUILTINS: { prototype: object }[] = [Object, Array, String, Number, Boolean, Function, RegExp, Date, Error];
+
+/**
+ * Run every linked script's initializer (`script/init_N.ts` → `__scriptInit`),
+ * once, in the order the ABC lists its scripts. AVM2 runs a script's initializer
+ * before its definitions are first touched; every module is linked eagerly here,
+ * so after linking and before any movie code runs is that moment for all of them.
+ *
+ * A script init may install methods on a builtin's prototype (towns2 adds
+ * `Array.prototype.copy` and wraps `String.prototype.charCodeAt`). New names are
+ * kept, exactly as in AS3. A *native* method is put back: in AVM2 a builtin's
+ * sealed methods are traits that typed code calls past the prototype — the
+ * wrapper itself calls `s.charCodeAt` and gets the native — whereas JavaScript has
+ * one slot for both, shared with the engine, where the wrapper would call itself.
+ */
+function runScriptInits(
+  cache: Map<string, { exports: Record<string, unknown>; error?: string }>,
+  errors: { path: string; message: string; detail?: string }[],
+): void {
+  const inits = [...cache].filter(([path, mod]) => /(^|\/)script\/init_\d+\.[jt]s$/.test(path) && !mod.error
+    && typeof mod.exports.__scriptInit === 'function');
+  if (!inits.length) return;
+  const natives = SHARED_BUILTINS.map((b) => {
+    const proto = b.prototype as Record<string, unknown>;
+    return { proto, methods: new Map(Object.getOwnPropertyNames(proto).map((n) => [n, Object.getOwnPropertyDescriptor(proto, n)!])) };
+  });
+  for (const [path, mod] of inits) {
+    try {
+      (mod.exports.__scriptInit as () => void)();
+    } catch (e) {
+      errors.push({ path, message: e instanceof Error ? `${e.name}: ${e.message}` : String(e), detail: e instanceof Error ? e.stack : undefined });
+    }
+  }
+  for (const { proto, methods } of natives) {
+    for (const [name, descriptor] of methods) {
+      const now = Object.getOwnPropertyDescriptor(proto, name);
+      if (now?.value !== descriptor.value && descriptor.configurable) Object.defineProperty(proto, name, descriptor);
+    }
+  }
 }
 
 /**

@@ -50,6 +50,30 @@ export interface SwfCharacter {
   textMatrix?: Matrix;
   /** DefineFont*: glyph index → character code */
   codeTable?: number[];
+  /** DefineFont2/3: the glyph outlines and layout, enough to build the font itself. */
+  font?: SwfFontOutline;
+}
+
+/** A point of a glyph contour: on the outline, or a quadratic control point. */
+export interface GlyphPoint { x: number; y: number; on: boolean }
+
+/**
+ * An embedded font as the SWF stores it (SWF 19 spec, DefineFont2/DefineFont3):
+ * quadratic outlines in a 1024-unit EM square (20480 for DefineFont3), y down.
+ */
+export interface SwfFontOutline {
+  name: string;
+  bold: boolean;
+  italic: boolean;
+  /** Units per em of every coordinate below. */
+  em: number;
+  /** Per glyph: its closed contours, each a run of points. */
+  glyphs: GlyphPoint[][][];
+  /** Per glyph (fonts with layout): the advance, in font units. */
+  advances?: number[];
+  ascent?: number;
+  descent?: number;
+  leading?: number;
 }
 
 export interface TextRecord {
@@ -147,6 +171,13 @@ export interface SwfDocument {
   root: Timeline;
   /** SymbolClass table: character id → AS3 class name (id 0 = document class). */
   symbolClasses?: Map<number, string>;
+  /**
+   * DoABC / DoABC2 payloads found while reading, one per tag and in tag order.
+   * Each still carries its tag header (flags + name) — `abcSources()` in
+   * `src/engine/flash/abc.ts` turns them into the modules the loader compiles.
+   * Kept out of the JSON export: the reader hands back binary bytes.
+   */
+  abc?: Uint8Array[];
   warnings: string[];
   stats: { tags: number; unknownTags: Record<string, number> };
 }

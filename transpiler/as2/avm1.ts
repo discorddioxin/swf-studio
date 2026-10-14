@@ -346,7 +346,17 @@ class Decoder {
         this.emit(a.op === 0x2a ? `$rt.avm1.raise(${value.code});` : `return ${value.code};`); break;
       }
       case 0x30: this.push(`${this.options.identifier('random')}(($rt.avm1.number(${this.pop().code}) | 0))`); break;
+      case 0x32: this.push(`$rt.avm1.charCode(${this.pop().code})`); break;
+      case 0x33: this.push(`$rt.avm1.asciiChar(${this.pop().code})`); break;
       case 0x34: this.push(`${this.options.identifier('getTimer')}()`); break;
+      case 0x3a: {
+        // Delete (computed property): pops the name then the object and *pushes* the
+        // boolean result (`true` when the property is gone), so it is a value on the
+        // operand stack, not a statement.
+        const name = this.pop(), obj = this.pop();
+        this.push(`$rt.avm1.deleteProperty(${obj.code}, ${name.code})`);
+        break;
+      }
       case 0x3d: case 0x40: {
         const nameValue = this.pop(), args = this.args(); this.flush();
         if (!this.plain(nameValue)) {
@@ -401,6 +411,12 @@ class Decoder {
         } else this.push(`$rt.invoke(${obj.code}, ${key.code}, ${args.join(', ')})`.replace(/, \)$/, ')'));
         break;
       }
+      case 0x69: {
+        // Extends is a statement: it relinks subclass.prototype, nothing is pushed.
+        const superclass = this.pop(), subclass = this.pop(); this.flush();
+        this.emit(`$rt.avm1.extendsClass(${subclass.code}, ${superclass.code});`);
+        break;
+      }
       case 0x81: this.flush(); this.emit(`${this.options.target}.gotoAndStop(${p.u16() + 1});`); break;
       case 0x83: {
         // GetURL(url, window): a navigation action, not an expression.
@@ -421,9 +437,6 @@ class Decoder {
       case 0x8e: case 0x9b: {
         const fn = a.fn!;
         if (fn.flags & ~F_ALL_FLAGS) this.fail('Unsupported function register/preload configuration');
-        // A preloaded `super` object is a scope object the lifted code cannot build;
-        // Flash itself stores `undefined` when the value is suppressed as well.
-        if ((fn.flags & F_PRELOAD_SUPER) && !(fn.flags & F_SUPPRESS_SUPER)) this.fail('Preloaded super register requires interpreter');
         if (fn.params.some((x) => x.register > 0 && x.register >= fn.registers)) this.fail('Unsupported function register/preload configuration');
         const child = new Decoder(fn.actions, { ...this.options, identifier: (n) => this.readName(n) }, this.pool, fn, `fn${++this.ids.next}_`, this.ids, this);
         const body = child.decode();
@@ -497,7 +510,10 @@ class Decoder {
       const preloads: [number, () => string][] = [
         [F_PRELOAD_THIS, () => `(this ?? ${this.options.target})`],
         [F_PRELOAD_ARGUMENTS, () => 'arguments'],
-        [F_PRELOAD_SUPER, () => 'undefined'],
+        // Preloaded `super`: the runtime knows the instance and the prototype the
+        // method was found on for this call, so the lifted function can hold the
+        // same object the interpreter would (`avm1Semantics.superValue`).
+        [F_PRELOAD_SUPER, () => `$rt.avm1.superValue(this)`],
         [F_PRELOAD_ROOT, () => this.options.identifier('_root')],
         [F_PRELOAD_PARENT, () => `((this ?? ${this.options.target})?._parent)`],
         [F_PRELOAD_GLOBAL, () => this.options.identifier('_global')],

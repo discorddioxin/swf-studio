@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import JSZip from 'jszip';
 import { loadUploadedPackages } from './swfLoading';
+import { isSwfXmlExport } from './swfSources';
 import { isAs2Bundle } from '../components/As2Execute';
 import { bundledExportDir, bundledExportedNames, bundledMainName, bundledSwfFile, bundledSwfNames } from './__tests__/bundledSet';
 
@@ -103,6 +104,33 @@ describe('uploading SWFs', () => {
     expect(names(packages)).toEqual(['scene.swf', 'main.swf']);
     packages.forEach((pkg) => pkg.cache.dispose());
   }, 30000);
+
+  it('keeps every non-SWF file of the upload for the movie to load, data XML included', async () => {
+    const main = bundledMainName();
+    const data = (name: string, text: string, path: string) => {
+      const file = new File([text], name);
+      Object.defineProperty(file, 'webkitRelativePath', { value: path, configurable: true });
+      return file;
+    };
+    const config = data('gameConfig.xml', '<?xml version="1.0"?>\n<!-- settings -->\n<config><level n="1"/></config>', 'game/games/demo/gameConfig.xml');
+    const sound = data('theme.mp3', 'ID3', 'game/sounds/theme.mp3');
+    const style = data('phone.css', 'p { color: red }', 'game/navPages/phone.css');
+    const packages = await loadUploadedPackages([binarySwf(main, `game/${main}.swf`), config, sound, style]);
+    // the data XML is not taken for an FFDec export: one movie, not two
+    expect(names(packages)).toEqual([`${main}.swf`]);
+    const files = packages[0].dependencyFiles!;
+    expect(await files.text('http://cdn.example.com/games/demo/gameConfig.xml')).toContain('<level n="1"/>');
+    expect(files.find('sounds/theme.mp3')?.name).toBe('theme.mp3');
+    expect(files.find('navPages/phone.css')?.name).toBe('phone.css');
+    packages.forEach((pkg) => pkg.cache.dispose());
+  }, 30000);
+
+  it('tells an FFDec SWF export from a data XML by its <swf> root', async () => {
+    const movie = bundledExportedNames()[0];
+    expect(await isSwfXmlExport(xmlExport(movie))).toBe(true);
+    expect(await isSwfXmlExport(new File(['<?xml version="1.0"?><!DOCTYPE c><c><swf/></c>'], 'c.xml'))).toBe(false);
+    expect(await isSwfXmlExport(new File(['<!-- x --><swf version="8">'], 'c.xml'))).toBe(true);
+  });
 
   it('reports an upload that holds no SWF at all', async () => {
     const notes = new File(['hello'], 'notes.txt');

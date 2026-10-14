@@ -348,3 +348,23 @@ Against SWF 19, swf‑studio is **spec‑conformant where it matters and corre
 
 *Prepared with spec PDF fetched 2026‑10‑09: https://open-flash.github.io/mirrors/swf-spec-19.pdf (9 chunks, pp. 12‑238). Tag names and offsets cross‑checked against `decompiler/swf/binary.ts:15‑90` and `decompiler/parser.ts` `classify()`.*
 
+
+---
+
+## Addendum 2026-10-12 — filters and placed-record field order
+
+Two claims above are corrected by byte-level checks on the shipped game files
+(details and reproducers: [`2026-10-12_FILTER_LAYOUT_AND_SYMBOL_LIBRARIES.md`](./2026-10-12_FILTER_LAYOUT_AND_SYMBOL_LIBRARIES.md)):
+
+* **§3 “Filters decoded per spec @966‑1000” was not true.** Every FILTERLIST size in
+  `skipFilterList` was wrong (e.g. DropShadow 33 bytes instead of 23, ColorMatrix 20 instead
+  of 80), so any DefineButton2 record or PlaceObject3 record carrying filters desynchronised
+  and the file was rejected with `unknown filter N` — the reported upload failure. Sizes are
+  now exact (23/9/15/27/20+5n/15+4wh/80) and pinned by
+  `src/lib/swf/filterList.test.ts`. Note the old conclusion’s caveat — “no filtered clips in
+  corpus” — was exactly the blind spot.
+* **Placed records store `ClipDepth` before `Name`**, not after as this document’s §3 table
+  lists from the spec text. Verified against real bytes plus the committed FFDec export
+  (gsecs2.9 sprite 22: `ratio, clipDepth=6, "mask"`). The reader and the XML→SWF writer follow
+  the bytes, and `src/lib/swf/swf-roundtrip.test.ts` gained an `original bytes ≡ xml` oracle —
+  the previous round-trip could not catch this because writer and reader shared the order.

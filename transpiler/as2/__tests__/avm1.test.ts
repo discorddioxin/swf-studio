@@ -171,6 +171,50 @@ describe('executable AVM1 decoder', () => {
     expect(code.match(/\+\+\$iterations/g)).toHaveLength(2);
   });
 
+  it("lifts Delete, AsciiToChar, CharToAscii and Extends to the interpreter's own semantics", () => {
+    // Delete (0x3a): pops the name, then the object, and pushes the result.
+    const del = base64([
+      ...push('obj'), 0x1c, ...push('gone'), 0x3a, 0x17,                        // delete obj.gone;
+      ...push('removed'), ...push('obj'), 0x1c, ...push('nope'), 0x3a, 0x1d,    // removed = delete obj.nope;
+      0,
+    ]);
+    compare(del, () => ({ obj: { gone: 1 } as Record<string, unknown> }), (c) => [{ ...c.obj }, c.removed]);
+
+    // AsciiToChar (0x33) / CharToAscii (0x32): NUL is the empty string, "" is 0.
+    const chars = base64([
+      ...push('a', 65), 0x33, 0x1d,
+      ...push('nul', 0), 0x33, 0x1d,
+      ...push('code', 'A'), 0x32, 0x1d,
+      ...push('none', ''), 0x32, 0x1d,
+      0,
+    ]);
+    compare(chars, () => ({}), (c) => [c.a, c.nul, c.code, c.none]);
+
+    // Extends (0x69) relinks subclass.prototype onto the superclass prototype.
+    const ext = base64([
+      ...record(0x9b, [...text('Base'), 0, 0, 0, 0]),
+      ...record(0x9b, [...text('Sub'), 0, 0, 0, 0]),
+      ...push('Sub', 'Base'), 0x69,
+      0,
+    ]);
+    const code = compare(ext, () => ({}), (c) => [typeof c.Sub, Object.getPrototypeOf(c.Sub.prototype) === c.Base.prototype]);
+    expect(code).toContain('$rt.avm1.extendsClass');
+  });
+
+  it('builds the preloaded super object from the call site instead of falling back', () => {
+    // DefineFunction2 `ping` with PreloadSuper (flag 0x10) in register 1: the body
+    // stores `typeof super` — Flash's super object exists whenever `this` does.
+    const body = [...push('result'), ...reg(1), 0x44, 0x1d];
+    const payload = base64([
+      ...record(0x8e, [...text('ping'), 0, 0, 4, 0x10, 0, body.length, 0]),
+      ...body,
+      ...push(0), ...push('ping'), 0x3d,
+      0,
+    ]);
+    const code = compare(payload, () => ({}), (c) => c.result);
+    expect(code).toContain('$rt.avm1.superValue(this)');
+  });
+
   it('uses one-based frame numbers and keeps animation commands visible', () => {
     const code = decodeAVM1Actions(base64([...record(0x81, [4, 0]), 6, 7, 0])).code;
     expect(code).toBe('$t.gotoAndStop(5);\n$t.play();\n$t.stop();');

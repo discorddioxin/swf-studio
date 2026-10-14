@@ -24,6 +24,7 @@ import type { AS2Handler, AS2Program } from '../../runtime/as2';
 import type { ColorTransform, DisplayItem, Frame, Matrix, PlaceOp, Rect, SwfCharacter, SwfDocument, Timeline } from '../../types';
 import type { AssetSource, LogEntry, LogLevel, LogMetadata, NetworkEvent, NetworkObserver } from '../flash/player';
 import type { AudioBackend, AudioHandle } from '../flash/media';
+import { DependencyTracker, describeDependency, type DependencyFiles } from '../flash/dependencies';
 import {
   apply, compose, concat, concatCT, decompose, identity, inRect, invert, isColorIdentity, transformRect, unionRect,
   type Components,
@@ -142,6 +143,15 @@ export class DisplayNode {
    * instead of as problems.
    */
   visibleSource: 'swf' | 'script' = 'swf';
+  /**
+   * `_lockroot`: this clip is the `_root` of its own subtree. Flash's `_root` is
+   * the top-most AVM1 ancestor, *unless* a clip on the way up declares itself the
+   * root — that is how a movie loaded into a clip (with the container's
+   * `_lockroot` set before loading, which the loaded root inherits) gets its own
+   * `_root` and therefore its own symbol library. Verified against Flash via
+   * Ruffle's `avm1/movieclip_lockroot` oracle.
+   */
+  lockRoot = false;
   clipDepth = 0;
   ratio = 0;
   timeline: Timeline | null = null;
@@ -188,6 +198,24 @@ export class DisplayNode {
 
 export { nodeOf } from './constants';
 
+/**
+ * Flash's `avm1_root()` (Ruffle `display_object.rs`): walk towards the top-most
+ * AVM1 ancestor, stopping at a clip that has `_lockroot` set (checked on the
+ * clip itself first, so a locked clip is its own `_root`). Level containers are
+ * separate roots because their parent is the stage, which is not an AVM1
+ * display object; a library symbol that was never placed has no parent at all,
+ * so it is its own root — that is what makes a sprite's `#initclip`
+ * (`DoInitAction`) see its own movie's library through `_root`.
+ */
+export function avm1Root(node: DisplayNode | null): DisplayNode | null {
+  let root = node;
+  while (root) {
+    if (root.lockRoot) break;
+    root = root.parent;
+  }
+  return root;
+}
+
 
 
 interface QueuedAction { node: DisplayNode; run: () => void; label: string; always?: boolean }
@@ -228,6 +256,11 @@ export interface AS2PlayerOptions {
    * warning; everything else is reported as before.
    */
   isOptionalExternal?: (url: string) => boolean;
+  /**
+   * Non-SWF files uploaded with the movies (XML, CSS, MP3, …). A movie's request
+   * for one is answered from here; a request nothing answers is a missing dependency.
+   */
+  dependencyFiles?: DependencyFiles | null;
   /** In-process stand-in for the game's XMLSocket server. Supplied by an adapter. */
   gameServer?: GameServerBackend | null;
 }
@@ -276,6 +309,10 @@ export class AS2Player {
   lastKey = { code: 0, ascii: 0 };
   readonly builtins: BuiltinState;
   private queue: QueuedAction[] = [];
+  /** Unplaced symbol nodes that sprite-targeted `DoInitAction`s are applied to. */
+  private spriteScopes = new Map<string, DisplayNode>();
+  /** The clip whose script is running (innermost `guard`), Flash's AVM1 base clip. */
+  private currentNode: DisplayNode | null = null;
   private running = false;
   private raf = 0;
   private last = 0;
@@ -298,8 +335,22 @@ export class AS2Player {
   errors = 0;
   private networkRequestSequence = 0;
   cursorHidden = false;
-  /** external SWFs the game asked for that could not be resolved */
-  readonly missingExternals = new Set<string>();
+  /**
+   * Every file the movies requested at run time that nothing could supply — SWFs,
+   * audio, XML, CSS, images, video, … — and the service endpoints nothing answered.
+   */
+  readonly dependencies = new DependencyTracker((entry, isNew) => {
+    if (isNew && !entry.optional) this.log('warn', `Missing dependency: ${describeDependency(entry)}`, undefined, { source: 'engine', context: 'Missing Dependencies' });
+  });
+  /** URLs of the SWFs among the missing dependencies (optional ones excluded). */
+  get missingExternals(): Set<string> {
+    return new Set(this.dependencies.files().filter((d) => d.kind === 'swf' && !d.optional).map((d) => d.url));
+  }
+  /** The movie whose code is running, for "requested by". */
+  requester(): string {
+    const movie = this.runningClip()?.movie ?? this.movie;
+    return movie.doc.header.fileName ?? (movie.url === 'root' ? 'main movie' : movie.url);
+  }
   /** ids of display nodes currently hovered in the inspector (highlight overlay) */
   highlightedIds: Set<number> | null = null;
   private readonly dbg: DebuggerStore;
@@ -455,34 +506,65 @@ export class AS2Player {
     } catch {}
   }
 
+  /**
+   * The clip whose script is currently running — Flash's AVM1 base clip. Host
+   * callbacks that need the calling clip (a global `Sound.attachSound` resolves
+   * its sound in that clip's AVM1 root movie, Ruffle `sound.rs`) use this.
+   */
+  runningClip(): DisplayNode | null { return this.currentNode; }
+
+  /** Queue `fn` as running on `node`, so `runningClip()` answers for it. */
+  private withRunningClip<T>(node: DisplayNode | null, fn: () => T): T {
+    const prev = this.currentNode;
+    if (node) this.currentNode = node;
+    try { return fn(); } finally { this.currentNode = prev; }
+  }
+
   /** Object.registerClass library of a movie (null = the main movie) */
   linkageScope(movie: Movie): Movie | null { return movie === this.movie ? null : movie; }
+
+  /**
+   * Run a movie's `DoInitAction` tags in SWF tag order. The SWF spec runs them
+   * "as soon as the tag is encountered", i.e. when the movie loads; the target
+   * depends on the tag: a tag that names a sprite is applied to that sprite
+   * (see `spriteScope`), a movie-level one runs against the movie's root clip.
+   */
+  runInitActions(movie: Movie, root: DisplayNode, url = ''): void {
+    const prog = movie.program;
+    if (!prog) return;
+    const where = url ? ` (${url})` : '';
+    if (prog.initActions?.length) {
+      for (const action of [...prog.initActions].sort((a, b) => a.order - b.order)) {
+        const sprite = action.targetSpriteId != null;
+        const label = sprite
+          ? `init action of sprite ${action.targetSpriteId}${where}`
+          : action.linkageName
+            ? `init action "${action.linkageName}"${where}`
+            : `init action${where}`;
+        const target = sprite ? this.spriteScope(movie, action.targetSpriteId!).obj : root.obj;
+        this.guard(label, () => action.run.call(target));
+      }
+      return;
+    }
+    // Compatibility for older transpiled programs without per-tag metadata.
+    for (const [name, fn] of Object.entries(prog.initByName ?? {})) {
+      this.guard(`init action "${name}"${where}`, () => fn.call(root.obj));
+    }
+    for (const [id, mod] of Object.entries(prog.timelines)) {
+      if (mod.init && Number(id) !== 0) {
+        const target = this.spriteScope(movie, Number(id)).obj;
+        this.guard(`init action of sprite ${id}${where}`, () => mod.init!.call(target));
+      }
+    }
+    prog.timelines[0]?.init && this.guard(`init action of the main timeline${where}`, () => prog.timelines[0].init!.call(root.obj));
+  }
 
   // ------------------------------------------------------------ lifecycle
   /** Initialise: DoInitAction scripts, flashvars, then root frame 1. */
   start() {
     if (this.started) return;
     this.started = true;
-    const prog = this.movie.program;
-    if (prog) {
-      if (prog.initActions?.length) {
-        for (const action of [...prog.initActions].sort((a, b) => a.order - b.order)) {
-          const label = action.targetSpriteId != null
-            ? `init action of sprite ${action.targetSpriteId}`
-            : action.linkageName
-              ? `init action "${action.linkageName}"`
-              : 'init action';
-          this.guard(label, () => action.run.call(this.root.obj));
-        }
-      } else {
-        // Compatibility for older transpiled programs without per-tag metadata.
-        for (const [name, fn] of Object.entries(prog.initByName ?? {})) this.guard(`init action "${name}"`, () => fn.call(this.root.obj));
-        for (const [id, mod] of Object.entries(prog.timelines)) {
-          if (mod.init && Number(id) !== 0) this.guard(`init action of sprite ${id}`, () => mod.init!.call(this.root.obj));
-        }
-        prog.timelines[0]?.init && this.guard('init action of the main timeline', () => prog.timelines[0].init!.call(this.root.obj));
-      }
-    }
+    this.runInitActions(this.movie, this.root);
     for (const [k, v] of Object.entries(this.opts.flashVars ?? {})) this.root.obj[k] = v;
     this.enterFirstFrame(this.root);
     this.runQueue();
@@ -523,6 +605,13 @@ export class AS2Player {
   isDisposedFor(_node: DisplayNode) { return this.disposed; }
   trackSocket(socket: GameSocket) { if (!this.disposed) this.gameSockets.add(socket); }
   untrackSocket(socket: GameSocket) { this.gameSockets.delete(socket); }
+
+  /**
+   * Advance by `ms` of player time (default: one frame) through `step`, the path the
+   * running app takes — timers (`setInterval`/`setTimeout`) fire as well as frames.
+   * For tests and tools that drive the player without an animation loop.
+   */
+  advanceTime(ms = 1000 / this.frameRate) { this.step(this.last + ms); }
 
   /** Advance by real time: timers + as many ticks as are due. */
   step(now: number) {
@@ -634,7 +723,7 @@ export class AS2Player {
           scopeHint['_label'] = a.label;
           scopeHint['_node'] = a.node;
         } catch {}
-        this.guard(a.label, a.run, scopeHint);
+        this.withRunningClip(a.node, () => this.guard(a.label, a.run, scopeHint));
         // step handling: after each action, if step requested, pause
         if (dbg.stepRequest === 'over' || dbg.stepRequest === 'into') {
           // pause after one action
@@ -911,6 +1000,34 @@ export class AS2Player {
     const i = parent.children.findIndex((c) => c.depth > node.depth);
     if (i < 0) parent.children.push(node); else parent.children.splice(i, 0, node);
     if (node.name && node.obj) this.publishName(node);
+  }
+
+  /**
+   * The object a sprite-targeted `DoInitAction` is applied to. The SWF spec is
+   * explicit that these init actions "reference the sprite so all the actions
+   * are automatically applied to the sprite" — Flash runs them with the symbol
+   * as the target, not with the movie's root clip. For a symbol that was never
+   * placed there is no display object, so it gets an unplaced clip node here:
+   * it carries the defining movie (so `Object.registerClass`/`attachMovie` use
+   * that movie's library) and has no parent (so `_root` inside the init action
+   * is the symbol itself — the classic MX `#initclip` pattern
+   * `_root.createClassObject(mx.managers.FocusManager, …)` depends on it).
+   * One node per (movie, character) is reused, so repeated init actions land on
+   * the same object, exactly like a symbol's one-time initialization.
+   */
+  spriteScope(movie: Movie, characterId: number): DisplayNode {
+    const key = `${movie.doc.header.fileName ?? movie.url ?? ''}#${characterId}`;
+    const cached = this.spriteScopes.get(key);
+    if (cached) return cached;
+    const node = new DisplayNode('clip', movie, characterId);
+    node.name = movie.doc.characters.get(characterId)?.exportName ?? '';
+    node.timeline = null;
+    node.fromTimeline = false;
+    node.depth = 0;
+    const obj: any = Object.create(RT.MovieClip.prototype);
+    this.bind(obj, node);
+    this.spriteScopes.set(key, node);
+    return node;
   }
 
   /** Make the child reachable as parent.name (AS2 resolves instance names as properties). */

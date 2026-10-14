@@ -12,10 +12,14 @@
 
 export const SAMPLE_GAME_SET_ID = 'gaia-fishing';
 
-/** Folder under `game-files/` holding the sample's SWFs and FFDec exports. */
+/** Folder under `game-files/` (the served root) holding the sample's SWFs. */
 export const SAMPLE_ROOT = 'game-files/fish-full';
 export const SAMPLE_SWF_DIR = `${SAMPLE_ROOT}/swfs`;
-export const SAMPLE_EXTERNAL_DIR = `${SAMPLE_ROOT}/external`;
+/**
+ * FFDec exports of some sample SWFs: test oracles for the parser only (never
+ * served, never read by the app, which works from the SWFs alone).
+ */
+export const SAMPLE_EXTERNAL_DIR = `fixtures/ffdec/${SAMPLE_GAME_SET_ID}`;
 
 /** The SWF that plays the game (the game set's `main`). */
 export const SAMPLE_MAIN = 'bassken_game4.21';
@@ -50,7 +54,7 @@ export const SAMPLE_OVERVIEW = 'bassken_overview';
 /** The sample's coast/scene movie (tests use it as the dependency SWF). */
 export const SAMPLE_SCENE = 'bassken_scene';
 
-/** The sample's pier movie (has committed fonts + FFDec exports). */
+/** The sample's pier movie (embeds a font of its own). */
 export const SAMPLE_PIER = 'bassken_pier';
 
 /**
@@ -59,7 +63,7 @@ export const SAMPLE_PIER = 'bassken_pier';
  */
 export const SAMPLE_TRACKING = 'OmnitureActionSource';
 
-/** Sample SWFs whose FFDec exports are committed under `external/`. */
+/** Sample SWFs whose FFDec exports are committed as test oracles. */
 export const SAMPLE_EXPORTED_NAMES = [
   'bassken_overview',
   'bassken_pier',
@@ -72,8 +76,6 @@ export const SAMPLE_EXPORTED_NAMES = [
 /** Path of a bundled sample SWF, relative to the public root. */
 export const sampleSwfPath = (name: string): string => `${SAMPLE_SWF_DIR}/${name}.swf`;
 
-/** FFDec export folder of one sample SWF. */
+/** FFDec export folder (test oracle) of one sample SWF. */
 export const sampleExportDir = (name: string): string => `${SAMPLE_EXTERNAL_DIR}/${name}`;
 
-/** Committed font exports of one sample SWF (ttf cannot be synthesized). */
-export const sampleFontDir = (name: string): string => `${sampleExportDir(name)}/fonts`;

@@ -28,6 +28,9 @@ import { globalDebugger, type DebuggerStore } from '../../debug/store';
 import { findMatchingBreakpoint, flashLabelMatchesBreakpoint } from '../../debug/breakpointMatch';
 import type { AudioBackend, AudioHandle, SoundChannel } from './media';
 import { TextField } from './text';
+import { DependencyTracker, describeDependency, dependencyKind, dependencyPath, isServiceEndpoint, type DependencyFiles } from './dependencies';
+import { ByteArray } from './utils';
+import { URLVariables } from './misc';
 
 const TWIPS = 20;
 
@@ -46,7 +49,7 @@ export interface ProgramLike {
 export type LogLevel = 'trace' | 'error' | 'warn' | 'info';
 export type LogSource = 'app' | 'engine' | 'forge' | 'network';
 export type LogKind = 'log' | 'problem' | 'request' | 'response';
-export type NetworkTransport = 'http' | 'xmlsocket' | 'url-loader' | 'external-swf' | 'navigation';
+export type NetworkTransport = 'http' | 'xmlsocket' | 'socket' | 'url-loader' | 'external-swf' | 'navigation';
 
 /** Structured request/response metadata shared by the engine and offline mocks. */
 export interface NetworkEvent {
@@ -89,10 +92,23 @@ export interface PlayerOptions {
   program?: ProgramLike | ((player: FlashPlayer) => ProgramLike) | null;
   /** Override for the document class (defaults to SymbolClass id 0). */
   documentClass?: string | null;
+  /**
+   * FlashVars: what the embedding page passed (`<param name="flashvars">`, the query
+   * string). The root's `loaderInfo.parameters` — a movie that reads one the page
+   * did not pass gets `undefined`, as in Flash Player.
+   */
+  parameters?: Record<string, string> | null;
   audio?: AudioBackend | null;
   onLog?: (entry: LogEntry) => void;
   /** Injected debugger (defaults to globalDebugger singleton for backward compat). */
   debugger?: DebuggerStore;
+  /**
+   * Non-SWF files uploaded with the movies (XML, CSS, MP3, images, …). A movie's
+   * request for one is answered from here; nothing answering is a missing dependency.
+   */
+  dependencyFiles?: DependencyFiles | null;
+  /** File names of the other SWFs loaded with this one (not missing when requested). */
+  externalSwfs?: readonly string[];
 }
 
 interface Scheduled { id: number; due: number; interval: number; repeat: boolean; fn: () => void }
@@ -110,6 +126,8 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
   /** Human-readable linkage report for the UI. */
   readonly linkage: { id: number; className: string; linked: boolean }[] = [];
   documentClassName: string | null = null;
+  /** FlashVars of the root movie (see `PlayerOptions.parameters`). */
+  readonly parameters: Record<string, string>;
   cursor = 'default';
 
   private readonly assets: AssetSource | null;
@@ -136,8 +154,11 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     this.doc = opts.doc;
     this.assets = opts.assets ?? null;
     this.audio = opts.audio ?? null;
+    this.parameters = { ...(opts.parameters ?? {}) };
     this.onLog = opts.onLog ?? (() => {});
     this.dbg = opts.debugger ?? globalDebugger;
+    this.dependencyFiles = opts.dependencyFiles ?? null;
+    this.externalSwfs = (opts.externalSwfs ?? []).map((n) => n.toLowerCase());
     const s = this.doc.header.stage;
     const previous = runtime.player;
     runtime.player = this as unknown as typeof runtime.player; // Stage construction reads host()
@@ -319,6 +340,80 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     return samples ? (samples / rate) * 1000 : 0;
   }
 
+  /**
+   * Every file the movie requested at run time that nothing could supply — SWFs,
+   * audio, XML, images, … — and the service endpoints nothing answered.
+   */
+  readonly dependencies = new DependencyTracker((entry, isNew) => {
+    if (isNew && !entry.optional) this.log('warn', `Missing dependency: ${describeDependency(entry)}`, undefined, { source: 'engine', context: 'Missing Dependencies' });
+  });
+  readonly dependencyFiles: DependencyFiles | null;
+  private readonly externalSwfs: string[];
+  /** The movie whose code made a request. */
+  requester(): string { return this.doc.header.fileName ?? 'main movie'; }
+
+  /**
+   * `URLLoader.load`: an uploaded file of that path answers with its contents in the
+   * loader's `dataFormat`; any other request fails as an unreachable URL does, and is
+   * recorded as a missing dependency.
+   */
+  loadUrl(target: EventDispatcher & { data: unknown; dataFormat: string; bytesLoaded: number; bytesTotal: number }, url: string, method = 'GET', payload?: string) {
+    const files = this.dependencyFiles;
+    if (files && !isServiceEndpoint(url, method) && files.find(url)) {
+      const requestId = `url-${++this.networkRequestSequence}`;
+      this.log('info', `URLLoader ${method} ${url}`, undefined, {
+        source: 'network', kind: 'request', transport: 'url-loader', direction: 'outgoing', requestId, method, url, payload,
+      });
+      void files.bytes(url).then((bytes) => {
+        if (!bytes) return;
+        this.schedule(0, () => {
+          const text = new TextDecoder().decode(bytes);
+          if (target.dataFormat === 'binary') {
+            const data = new ByteArray();
+            for (const b of bytes) data.writeByte(b);
+            data.position = 0;
+            target.data = data;
+          } else if (target.dataFormat === 'variables') target.data = new URLVariables(text);
+          else target.data = text;
+          target.bytesLoaded = target.bytesTotal = bytes.length;
+          this.log('info', `URLLoader ${url}: served from the uploaded file`, undefined, {
+            source: 'network', kind: 'response', transport: 'url-loader', direction: 'incoming', requestId, method, url, status: 'ok', payload: text.slice(0, 2000),
+          });
+          target.dispatchEvent(new Event(Event.COMPLETE));
+        }, false);
+      });
+      return;
+    }
+    this.dependencies.record({ url, api: 'URLLoader.load', requestedBy: this.requester(), method, kind: target.dataFormat === 'variables' ? 'variables' : undefined });
+    this.failLoad(target, url, method, payload);
+  }
+
+  /** `Sound.load` / `new Sound(request)`: the uploaded file's URL, or null (recorded, ioError). */
+  soundUrl(target: EventDispatcher, url: string): string | null {
+    const found = this.dependencyFiles?.objectUrl(url) ?? null;
+    if (found) { this.schedule(0, () => target.dispatchEvent(new Event(Event.COMPLETE)), false); return found; }
+    this.dependencies.record({ url, api: 'Sound.load', requestedBy: this.requester(), kind: 'audio' });
+    this.schedule(0, () => target.dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, `Error #2032: Stream Error. URL: ${url}`)), false);
+    return null;
+  }
+
+  /**
+   * `Loader.load`: a SWF or image the movie pulls in. One loaded or uploaded with
+   * this movie is there (running it inside this player is not implemented yet); any
+   * other is a missing dependency, and the loader's `contentLoaderInfo` gets the
+   * ioError Flash Player dispatches for an unreachable URL.
+   */
+  loaderLoad(contentLoaderInfo: EventDispatcher, url: string) {
+    const name = dependencyPath(url).split('/').pop()?.toLowerCase() ?? '';
+    const available = (dependencyKind(url, 'Loader.load') === 'swf' && name && this.externalSwfs.includes(name)) || !!this.dependencyFiles?.find(url);
+    if (available) {
+      this.log('warn', `Loader.load("${url}"): the file is loaded, but running loaded content inside the player is not implemented yet`, undefined, { source: 'engine', context: 'Loader' });
+      return;
+    }
+    this.dependencies.record({ url, api: 'Loader.load', requestedBy: this.requester() });
+    this.schedule(0, () => contentLoaderInfo.dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, `Error #2035: URL Not Found. URL: ${url}`)), false);
+  }
+
   failLoad(target: EventDispatcher, url: string, method = 'GET', payload?: string) {
     const requestId = `url-${++this.networkRequestSequence}`;
     const message = `URLLoader ${method} ${url}`;
@@ -329,6 +424,23 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
       const error = `Error #2032: Stream Error. URL: ${url}`;
       this.log('warn', error, undefined, {
         source: 'network', kind: 'response', transport: 'url-loader', direction: 'incoming', requestId, method, url,
+        status: 'blocked offline', payload: error,
+      });
+      target.dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, error));
+    }, false);
+  }
+
+  /** A `flash.net.Socket` connect: logged as a request, refused like an unreachable host. */
+  failSocket(target: EventDispatcher, host: string, port: number) {
+    const requestId = `socket-${++this.networkRequestSequence}`;
+    const url = `${host}:${port}`;
+    this.log('info', `Socket connect ${url}`, undefined, {
+      source: 'network', kind: 'request', transport: 'socket', direction: 'outgoing', requestId, method: 'CONNECT', url,
+    });
+    this.schedule(0, () => {
+      const error = `Error #2031: Socket Error. URL: ${host}`;
+      this.log('warn', error, undefined, {
+        source: 'network', kind: 'response', transport: 'socket', direction: 'incoming', requestId, method: 'CONNECT', url,
         status: 'blocked offline', payload: error,
       });
       target.dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, error));

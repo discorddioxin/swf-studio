@@ -15,10 +15,12 @@
 
 import { AssetCache, expandUploadFiles, filePath, hydrateActionScriptSources, ingestFiles, patchButtonAssetIds, splitPackages, type SwfPackage } from './assets';
 import { parseSwfXml } from './parser';
-import { parseSwfBinary } from './swf/binary';
+import { parseSwfBinary, type SwfFile } from './swf/binary';
 import { swfFilesToFiles } from './bundled';
-import { orderSources, swfSourcesFromFiles } from './swfSources';
+import { isSwfXmlExport, orderSources, swfSourcesFromFiles } from './swfSources';
 import type { SwfDocument } from '../types';
+import { DependencyFiles } from '../engine/flash/dependencies';
+
 
 export interface UploadProgress {
   /** progress message for the Loader ("Parsing scene.swf (2/4)…") */
@@ -52,8 +54,15 @@ export async function loadUploadedPackages(
     onProgress?.('Indexing files…');
     if (files.some((file) => /\.zip$/i.test(file.name))) onProgress?.('Unpacking ZIP archives…');
     const expandedFiles = await expandUploadFiles(files);
+    // An .xml is an FFDec export only with a <swf> root; any other XML is data the
+    // movie loads at run time, like every other non-SWF file of the upload.
+    const dataXml = new Set<File>();
+    for (const file of expandedFiles) if (/\.xml$/i.test(file.name) && !(await isSwfXmlExport(file))) dataXml.add(file);
+    const dependencyFiles = new DependencyFiles(expandedFiles
+      .filter((file) => !/\.swf$/i.test(file.name) && (dataXml.has(file) || !/\.xml$/i.test(file.name)))
+      .map((file) => ({ path: filePath(file), file })));
     // FFDec exports carry their whole folder; a raw .swf carries nothing but itself.
-    const parts = splitPackages(expandedFiles.filter((file) => !/\.swf$/i.test(file.name)));
+    const parts = splitPackages(expandedFiles.filter((file) => !/\.swf$/i.test(file.name) && !dataXml.has(file)));
     const xmlParts = new Map(parts.map((part) => [filePath(part.xmlFile), part]));
     const filesByKey = new Map<string, File>();
     for (const file of expandedFiles) {
@@ -61,7 +70,7 @@ export async function loadUploadedPackages(
       if (!filesByKey.has(key)) filesByKey.set(key, file);
     }
 
-    const sources = orderSources(swfSourcesFromFiles(expandedFiles), mainKey);
+    const sources = orderSources(swfSourcesFromFiles(expandedFiles.filter((file) => !dataXml.has(file))), mainKey);
     if (!sources.length) throw new Error('No .swf or .xml SWF found in that selection — expected a raw SWF or a JPEXS XML dump.');
     await new Promise((resolve) => setTimeout(resolve, 30)); // let the busy message paint
     for (let i = 0; i < sources.length; i++) {
@@ -70,7 +79,17 @@ export async function loadUploadedPackages(
       if (source.kind === 'binary') {
         const file = filesByKey.get(source.key);
         if (!file) continue;
-        const { doc, files: parsedFiles } = await parseSwfBinary(await file.arrayBuffer(), source.fileName);
+        let parsed: { doc: SwfDocument; files: SwfFile[] };
+        try {
+          parsed = await parseSwfBinary(await file.arrayBuffer(), source.fileName);
+        } catch (error) {
+          // Which of several uploaded SWFs failed is not guessable from the
+          // message alone ("unknown filter 51" says nothing about the file).
+          // The parser's own message already names the tag and record.
+          const message = error instanceof Error ? error.message : String(error);
+          throw new Error(`${source.fileName}: ${message}`);
+        }
+        const { doc, files: parsedFiles } = parsed;
         built.push(await buildPackage(swfFilesToFiles(parsedFiles, source.stem), doc, onChange));
       } else {
         const part = xmlParts.get(source.key);
@@ -80,6 +99,7 @@ export async function loadUploadedPackages(
       }
     }
     if (!built.length) throw new Error('No readable SWF files found in the selected uploads.');
+    for (const pkg of built) pkg.dependencyFiles = dependencyFiles;
     return built;
   } catch (error) {
     built.forEach((pkg) => pkg.cache.dispose());

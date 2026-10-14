@@ -12,11 +12,14 @@ import { RunningTimelinesSidebar } from './RunningTimelinesSidebar';
 import { buildWorkbenchTimelineMetadata } from '../engine/as2/workbenchMetadata';
 import { ExecutionConsole } from './ExecutionConsole';
 import { useExecutionDiagnostics } from './useExecutionDiagnostics';
-import { compileSources, expectedClasses, isCodeFile, linkProgram, mergeSources, type CompiledSources, type LinkedProgram } from '../engine/flash/loader';
+import { compileSources, expectedClasses, isCodeFile, linkProgram, mergeSources, type CompiledSources, type LinkedProgram, type SourceFile } from '../engine/flash/loader';
+import { abcSources } from '../engine/flash/abc';
 import { FlashPlayer, HtmlAudioBackend, type LogEntry } from '../engine/flash/player';
 import type { AudioBackend } from '../engine/flash/media';
 import { DisplayObject, MovieClip } from '../engine/flash/display';
 import { As2Execute, isAs2Bundle } from './As2Execute';
+import { MissingDependenciesBanner, MissingDependenciesPanel, dependencyProblems, useMissingDependencies } from './MissingDependencies';
+import type { DependencyFiles } from '../engine/flash/dependencies';
 import { useDebugger, useDebuggerState } from '../debug/store';
 import { DebugPanel } from '../debug/DebugPanel';
 import { usePopout } from '../debug/Popout';
@@ -31,12 +34,16 @@ type CodeState =
     linkErrors: LinkedProgram['errors'];
     /** dependency SWFs whose code was folded in because the main movie alone could not link */
     dependencies: string[];
+    /** code lifted out of the movie's own DoABC tags, when it is an AVM2 movie */
+    abc: { payloads: number; files: number; classes: number; refusals: number; unsupported: string[] } | null;
   };
 
 const MAX_LOG = 500;
 
-export function ExecuteTab({ externals, project, gameSetId, adapterId, onAdapterChange, ...props }: {
+export function ExecuteTab({ externals, project, gameSetId, adapterId, onAdapterChange, dependencyFiles, ...props }: {
   doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
+  /** non-SWF files uploaded with the movies (XML, CSS, MP3, …), which they may request at run time */
+  dependencyFiles?: DependencyFiles | null;
   /** bundled game set the session came from, if any (the adapter hint) */
   gameSetId?: string | null;
   /** game adapter pick: 'auto' (detect) or an id from src/adapters */
@@ -44,11 +51,14 @@ export function ExecuteTab({ externals, project, gameSetId, adapterId, onAdapter
   onAdapterChange?: (id: string) => void;
 }) {
   return isAs2Bundle(props.doc, props.assets)
-    ? <As2Execute {...props} project={project} externals={externals} gameSetId={gameSetId} adapterId={adapterId} onAdapterChange={onAdapterChange} />
-    : <As3Execute {...props} project={project} externals={externals} />;
+    ? <As2Execute {...props} project={project} externals={externals} gameSetId={gameSetId} adapterId={adapterId} onAdapterChange={onAdapterChange} dependencyFiles={dependencyFiles} />
+    : <As3Execute {...props} project={project} externals={externals} uploadedFiles={dependencyFiles ?? null} />;
 }
 
-function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[] }) {
+function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles = null }: {
+  doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
+  uploadedFiles?: DependencyFiles | null;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<FlashPlayer | null>(null);
@@ -67,6 +77,10 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
   const [size, setSize] = useState({ w: 800, h: 500 });
   const pendingLogs = useRef<LogEntry[]>([]);
   const executionFaultRef = useRef(false);
+  const dependencies = useMissingDependencies(useCallback(() => playerRef.current?.dependencies, []));
+  // The other loaded SWFs, by file name. A string, so the player is not rebuilt on
+  // every render (`externals` defaults to a fresh array).
+  const externalSwfNames = externals.map((pkg) => pkg.doc.header.fileName ?? '').filter(Boolean).join('\n');
   const dbg = useDebugger();
   const dbgState = useDebuggerState();
   const executePopout = usePopout({ title: 'Execute Engine — SWF Studio', width: 900, height: 700 });
@@ -113,14 +127,17 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
     return () => dbg.unregisterCallbacks('flash');
   }, [dbg]);
 
-  /** Dependency SWFs (everything loaded besides the main one) and their code files. */
+  /** Dependency SWFs (everything loaded besides the main one): code files and AVM2 payloads. */
   const dependencyFiles = useMemo(() => externals
     .map((pkg) => ({
       name: pkg.bundle.xmlName || pkg.doc.header.fileName || 'dependency.swf',
       files: pkg.bundle.files.filter((f) => isCodeFile(f.path)),
+      abc: pkg.doc.abc ?? [],
     }))
-    .filter((dependency) => dependency.files.length > 0), [externals]);
-  const dependencyKey = dependencyFiles.map((d) => `${d.name}:${d.files.length}`).join('|');
+    .filter((dependency) => dependency.files.length > 0 || dependency.abc.length > 0), [externals]);
+  const dependencyKey = dependencyFiles.map((d) => `${d.name}:${d.files.length}:${d.abc.length}`).join('|');
+  /** A movie's own AVM2 code, if it has any (`DoABC` tags read with the SWF). */
+  const ownAbc = useMemo(() => abcSources(doc.abc ?? []), [doc]);
   const as3TimelineNames = useMemo(() => buildWorkbenchTimelineMetadata(doc, project), [doc, project]);
 
   // ---- compile the transpiled code in the bundle (once per bundle)
@@ -129,9 +146,19 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
     setCode({ status: 'loading' });
     const read = async (f: { path: string; file: File }) => ({ path: f.path, text: await readText(f.file) });
     const files = (assets?.files ?? []).filter((f) => isCodeFile(f.path));
+    /** The movie's own code first; a file in the folder that claims the same path is the author's, so it wins. */
+    const withAbc = (sources: SourceFile[]) => {
+      const mine = new Set(sources.map((f) => f.path.replace(/^\.\//, '')));
+      return [...sources, ...ownAbc.sources.filter((f) => !mine.has(f.path.replace(/^\.\//, '')))];
+    };
+    const abcSummary = ownAbc.payloads ? {
+      payloads: ownAbc.payloads, files: ownAbc.sources.length, classes: ownAbc.classes.length,
+      refusals: ownAbc.refusals.length, unsupported: ownAbc.unsupported,
+    } : null;
     Promise.all(files.map(read))
-      .then(async (mainSources) => {
+      .then(async (readFiles) => {
         if (cancelled) return;
+        const mainSources = withAbc(readFiles);
         let compiled = compileSources(mainSources);
         let probe = linkProgram(compiled);
         let dependencies: string[] = [];
@@ -143,28 +170,32 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
             files: await Promise.all(dependency.files.map(read)),
           })));
           if (cancelled) return;
+          const dependencyAbc = abcSources(dependencyFiles.flatMap((d) => d.abc));
           const withDependencies = mergeSources(mainSources, readDependencies);
-          if (withDependencies.used.length) {
-            const retryCompiled = compileSources(withDependencies.sources);
+          const retrySources = dependencyAbc.sources.length
+            ? withAbc([...withDependencies.sources, ...dependencyAbc.sources.filter((f) => !ownAbc.sources.some((mine) => mine.path === f.path))])
+            : withDependencies.sources;
+          if (withDependencies.used.length || dependencyAbc.sources.length) {
+            const retryCompiled = compileSources(retrySources);
             const retry = linkProgram(retryCompiled);
             if (retry.errors.length <= probe.errors.length && unresolved(retry) <= unresolved(probe)) {
               compiled = retryCompiled;
               probe = retry;
-              dependencies = withDependencies.used;
+              dependencies = withDependencies.used.length ? withDependencies.used : dependencyAbc.payloads ? [`${dependencyAbc.payloads} DoABC payload(s)`] : [];
             }
           }
         }
         const displayClasses = probe.classes
           .filter((c) => { const d = probe.getDefinition(c.qualifiedName); return typeof d === 'function' && d.prototype instanceof DisplayObject; })
           .map((c) => c.qualifiedName);
-        setCode({ status: 'ready', compiled, classes: probe.classes, displayClasses, dependencies, linkErrors: probe.errors });
+        setCode({ status: 'ready', compiled, classes: probe.classes, displayClasses, dependencies, linkErrors: probe.errors, abc: abcSummary });
       })
       .catch((e) => {
         if (!cancelled) setCode({ status: 'failed', error: `Could not read the code files: ${e instanceof Error ? e.message : String(e)}` });
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assets, dependencyKey]);
+  }, [assets, dependencyKey, ownAbc]);
 
   useEffect(() => { setDocClass(null); }, [doc]);
 
@@ -186,6 +217,8 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
       debugger: dbg,
       program: code.compiled.modules.length ? () => linkProgram(code.compiled) : null,
       documentClass: docClass,
+      dependencyFiles: uploadedFiles,
+      externalSwfs: externalSwfNames ? externalSwfNames.split('\n') : [],
       onLog: (entry) => {
         pendingLogs.current.push(entry);
         if (entry.level === 'error') console.error('[game]', entry.message, entry.detail ?? '');
@@ -204,7 +237,7 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
     player.start();
     canvasRef.current?.focus({ preventScroll: true });
     return () => { player.dispose(); if (playerRef.current === player) playerRef.current = null; };
-  }, [doc, cache, code, docClass, session]);
+  }, [doc, cache, code, docClass, session, uploadedFiles, externalSwfNames]);
 
   // ---- fit the canvas to the panel
   useEffect(() => {
@@ -325,7 +358,7 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
   ] : code.status === 'failed' ? [{
     level: 'error', kind: 'problem', source: 'forge', context: 'reading code files', message: code.error, time: 0,
   }] : [];
-  const consoleEntries = [...forgeProblems, ...logs];
+  const consoleEntries = [...forgeProblems, ...dependencyProblems(dependencies), ...logs];
   const errorCount = consoleEntries.filter((entry) => entry.level === 'error').length;
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
@@ -372,10 +405,12 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
 
       {code.status === 'ready' && !hasCode && (
         <div className="shrink-0 border-b border-amber-900/60 bg-amber-950/40 px-3 py-1.5 text-[11px] text-amber-200">
-          No transpiled code (.ts / .js) was found in the loaded folder, so only the SWF timeline plays: no game logic, input handling or frame scripts.
-          Add the game's TypeScript files to the folder and reload to run it.
+          No code in this movie: the SWF has no AVM2 (DoABC) payload and the folder has no .ts / .js files, so only the SWF timeline plays.
+          For an AS1 / AS2 movie the code lives in DoAction tags and runs on the AS2 engine; for an AVM2 movie add its folder.
         </div>
       )}
+
+      <MissingDependenciesBanner list={dependencies} />
 
       {dbgState.paused && (
         <div className="flex shrink-0 items-center gap-2 border-b border-amber-900/40 bg-amber-950/30 px-3 py-1.5 text-xs text-amber-200">
@@ -432,6 +467,17 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
               <div>
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Code</div>
                 <div>{code.compiled.modules.length} file(s) compiled, {code.classes.length} class(es) exported.</div>
+                {code.abc && (
+                  <div className="mt-1 text-zinc-400">
+                    Lifted from the movie's own DoABC code ({code.abc.payloads} payload{code.abc.payloads === 1 ? '' : 's'}, {code.abc.files} file{code.abc.files === 1 ? '' : 's'}, {code.abc.classes} class{code.abc.classes === 1 ? '' : 'es'}).
+                    {code.abc.refusals > 0 && (
+                      <span className="text-amber-300"> {code.abc.refusals} method body(ies) could not be lifted — they throw where they are called.</span>
+                    )}
+                    {code.abc.unsupported.length > 0 && (
+                      <span className="text-amber-300"> {code.abc.unsupported.length} engine API(s) missing: {code.abc.unsupported.slice(0, 4).join(', ')}{code.abc.unsupported.length > 4 ? ', …' : ''} (a call throws).</span>
+                    )}
+                  </div>
+                )}
                 {code.dependencies.length > 0 && (
                   <div className="mt-1 text-zinc-500">
                     Includes the code of dependency SWF{code.dependencies.length === 1 ? '' : 's'}: {code.dependencies.join(', ')}
@@ -462,6 +508,7 @@ function As3Execute({ doc, cache, assets, project, externals = [] }: { doc: SwfD
                     ))}
                   </tbody>
                 </table>
+                <div className="mt-3"><MissingDependenciesPanel list={dependencies} /></div>
               </div>
             </div>
           )}

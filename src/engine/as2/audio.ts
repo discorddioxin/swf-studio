@@ -1,5 +1,6 @@
-// Audio for the AS2 player: sounds come from the FFDec export (sounds/<id>_<name>.mp3|.flv).
-// MP3 plays directly; ADPCM .flv files are decoded to WAV on first use.
+// Audio for the AS2 player: sounds/<id>.mp3|.wav, which the SWF parser extracts from
+// each DefineSound. MP3 plays directly; an ADPCM .flv (an exported sound) is decoded
+// to WAV on first use.
 
 import type { AudioBackend, AudioHandle } from '../flash/media';
 import { HtmlAudioBackend, type AssetSource } from '../flash/player';
@@ -91,7 +92,7 @@ export function soundFilesOf(files: { path: string; file: File }[]): Map<number,
 /** Font family of an embedded font: "swf-font-<id>" (main movie) or "swf-font-<key>-<id>" (a loaded SWF). */
 export const embeddedFontFamily = (id: number, key?: string) => (key ? `swf-font-${key}-${id}` : `swf-font-${id}`);
 
-/** fonts/<id>_<name>.ttf → FontFace embeddedFontFamily(id, key) (best effort; returns the registered ids). */
+/** fonts/<id>.ttf (built from the SWF's own DefineFont2/3) → FontFace embeddedFontFamily(id, key) (best effort; returns the registered ids). */
 export async function registerFonts(files: { path: string; file: File }[], key?: string, signal?: AbortSignal): Promise<Set<number>> {
   const done = new Set<number>();
   if (signal?.aborted || typeof FontFace === 'undefined' || typeof document === 'undefined' || !document.fonts) return done;
@@ -104,7 +105,7 @@ export async function registerFonts(files: { path: string; file: File }[], key?:
     faces.length = 0;
   }, { once: true });
   await Promise.all(files.map(async (f) => {
-    const m = /(?:^|\/)fonts\/(\d+)_[^/]*\.(ttf|otf|woff2?)$/i.exec(f.path);
+    const m = /(?:^|\/)fonts\/(\d+)(?:_[^/]*)?\.(ttf|otf|woff2?)$/i.exec(f.path);
     if (!m) return;
     try {
       const bytes = await f.file.arrayBuffer();

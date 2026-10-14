@@ -73,11 +73,181 @@ export class Dictionary {
       get: (_t, k) => (k === 'size' ? map.size : k in api && !map.has(k) ? api[k as string] : map.get(k)),
       set: (_t, k, v) => { map.set(k, v); return true; },
       has: (_t, k) => map.has(k),
-      deleteProperty: (_t, k) => map.delete(k),
+      // AS3 `delete d[k]` is true whether or not the key was there (so is JavaScript's,
+      // and a false here is a TypeError in strict code).
+      deleteProperty: (_t, k) => { map.delete(k); return true; },
       ownKeys: () => [...map.keys()].filter((k): k is string | symbol => typeof k === 'string' || typeof k === 'symbol'),
       getOwnPropertyDescriptor: (_t, k) => (map.has(k) ? { enumerable: true, configurable: true, writable: true, value: map.get(k) } : undefined),
     });
   }
+}
+
+/**
+ * AVM2's `Class`: the type of class objects. Here a class *is* its constructor, so
+ * `x instanceof Class` asks whether x is one — which is what `getClassDef`-style
+ * code does with the result of `getDefinitionByName`.
+ *
+ * `Class(x)` is a cast, and like every other cast in AS3 it is identity on a value
+ * of the right kind and a `TypeError` otherwise.
+ */
+export function Class(value?: unknown): unknown {
+  if (arguments.length === 0) return Class;
+  if (isClassObject(value)) return value;
+  throw new TypeError(`Error #1034: Type Coercion failed: cannot convert ${String(value)} to Class.`);
+}
+export function isClassObject(value: unknown): boolean {
+  return typeof value === 'function' && (value as { prototype?: unknown }).prototype != null;
+}
+Object.defineProperty(Class, Symbol.hasInstance, { value: (value: unknown) => isClassObject(value) });
+
+/**
+ * Instance slot defaults of a lifted class. In AVM2 an object holds every declared
+ * slot's default from the moment it is allocated, so a base-class constructor that
+ * calls an overridden method already sees the subclass's `_value = 1`. JavaScript
+ * runs field initializers only after `super()` returns; a default on the prototype
+ * is visible from the start, and the first write makes the instance's own copy.
+ *
+ * A name the engine (or a base class) already defines as an accessor or method is
+ * left alone: the lifted class named a slot in a namespace TypeScript cannot keep
+ * apart, and shadowing the accessor would cut the display object off from it.
+ */
+export function __slots(owner: { prototype: object }, defaults: Record<string, unknown>): void {
+  const proto = owner.prototype;
+  for (const [name, value] of Object.entries(defaults)) {
+    if (definesBehaviour(Object.getPrototypeOf(proto), name)) continue;
+    Object.defineProperty(proto, name, { value, writable: true, configurable: true, enumerable: false });
+  }
+}
+
+/** Is `name` an accessor or a method somewhere on the chain from `proto`? */
+export function definesBehaviour(proto: object | null, name: string): boolean {
+  for (let p = proto; p && p !== Object.prototype; p = Object.getPrototypeOf(p)) {
+    const desc = Object.getOwnPropertyDescriptor(p, name);
+    if (!desc) continue;
+    return !!(desc.get || desc.set || typeof desc.value === 'function');
+  }
+  return false;
+}
+
+/**
+ * A method read as a value: `obj.method` in AVM2 is a closure bound to `obj`, not the
+ * bare function. Emitted reads go through here so `addEventListener(..., this.onTick)`
+ * keeps its receiver, and so adding and removing the same listener pair up (the bound
+ * closure is cached per receiver, where AVM2 compares the receiver and the method).
+ */
+export function __method(recv: unknown, name: string, owner?: { prototype?: object; name?: string }): unknown {
+  if (recv == null) {
+    throw new TypeError(`TypeError: Error #1009: Cannot access a property or method of a null object reference`);
+  }
+  const holder = (owner?.prototype ?? recv) as Record<string, unknown>;
+  const fn = holder?.[name];
+  if (typeof fn !== 'function') return (recv as Record<string, unknown>)[name];
+  let cache = METHOD_CACHE.get(recv as object);
+  const key = owner ? `${name}#${owner.name ?? 'super'}` : name;
+  const hit = cache?.get(key);
+  if (hit) return hit;
+  const bound = fn.bind(recv);
+  if (!cache) METHOD_CACHE.set(recv as object, (cache = new Map()));
+  cache.set(key, bound);
+  return bound;
+}
+const METHOD_CACHE = new WeakMap<object, Map<string, unknown>>();
+
+/**
+ * Name resolution through `with` scopes (`pushwith`; also every E4X filter
+ * `list.(predicate)`, whose predicate runs with each item as a `with` scope). The
+ * scopes come innermost first; the first that *has* the property is where the name
+ * lives, as AVM2's scope-chain search asks each `with` object `hasProperty`. A value
+ * can answer that itself through `__hasProperty` — XML does, since its children and
+ * attributes are properties no `in` test sees. Otherwise the name resolves where it
+ * would without the `with`: `fallback`, or what `lazyFallback()` returns — a global
+ * is only read when no `with` object answers, since reading an undefined one throws.
+ */
+export function __withScope(scopes: unknown[], name: string, fallback: unknown, lazyFallback?: () => unknown): unknown {
+  for (const scope of scopes) {
+    if (scope == null) continue;
+    const probe = (scope as { __hasProperty?: (n: string) => boolean }).__hasProperty;
+    if (typeof probe === 'function' ? probe.call(scope, name) : name in Object(scope)) return scope;
+  }
+  return lazyFallback ? lazyFallback() : fallback;
+}
+
+/**
+ * AVM2 interfaces exist at runtime: `x is IFoo`, `x as IFoo` and
+ * `x instanceof IFoo` all work, and a class declares the interfaces it implements.
+ * TypeScript erases both the interface and the `implements` clause, so the engine
+ * keeps the two facts it needs explicitly:
+ *
+ *   const IFocusManagerComponent = __interface('fl.managers.IFocusManagerComponent');
+ *   __implements(UIComponent, IEventDispatcher, IFocusManagerComponent);
+ *
+ * `instanceof` then walks the class's own list (and its supers', which the helper
+ * flattens once at registration), including interfaces that extend interfaces.
+ */
+export interface InterfaceShape {
+  readonly name: string;
+  readonly parents: InterfaceShape[];
+  readonly implementors: WeakSet<object>;
+}
+
+const INTERFACES = new WeakMap<object, InterfaceShape>();
+
+/** An interface object: a value `instanceof` understands, and a type in AS3 terms. */
+export function __interface(name: string, ...parents: unknown[]): InterfaceShape {
+  const shape: InterfaceShape = {
+    name,
+    parents: parents.filter((p): p is InterfaceShape => INTERFACES.has(p as object) || (typeof p === 'object' && p !== null && 'implementors' in p)),
+    implementors: new WeakSet<object>(),
+  };
+  INTERFACES.set(shape, shape);
+  Object.defineProperty(shape, Symbol.hasInstance, {
+    value: (value: unknown) => implementsInterface(value, shape),
+    enumerable: false,
+  });
+  Object.defineProperty(shape, 'toString', { value: () => `[interface ${name}]`, enumerable: false });
+  return shape;
+}
+
+/** Declare (once per class) the interfaces a class implements. */
+export function __implements(owner: unknown, ...faces: InterfaceShape[]): void {
+  const target = classOf(owner);
+  if (!target) return;
+  const list = interfaceList(target);
+  for (const face of faces) {
+    if (!face) continue;
+    if (!list.includes(face)) list.push(face);
+    face.implementors.add(target);
+  }
+}
+
+/** Does `value` implement `iface`? Walks the class chain, interfaces included. */
+export function implementsInterface(value: unknown, iface: InterfaceShape): boolean {
+  if (value == null) return false;
+  const target = classOf(value);
+  if (!target) return false;
+  if (iface.implementors.has(target)) return true;
+  return interfaceList(target).some((face) => face === iface || face.parents.some((p) => p === iface));
+}
+
+/** The interfaces of a class, including the ones its superclasses declared. */
+function interfaceList(target: object): InterfaceShape[] {
+  const existing = interfaceLists.get(target);
+  if (existing) return existing;
+  const own = [...(Object.getOwnPropertyDescriptor(target, '__interfaces')?.value as InterfaceShape[] | undefined ?? [])];
+  const list: InterfaceShape[] = [];
+  for (const face of own) if (!list.includes(face)) list.push(face);
+  for (const face of [...list]) for (const parent of face.parents) if (!list.includes(parent)) list.push(parent);
+  interfaceLists.set(target, list);
+  return list;
+}
+const interfaceLists = new WeakMap<object, InterfaceShape[]>();
+
+/** The class of a value: instances give their constructor, class objects themselves. */
+function classOf(value: unknown): object | null {
+  if (typeof value === 'function') return value;
+  if (typeof value !== 'object' || value === null) return null;
+  const ctor = (value as { constructor?: unknown }).constructor;
+  return ctor && ctor !== Object ? (ctor as object) : null;
 }
 
 export function getDefinitionByName(name: string): unknown {
@@ -153,3 +323,69 @@ export class IOError extends Error { constructor(message = '', public errorID = 
 export class EOFError extends IOError { constructor(message = '', errorID = 0) { super(message, errorID); this.name = 'EOFError'; } }
 
 export function isXMLName(s: string) { return /^[A-Za-z_][\w.-]*$/.test(s); }
+
+// `Object.prototype.setPropertyIsEnumerable` is ActionScript-only (Flash's Object
+// class has it; JavaScript's does not). A movie calls it on any object — its own
+// class instances included — so it is installed once, here, as a non-enumerable
+// method, exactly where AS3 defines it.
+declare global {
+  interface Object {
+    setPropertyIsEnumerable(name: string, isEnum?: boolean): void;
+  }
+}
+if (!Object.prototype.setPropertyIsEnumerable) {
+  Object.defineProperty(Object.prototype, 'setPropertyIsEnumerable', {
+    value: function (this: Record<string, unknown>, name: string, isEnum = true) {
+      // `length` and other built-in properties cannot be re-declared; AS3 leaves
+      // them as they are rather than throwing.
+      if (name === 'length') return;
+      const value = this[name];
+      Object.defineProperty(this, name, { value, enumerable: isEnum, configurable: true, writable: true });
+    },
+    enumerable: false, configurable: true, writable: true,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Emitter helpers: the three bytecodes whose ActionScript semantics have no
+// JavaScript spelling. A transpiled module calls these by name — the loader puts
+// every top-level name in scope — so they live here rather than in the emitter.
+
+/**
+ * `applytype` — `Vector.<int>`: the class is asked to specialise itself with the
+ * type arguments. The engine's Vector is untyped at runtime (TypeScript erases the
+ * type), so the class itself is the answer.
+ */
+export function __applyType(base: unknown, ...types: unknown[]): unknown {
+  const klass = base as { applyType?: (...t: unknown[]) => unknown } | null;
+  if (klass && typeof klass === 'object' || typeof klass === 'function') {
+    if (klass && typeof klass.applyType === 'function') return klass.applyType(...types);
+    return klass;
+  }
+  throw new TypeError('applytype of a non-class');
+}
+
+/**
+ * `hasnext2` + `nextname`: the cursor of a `for-in` is a key here, so advancing
+ * means "the key after this one". `null` means the object is exhausted.
+ */
+export function __iterAdvance(object: unknown, cursor: unknown): string | null {
+  if (object == null) return null;
+  const keys = Object.keys(object as Record<string, unknown>);
+  if (cursor == null) return keys.length ? keys[0] : null;
+  const at = keys.indexOf(String(cursor));
+  const next = at < 0 ? 0 : at + 1;
+  return next < keys.length ? keys[next] : null;
+}
+
+/** `nextvalue` — the value the cursor is standing on (`for each`). */
+export function __iterValue(object: unknown, cursor: unknown): unknown {
+  if (object == null || cursor == null) return undefined;
+  return (object as Record<string, unknown>)[String(cursor)];
+}
+
+/** `convert_o` — coercing to Object throws on null and undefined. */
+export function __coerceObject(value: unknown): unknown {
+  if (value === null || value === undefined) throw new TypeError('null or undefined cannot be coerced to Object');
+  return value;
+}

@@ -54,7 +54,8 @@ by `__tests__/sample.test.ts`, and the generic side reads the same data through
 
 1. Put the files under `game-files/<your-set>/…`.
 2. Write `game-files/games/<id>.json`:
-   `{ id, label, main, swfs: [{ name, path, fonts?, fileBase?, scriptOverrides? }] }`.
+   `{ id, label, main, swfs: [{ name, path }] }` — SWFs only; their fonts, sounds,
+   bitmaps and scripts come out of the SWFs themselves.
 3. Point `game-files/manifest.json` at it (`{ default: "<id>", games: ["games/<id>.json"] }`).
 4. If the game needs offline stand-ins, add `src/adapters/<game>/` and register
    it in `GAME_ADAPTERS`; otherwise omit `adapter` from the set and it runs on

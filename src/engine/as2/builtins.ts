@@ -4,7 +4,9 @@
 
 import * as RT from '../../runtime/as2';
 import type { ColorTransform, Rect } from '../../types';
+import { dependencyKind, isServiceEndpoint } from '../flash/dependencies';
 import { identity, invert, apply as applyM, transformRect } from './geom';
+import { avm1Root } from './player';
 import { DEPTH_OFFSET, NODE, TWIPS, nodeOf } from './constants';
 import type { AS2Player, DisplayNode, DrawCmd, Movie } from './player';
 
@@ -42,7 +44,31 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     duplicate, removeClip, startDrag, updateDrag, loadMovie, loadVariables, unloadMovie, typeInto,
   };
 
-  const missingWarned = new Set<string>();
+  /** Every movie whose library is loaded in this run (main + `loadMovie` targets). */
+  const loadedMovies: Movie[] = [p.movie];
+  const movieLabel = (m: Movie) => m.doc.header.fileName ?? m.url ?? '?';
+  /** Libraries other than the given one that export `linkage` — diagnostic only: it
+   *  explains why Flash would still fail the lookup (`_lockroot`/levels scope symbols
+   *  per movie). */
+  /**
+   * The library a Sound resolves its exported sound in: the Sound's target clip
+   * when it has one, otherwise the AVM1 root movie of the clip whose script is
+   * running (Ruffle `sound.rs`, using Flash's `avm1_root` walk — `_lockroot`
+   * included). Falls back to the main movie for host code with no base clip.
+   */
+  function soundLibrary(sound: any): Movie {
+    const owner = N(sound.target) ?? p.runningClip();
+    return (avm1Root(owner) ?? p.root).movie;
+  }
+
+  function externalLibraries(linkage: string, except?: Movie): string[] {
+    const out: string[] = [];
+    for (const m of loadedMovies) {
+      if (m === except || out.includes(movieLabel(m))) continue;
+      if ([...m.doc.characters.values()].some((c) => c.exportName === linkage)) out.push(movieLabel(m));
+    }
+    return out;
+  }
 
   // ------------------------------------------------------------ helpers
   function nextDepth(node: DisplayNode) {
@@ -57,11 +83,22 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   }
 
   function attachMovie(parent: DisplayNode, linkage: string, name: string, depth: number, init?: Record<string, unknown> | null) {
-    // Flash looks the symbol up in the library of the SWF the target clip belongs to; fall back to the main movie
-    let movie = parent.movie;
-    let ch = [...movie.doc.characters.values()].find((c) => c.exportName === linkage);
-    if (!ch && movie !== p.movie) { movie = p.movie; ch = [...movie.doc.characters.values()].find((c) => c.exportName === linkage); }
-    if (!ch) { p.log('warn', `attachMovie: no symbol exported as "${linkage}"`); return undefined; }
+    // Symbols are resolved in the library of the SWF the target clip belongs to —
+    // Flash has no cross-movie fallback (Ruffle `avm1/globals/movie_clip.rs`
+    // `attach_movie` looks only in `movie_clip.movie()`'s library; sharing across
+    // movies needs ImportAssets). Widening this hid the real error and could
+    // attach a same-named symbol from a different movie.
+    const movie = parent.movie;
+    const ch = [...movie.doc.characters.values()].find((c) => c.exportName === linkage);
+    if (!ch) {
+      // Report where the symbol *is* exported: for a `_root.attachMovie(…)` in a
+      // movie loaded into a clip, the usual cause is the loaded movie expecting
+      // its own `_root` (Flash's `_lockroot` on the container before loading).
+      const owners = externalLibraries(linkage);
+      p.log('warn', `attachMovie: no symbol exported as "${linkage}" in ${movie.doc.header.fileName ?? movie.url}` +
+        (owners.length ? ` (exported by ${owners.join(', ')})` : ''));
+      return undefined;
+    }
     place(parent, num(depth));
     const node = p.instantiate(movie, ch.id, parent, num(depth), String(name), { initObject: init ?? null });
     p.runQueue();
@@ -126,8 +163,10 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     };
     const u = String(url).trim();
     if (!u) return;
-    if (/\.(jpe?g|png|gif)(\?|$)/i.test(u)) {
-      p.log('warn', `loadMovie("${u}"): external images are not supported offline`);
+    const api = loader ? 'MovieClipLoader.loadClip' : 'loadMovie';
+    const requestedBy = p.requester();
+    if (dependencyKind(u, api) === 'image' && p.opts.dependencyFiles?.find(u)) {
+      p.log('warn', `${api}("${u}"): the image is uploaded, but loading images into clips is not implemented yet`);
     }
     const resolved = p.opts.resolveExternal ? Promise.resolve(p.opts.resolveExternal(u)) : Promise.resolve(null);
     const target = node;
@@ -147,19 +186,15 @@ export function installBuiltins(p: AS2Player): BuiltinState {
         // avatars and similar live assets) keep the clip's built-in artwork
         // without reporting a missing external SWF. Everything else is real.
         if (p.opts.isOptionalExternal?.(u)) {
-          p.log('info', `loadMovie("${u}"): optional asset, not bundled`);
+          p.dependencies.record({ url: u, api, requestedBy, optional: true });
+          p.log('info', `${api}("${u}"): optional live asset, not available offline`);
           return;
         }
+        p.dependencies.record({ url: u, api, requestedBy });
         if ((p.opts.missingExternal ?? 'empty') === 'error') {
-          p.log('error', `loadMovie: "${u}" is not available (external SWF missing)`);
           fire('onLoadError', 'URLNotFound', 404);
           return;
         }
-        if (!missingWarned.has(u)) {
-          missingWarned.add(u);
-          p.log('warn', `loadMovie: "${u}" is not available – continuing as if it loaded empty. Add its FFDec export to play this part of the game.`);
-        }
-        p.missingExternals.add(u);
         fire('onLoadStart');
         replaceContent(target, null, u);
         fire('onLoadProgress', 0, 0);
@@ -180,6 +215,10 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     node.handlers = node.handlers.filter((h) => h.kind === 'onClipEvent');
     node.drawing = null;
     if (!movie) { node.timeline = null; node.frame = 0; return; }
+    // Register before the movie's init actions run: they are the first place a
+    // missing export is reported (`attachMovie` on `_root`), and the point of the
+    // hint is to name the loaded libraries that do export it.
+    if (!loadedMovies.includes(movie)) loadedMovies.push(movie);
     node.movie = movie;
     node.characterId = 0;
     node.timeline = movie.doc.root;
@@ -197,18 +236,11 @@ export function installBuiltins(p: AS2Player): BuiltinState {
         // in an MX component movie. Skipping them leaves every skin/subelement a
         // plain MovieClip, which collapses MX layouts (a List then keeps its white
         // border and never creates a single row).
-        if (prog.initActions?.length) {
-          for (const action of [...prog.initActions].sort((a, b) => a.order - b.order)) {
-            const label = action.targetSpriteId != null
-              ? `init action of sprite ${action.targetSpriteId} (${url})`
-              : action.linkageName
-                ? `init action "${action.linkageName}" (${url})`
-                : `init action (${url})`;
-            p.guard(label, () => action.run.call(node.obj));
-          }
-        }
+        if (prog.initActions?.length) p.runInitActions(movie, node, url);
         for (const [n, fn] of Object.entries(prog.initByName ?? {})) p.guard(`init action "${n}" (${url})`, () => fn.call(node.obj));
-        for (const [id, mod] of Object.entries(prog.timelines)) if (mod.init) p.guard(`init action ${id} (${url})`, () => mod.init!.call(node.obj));
+        for (const [id, mod] of Object.entries(prog.timelines)) {
+          if (mod.init && Number(id) !== 0) p.guard(`init action of sprite ${id} (${url})`, () => mod.init!.call(p.spriteScope(movie, Number(id)).obj));
+        }
       } finally {
         RT.setLinkageScope(prev);
       }
@@ -221,10 +253,15 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     for (const c of [...node.children]) p.removeNode(c);
     node.timeline = null;
     node.frame = 0;
+    // an unmounted library must not be named as the owner of a symbol
+    const mounted = new Set<Movie>();
+    const walk = (n: DisplayNode) => { if (n.movie) mounted.add(n.movie); for (const c of n.children) walk(c); };
+    walk(p.root);
+    for (let i = loadedMovies.length - 1; i >= 0; i--) if (!mounted.has(loadedMovies[i])) loadedMovies.splice(i, 1);
   }
 
   function loadVariables(url: string, node: DisplayNode | null) {
-    fetchText(url, 'GET', null).then((txt) => {
+    fetchText(url, 'GET', null, 'loadVariables').then((txt) => {
       if (txt == null || !node || node.removed) return;
       decodeVars(node.obj, txt);
       p.dispatchClipEvent(node, 'data');
@@ -232,14 +269,35 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     });
   }
 
-  function fetchText(url: string, method: string, body: string | null): Promise<string | null> {
-    if (p.opts.fetchText) return p.opts.fetchText(url, method, body, (event) => p.recordNetwork(event)).catch((error: unknown) => {
+  /**
+   * A text request (XML, LoadVars, loadVariables, StyleSheet). An uploaded file of
+   * that path answers first; then the adapter's offline network. A request nothing
+   * answers is recorded as a missing dependency of the movie that made it.
+   */
+  function fetchText(url: string, method: string, body: string | null, api: string): Promise<string | null> {
+    const requestedBy = p.requester();
+    const missing = () => { p.dependencies.record({ url, api, requestedBy, method }); };
+    const files = p.opts.dependencyFiles;
+    if (files && !isServiceEndpoint(url, method) && files.find(url)) {
+      const requestId = p.nextNetworkRequestId('file');
+      p.recordNetwork({ kind: 'request', transport: 'http', direction: 'outgoing', requestId, method, url, status: 'sent', payload: body ?? undefined });
+      return files.text(url).then((text) => {
+        p.recordNetwork({ kind: 'response', transport: 'http', direction: 'incoming', requestId, method, url, status: 'ok', payload: text ?? undefined, message: `${api} ${url}: served from the uploaded file` });
+        return text;
+      });
+    }
+    if (p.opts.fetchText) return p.opts.fetchText(url, method, body, (event) => p.recordNetwork(event)).then((text) => {
+      if (text == null) missing();
+      return text;
+    }, (error: unknown) => {
       const err = error instanceof Error ? error : new Error(String(error));
       const message = `HTTP mock request failed: ${method} ${url}: ${err.message}`;
       p.log('error', message, err.stack, { source: 'engine', kind: 'problem', context: 'HTTP mock transport' });
       p.recordNetwork({ kind: 'response', transport: 'http', direction: 'incoming', method, url, status: 'error', payload: err.stack, message });
+      missing();
       return null;
     });
+    missing();
     const requestId = p.nextNetworkRequestId('http');
     p.recordNetwork({ kind: 'request', transport: 'http', direction: 'outgoing', requestId, method, url, status: 'sent', payload: body ?? undefined });
     const message = `network request not available offline: ${method} ${url}`;
@@ -335,8 +393,13 @@ export function installBuiltins(p: AS2Player): BuiltinState {
       set(this: any, v: any) { const n = N(this); if (!n || n === p.root) return; p.unpublishName(n); n.name = String(v); p.publishName(n); },
     },
     _parent: { get(this: any) { return N(this)?.parent?.obj; } },
-    _root: { get() { return p.root.obj; } },
-    _level0: { get() { return p.root.obj; } },
+    // Flash's `_root`: the top-most AVM1 ancestor, or the nearest clip that
+    // declared itself a root with `_lockroot` (Ruffle `avm1_root`). A movie
+    // loaded into a clip therefore keeps the loading movie's `_root` unless the
+    // container locked it — which is why that path is the documented way to give
+    // a loaded movie its own symbol library.
+    _root: { get(this: any) { return (avm1Root(N(this)) ?? p.root).obj; } },
+    _level0: { get(this: any) { return (avm1Root(N(this)) ?? p.root).obj; } },
     _global: { get() { return RT._global; } },
     _target: { get(this: any) { return N(this)?.slashPath() ?? ''; } },
     _url: { get(this: any) { const n = N(this); return n?.url && n.url !== 'root' ? n.url : p.doc.header.fileName; } },
@@ -358,7 +421,13 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     _totalframes: { get(this: any) { return N(this)?.totalFrames ?? 1; } },
     _framesloaded: { get(this: any) { return N(this)?.totalFrames ?? 1; } },
     _droptarget: { get() { const t = p.mouseTarget(p.mouse.x, p.mouse.y); return t ? t.slashPath() : ''; } },
-    _lockroot: { get() { return false; } },
+    // Flash-verified coercion (Ruffle's `movieclip_lockroot` oracle): AVM1
+    // `toBoolean` — only the empty string is false among strings, and NaN/0/null
+    // /undefined are false.
+    _lockroot: {
+      get(this: any) { return N(this)?.lockRoot ?? false; },
+      set(this: any, v: any) { const n = N(this); if (n) n.lockRoot = RT.$rt.avm1.toBoolean(v); },
+    },
     play(this: any) { const n = N(this); if (n) n.playing = true; },
     stop(this: any) { const n = N(this); if (n) n.playing = false; },
     nextFrame(this: any) { const n = N(this); if (n) { n.playing = false; p.gotoFrame(n, n.frame + 1); } },
@@ -618,21 +687,34 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   // ------------------------------------------------------------ Sound
   def(RT.Sound.prototype, {
     attachSound(this: any, id: any) {
-      // the library of the SWF the Sound's target clip came from, then the main movie
-      const own = N(this.target)?.movie;
-      const find = (m: Movie) => [...m.doc.characters.values()].find((c) => c.kind === 'sound' && c.exportName === String(id));
-      let movie: Movie = own ?? p.movie;
-      let ch = find(movie);
-      if (!ch && movie !== p.movie) { movie = p.movie; ch = find(movie); }
-      if (!ch) p.log('warn', `Sound.attachSound: no sound exported as "${id}"`);
+      // Ruffle `avm1/globals/sound.rs::attach_sound`: a global (target-less) Sound
+      // resolves the export in the library of the *running script's* AVM1 root
+      // movie; a Sound created with a target clip uses that clip's own movie. The
+      // main movie is not a fallback — Flash never searches other movies, and
+      // widening it hid which movie actually lacks the sound.
+      const movie = soundLibrary(this);
+      const ch = [...movie.doc.characters.values()].find((c) => c.kind === 'sound' && c.exportName === String(id));
+      if (!ch) {
+        const owners = externalLibraries(String(id), movie);
+        p.log('warn', `Sound.attachSound: no sound exported as "${id}" in ${movieLabel(movie)}` +
+          (owners.length ? ` (exported by ${owners.join(', ')})` : ''));
+      }
       this.__movie = movie;
       this.__sound = ch?.id ?? null;
       this.__url = null;
     },
-    loadSound(this: any, url: any, _stream?: any) {
-      this.__url = null;
-      p.log('warn', `Sound.loadSound("${url}"): external sounds are not available offline`);
-      setTimeout(() => { if (typeof this.onLoad === 'function') p.guard('Sound.onLoad', () => this.onLoad(false)); p.runQueue(); }, 0);
+    loadSound(this: any, url: any, stream?: any) {
+      const u = String(url ?? '');
+      const found = p.opts.dependencyFiles?.objectUrl(u) ?? null;
+      this.__url = found;
+      this.__sound = null;
+      if (!found) p.dependencies.record({ url: u, api: 'Sound.loadSound', requestedBy: p.requester(), kind: 'audio' });
+      setTimeout(() => {
+        // A streaming sound starts playing as soon as it loads (Flash `isStreaming`).
+        if (found && stream) this.start();
+        if (typeof this.onLoad === 'function') p.guard('Sound.onLoad', () => this.onLoad(!!found));
+        p.runQueue();
+      }, 0);
     },
     start(this: any, offset?: any, loops?: any) {
       if (this.__sound == null && !this.__url) return;
@@ -646,7 +728,7 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     },
     stop(this: any, id?: any) {
       if (id != null) {
-        const movie: Movie = this.__movie ?? N(this.target)?.movie ?? p.movie;
+        const movie: Movie = this.__movie ?? soundLibrary(this);
         const ch = [...movie.doc.characters.values()].find((c) => c.exportName === String(id));
         p.stopSound(ch?.id ?? -1, movie);
         return;
@@ -723,17 +805,17 @@ export function installBuiltins(p: AS2Player): BuiltinState {
       return pairs.join('&');
     },
     decode(this: any, s: any) { decodeVars(this, String(s ?? '')); },
-    load(this: any, url: any) { return lvRequest(this, String(url), 'GET', null, this); },
+    load(this: any, url: any) { return lvRequest(this, String(url), 'GET', null, this, 'LoadVars.load'); },
     send(this: any, url: any, win?: any, method?: any) { p.log('info', `LoadVars.send(${url}${win ? `, ${win}` : ''}, ${method ?? 'POST'}) – not sent (offline)`); return true; },
-    sendAndLoad(this: any, url: any, target: any, method?: any) { return lvRequest(this, String(url), String(method ?? 'POST').toUpperCase(), this.toString(), target); },
+    sendAndLoad(this: any, url: any, target: any, method?: any) { return lvRequest(this, String(url), String(method ?? 'POST').toUpperCase(), this.toString(), target, 'LoadVars.sendAndLoad'); },
     getBytesLoaded(this: any) { return this.loaded ? 1 : 0; },
     getBytesTotal() { return 1; },
     addRequestHeader() {},
   });
-  function lvRequest(src: any, url: string, method: string, body: string | null, target: any) {
+  function lvRequest(src: any, url: string, method: string, body: string | null, target: any, api: string) {
     if (target == null) return false;
     target.loaded = false;
-    fetchText(url, method, body).then((txt) => {
+    fetchText(url, method, body, api).then((txt) => {
       const done = () => {
         if (typeof target.onData === 'function' && Object.prototype.hasOwnProperty.call(target, 'onData')) { target.onData(txt ?? undefined); return; }
         if (txt != null) { decodeVars(target, txt); target.loaded = true; }
@@ -758,6 +840,28 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     },
     unloadClip(this: any, target: any) { unloadMovie(N(target)); return true; },
     getProgress() { return { bytesLoaded: 1, bytesTotal: 1 }; },
+  });
+
+  // ------------------------------------------------------------ NetStream / TextField.StyleSheet
+  def(RT.NetStream.prototype, {
+    play(this: any, url: any) {
+      const u = String(url ?? '');
+      if (!u) return;
+      if (p.opts.dependencyFiles?.find(u)) p.log('warn', `NetStream.play("${u}"): the video is uploaded, but video playback is not implemented yet`);
+      else p.dependencies.record({ url: u, api: 'NetStream.play', requestedBy: p.requester(), kind: 'video' });
+    },
+    close() {}, pause() {}, seek() {}, setBufferTime() {},
+  });
+  def(RT.TextFieldStyleSheet.prototype, {
+    load(this: any, url: any) {
+      this.loaded = false;
+      fetchText(String(url), 'GET', null, 'StyleSheet.load').then((txt) => {
+        if (txt != null) { this.parseCSS(txt); this.loaded = true; }
+        if (typeof this.onLoad === 'function') p.guard('StyleSheet.onLoad', () => this.onLoad(txt != null));
+        p.runQueue();
+      });
+      return true;
+    },
   });
 
   // ------------------------------------------------------------ LocalConnection / XMLSocket / XML / ContextMenu
@@ -842,7 +946,7 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     parseXML(this: any, s: any) { parseXmlInto(this, String(s ?? '')); },
     load(this: any, url: any) {
       this.loaded = false;
-      fetchText(String(url), 'GET', null).then((txt) => {
+      fetchText(String(url), 'GET', null, 'XML.load').then((txt) => {
         if (txt != null) { parseXmlInto(this, txt); this.loaded = true; }
         if (typeof this.onLoad === 'function') p.guard('XML.onLoad', () => this.onLoad(txt != null));
         p.runQueue();
@@ -850,7 +954,7 @@ export function installBuiltins(p: AS2Player): BuiltinState {
       return true;
     },
     sendAndLoad(this: any, url: any, target: any) {
-      fetchText(String(url), 'POST', String(this)).then((txt) => {
+      fetchText(String(url), 'POST', String(this), 'XML.sendAndLoad').then((txt) => {
         if (txt != null && target) { parseXmlInto(target, txt); target.loaded = true; }
         if (typeof target?.onLoad === 'function') p.guard('XML.onLoad', () => target.onLoad(txt != null));
         p.runQueue();

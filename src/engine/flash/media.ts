@@ -39,14 +39,18 @@ export class Sound extends EventDispatcher {
     super();
     const symbol = soundHost()?.symbolForClass(new.target);
     if (typeof symbol === 'number') this._characterId = symbol;
-    if (stream?.url) this._url = stream.url;
+    if (stream?.url) this.load(stream);
   }
   get length() { return this._characterId != null ? soundHost()?.soundLength(this._characterId) ?? 0 : 0; }
   get bytesLoaded() { return 1; }
   get bytesTotal() { return 1; }
   get isBuffering() { return false; }
   get url() { return this._url; }
-  load(stream: { url?: string }) { this._url = stream?.url ?? null; }
+  load(stream: { url?: string }) {
+    const url = stream?.url ?? '';
+    const host = runtime.player as unknown as { soundUrl?: (t: EventDispatcher, url: string) => string | null } | null;
+    this._url = url ? host?.soundUrl?.(this, url) ?? null : null;
+  }
   close() {}
   play(startTime = 0, loops = 0, sndTransform: SoundTransform | null = null): SoundChannel | null {
     const host = soundHost();

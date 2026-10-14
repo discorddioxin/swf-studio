@@ -21,6 +21,7 @@ import type { Frame, SwfDocument, Timeline } from '../../types';
 import { runtime, type PlayerContext } from './context';
 import { Event, EventDispatcher } from './events';
 import { ColorTransform, Matrix, Point, Rectangle, Transform } from './geom';
+import { definesBehaviour } from './utils';
 
 const TWIPS = 20;
 /** Timeline depths sit below script depths, as in Flash (-16384 + depth). */
@@ -36,6 +37,7 @@ export interface DisplayHost extends PlayerContext {
   readonly root: DisplayObject | null;
   readonly frameId: number;
   readonly mouse: { x: number; y: number; down: boolean };
+  readonly parameters: Record<string, string>;
   timelineFor(symbol: SymbolRef): Timeline | undefined;
   classForSymbol(id: number): Ctor | undefined;
   symbolForClass(ctor: Function): SymbolRef | undefined;
@@ -430,14 +432,13 @@ export class DisplayObjectContainer extends InteractiveObject {
 }
 
 /** True when obj[name] may be assigned without clobbering a method/accessor. */
+/**
+ * May a named timeline child be stored under `name` on `obj`? Not when the class
+ * defines `name` as an accessor or method — but a declared slot is exactly where it
+ * goes, including one whose default (`null`) sits on the prototype.
+ */
 function isPlainSlot(obj: object, name: string) {
-  let proto: object | null = Object.getPrototypeOf(obj);
-  while (proto && proto !== Object.prototype) {
-    const desc = Object.getOwnPropertyDescriptor(proto, name);
-    if (desc) return false;
-    proto = Object.getPrototypeOf(proto);
-  }
-  return true;
+  return !definesBehaviour(Object.getPrototypeOf(obj), name);
 }
 
 // ---------------------------------------------------------------- Graphics --
@@ -888,7 +889,8 @@ export class Stage extends DisplayObjectContainer {
 // --------------------------------------------------------------- LoaderInfo --
 
 export class LoaderInfo extends EventDispatcher {
-  readonly parameters: Record<string, string> = {};
+  /** FlashVars: the player's for the root movie (an object, never null). */
+  get parameters(): Record<string, string> { return host()?.parameters ?? {}; }
   readonly url = 'file:///game.swf';
   readonly loaderURL = 'file:///game.swf';
   readonly contentType = 'application/x-shockwave-flash';

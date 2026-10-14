@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   SAMPLE_CHAT, SAMPLE_EXPORTED_NAMES, SAMPLE_GAME_SET_ID, SAMPLE_MAIN, SAMPLE_PIER, SAMPLE_SCENE,
-  SAMPLE_SERVICE, SAMPLE_SWF_NAMES, SAMPLE_TRACKING, sampleExportDir, sampleFontDir, sampleSwfPath,
+  SAMPLE_EXTERNAL_DIR, SAMPLE_SERVICE, SAMPLE_SWF_NAMES, SAMPLE_TRACKING, sampleExportDir, sampleSwfPath,
 } from '../sample';
 
 // `sample.ts` paths are repo-relative (`game-files/…`); the manifest's own
@@ -20,9 +20,6 @@ const DATA = resolve(ROOT, 'game-files');
 interface SetEntry {
   name: string;
   path: string;
-  fileBase?: string;
-  fonts?: string[];
-  scriptOverrides?: { path: string; target: string }[];
 }
 interface GameSet {
   id: string;
@@ -65,12 +62,13 @@ describe('sample facts vs the shipped data', () => {
     }
   });
 
-  it('fonts and script overrides the set ships exist under the names the adapter publishes', () => {
-    for (const entry of set.swfs) {
-      for (const font of entry.fonts ?? []) expect(existsSync(resolve(DATA, font)), font).toBe(true);
-      for (const override of entry.scriptOverrides ?? []) expect(existsSync(resolve(DATA, override.path)), override.path).toBe(true);
-    }
-    expect(existsSync(resolve(ROOT, sampleFontDir(SAMPLE_SERVICE)))).toBe(true);
-    expect(existsSync(resolve(ROOT, sampleFontDir(SAMPLE_PIER)))).toBe(true);
+  it('the set names SWFs and nothing else: every other file comes out of the SWFs', () => {
+    for (const entry of set.swfs) expect(Object.keys(entry).sort(), entry.name).toEqual(['name', 'path']);
+  });
+
+  it('FFDec exports are test oracles outside the served root, never part of the app', () => {
+    expect(SAMPLE_EXTERNAL_DIR.startsWith('game-files/')).toBe(false);
+    expect(existsSync(resolve(ROOT, sampleExportDir(SAMPLE_SERVICE), `${SAMPLE_SERVICE}.xml`))).toBe(true);
+    expect(existsSync(resolve(DATA, 'fish-full/external'))).toBe(false);
   });
 });
