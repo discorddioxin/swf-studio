@@ -11,7 +11,7 @@ import { AS2Player } from '@/engine/as2/player';
 import { createExternalResolver, type ExternalSwf } from '@/engine/as2/externals';
 import { phpSerialize, phpUnserialize, parseGatewayRequest } from '../gsi';
 import { createFishingSession } from '..';
-import { SAMPLE_SERVICE, SAMPLE_SWF_NAMES, SAMPLE_TRACKING, sampleExportDir, sampleSwfPath } from '../sample';
+import { SAMPLE_SERVICE, SAMPLE_SWF_NAMES, SAMPLE_TRACKING, sampleSwfPath } from '../sample';
 
 const NAMES = SAMPLE_SWF_NAMES;
 
@@ -19,17 +19,10 @@ async function load(name: string) {
   const buf = readFileSync(sampleSwfPath(name));
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   const { doc, files } = await parseSwfBinary(ab, `${name}.swf`);
-  const chooserOverride = name === SAMPLE_SERVICE
-    ? readFileSync(`${sampleExportDir(SAMPLE_SERVICE)}/scripts/frame_61/DoAction.as`, 'utf8')
-    : null;
+  // Every script is the SWF's own bytecode: nothing is substituted.
   const sources: SourceInput[] = files
     .filter((f) => /\.as$/i.test(f.path))
-    .map((f) => ({
-      path: f.path,
-      text: name === SAMPLE_SERVICE && f.path === 'scripts/frame_61/DoAction.as' && chooserOverride != null
-        ? chooserOverride
-        : new TextDecoder().decode(f.bytes),
-    }));
+    .map((f) => ({ path: f.path, text: new TextDecoder().decode(f.bytes) }));
   return { doc, files, sources };
 }
 
@@ -90,7 +83,7 @@ it('runs the full 4-step multiplayer flow with MockServer and bundled tracking S
 
   const stepTicks = async (count: number) => {
     for (let i = 0; i < count; i++) {
-      player.tick();
+      player.advanceTime();
       player.runQueue();
       await new Promise((r) => setTimeout(r, 2));
     }
@@ -109,16 +102,9 @@ it('runs the full 4-step multiplayer flow with MockServer and bundled tracking S
   const joinButton = root.gsecs?.mc_ServerChooser?.join_btn;
   expect(serverList?.getLength?.()).toBe(2);
 
-  // Join is disabled and its handler is guarded until a real server row is selected.
-  const serverIPBeforeJoin = root.GSECS_SelectedServerIP;
-  expect(joinButton?.enabled).toBe(false);
-  expect(joinButton?._alpha).toBe(45);
-  joinButton.onRelease();
-  await stepTicks(10);
-  expect(root.gsecs?._currentframe).toBe(75);
-  expect(root.GSECS_SelectedServerIP).toBe(serverIPBeforeJoin);
-  expect(joinButton.enabled).toBe(false);
-  expect(mockServer.sushiServer.received).toHaveLength(0);
+  // The SWF's own chooser: Join is an ordinary button, enabled before any row is
+  // picked (frame 61 has no guard).
+  expect(joinButton?.enabled).not.toBe(false);
 
   // 2. Select a server row and click Join -> lands on Room Chooser (frame 45)
   serverList.selectRow(0);

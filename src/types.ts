@@ -50,6 +50,30 @@ export interface SwfCharacter {
   textMatrix?: Matrix;
   /** DefineFont*: glyph index → character code */
   codeTable?: number[];
+  /** DefineFont2/3: the glyph outlines and layout, enough to build the font itself. */
+  font?: SwfFontOutline;
+}
+
+/** A point of a glyph contour: on the outline, or a quadratic control point. */
+export interface GlyphPoint { x: number; y: number; on: boolean }
+
+/**
+ * An embedded font as the SWF stores it (SWF 19 spec, DefineFont2/DefineFont3):
+ * quadratic outlines in a 1024-unit EM square (20480 for DefineFont3), y down.
+ */
+export interface SwfFontOutline {
+  name: string;
+  bold: boolean;
+  italic: boolean;
+  /** Units per em of every coordinate below. */
+  em: number;
+  /** Per glyph: its closed contours, each a run of points. */
+  glyphs: GlyphPoint[][][];
+  /** Per glyph (fonts with layout): the advance, in font units. */
+  advances?: number[];
+  ascent?: number;
+  descent?: number;
+  leading?: number;
 }
 
 export interface TextRecord {

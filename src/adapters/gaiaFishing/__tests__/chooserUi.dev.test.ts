@@ -17,7 +17,7 @@ import { buildAS2Program, type SourceInput } from '@/engine/as2/program';
 import { AS2Player, type DisplayNode } from '@/engine/as2/player';
 import { createExternalResolver, type ExternalSwf } from '@/engine/as2/externals';
 import { createFishingSession, gaiaFishingAdapter } from '..';
-import { SAMPLE_GAME_SET_ID, SAMPLE_MAIN, SAMPLE_SERVICE, SAMPLE_SWF_NAMES, sampleExportDir, sampleSwfPath } from '../sample';
+import { SAMPLE_GAME_SET_ID, SAMPLE_MAIN, SAMPLE_SWF_NAMES, sampleSwfPath } from '../sample';
 import { scanStage, snapshotStage, stageRect, type InspectablePlayer } from '@/components/uiTroubleshooter/scan';
 
 const NAMES = SAMPLE_SWF_NAMES;
@@ -26,17 +26,10 @@ async function load(name: string) {
   const buf = readFileSync(sampleSwfPath(name));
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   const { doc, files } = await parseSwfBinary(ab, `${name}.swf`);
-  const chooserOverride = name === SAMPLE_SERVICE
-    ? readFileSync(`${sampleExportDir(SAMPLE_SERVICE)}/scripts/frame_61/DoAction.as`, 'utf8')
-    : null;
+  // Every script is the SWF's own bytecode: nothing is substituted.
   const sources: SourceInput[] = files
     .filter((f) => /\.as$/i.test(f.path))
-    .map((f) => ({
-      path: f.path,
-      text: name === SAMPLE_SERVICE && f.path === 'scripts/frame_61/DoAction.as' && chooserOverride != null
-        ? chooserOverride
-        : new TextDecoder().decode(f.bytes),
-    }));
+    .map((f) => ({ path: f.path, text: new TextDecoder().decode(f.bytes) }));
   return { doc, files, sources };
 }
 
@@ -63,7 +56,7 @@ async function bootToChooser() {
     }, session.network),
   });
   const ticks = async (count: number) => {
-    for (let i = 0; i < count; i++) { player.tick(); player.runQueue(); await new Promise((r) => setTimeout(r, 2)); }
+    for (let i = 0; i < count; i++) { player.advanceTime(); player.runQueue(); await new Promise((r) => setTimeout(r, 2)); }
   };
   player.start();
   await ticks(80);

@@ -73,7 +73,7 @@ it('resolves library symbols in the movie Flash would search, and reports the re
   };
 
   player.start();
-  for (let i = 0; i < 120; i++) { player.tick(); player.runQueue(); await new Promise((r) => setTimeout(r, 2)); }
+  for (let i = 0; i < 120; i++) { player.advanceTime(); player.runQueue(); await new Promise((r) => setTimeout(r, 2)); }
 
   const root: any = player.root.obj;
 

@@ -5,10 +5,12 @@
 
 import type {
   ColorTransform, DisplayItem, EventKind, Frame, FrameEvent, Matrix, PlaceOp,
-  Rect, SwfCharacter, SwfDocument, SwfHeader, TextRecord, Timeline,
+  GlyphPoint, Rect, SwfCharacter, SwfDocument, SwfFontOutline, SwfHeader, TextRecord, Timeline,
 } from '../../src/types';
 import { classify, kindOfTag, isSpecialTag, actionFileCandidates } from '../parser';
 import { BitReader, avm1ActionSource, isLikelyActionStream, latin1 } from './bitio';
+import { buildTrueType } from '../../src/lib/swfFont';
+import { decodeAdpcm, encodeWav } from '../../src/engine/as2/adpcm';
 import { shapeToSvg, type SvgBitmapInfo, type SvgFillStyle, type SvgLineStyle, type SvgShapeRecord } from './shapeSvg';
 
 /** SWF tag codes → JPEXS FFDec type names (the XML "type" attribute). */
@@ -590,7 +592,7 @@ async function decodeJpeg3(jpeg: Uint8Array, alphaCompressed: Uint8Array, w: num
 
 // fonts ---------------------------------------------------------------------
 
-interface FontInfo { id: number; codeTable: number[]; name: string; attrs: Record<string, string> }
+interface FontInfo { id: number; codeTable: number[]; name: string; attrs: Record<string, string>; outline: SwfFontOutline }
 
 function parseFont23(tag: RawTag): FontInfo {
   const br = new BitReader(tag.data);
@@ -628,7 +630,39 @@ function parseFont23(tag: RawTag): FontInfo {
       codeTable.push(fontFlagsWideCodes ? br.u16() : br.u8());
     }
   }
-  void stripped; void offsetTable;
+  // Each glyph is a SHAPE (fill/line bit counts, then shape records) at its offset
+  // from the start of the offset table, ending where the next one starts.
+  const glyphs: GlyphPoint[][][] = [];
+  if (!stripped) {
+    for (let i = 0; i < numGlyphs; i++) {
+      try {
+        br.seek(pos + offsetTable[i]);
+        glyphs.push(glyphContours(readShapeRecords(br, 1, [])));
+      } catch {
+        glyphs.push([]);
+      }
+    }
+  }
+  // The layout block follows the code table.
+  let advances: number[] | undefined;
+  let ascent: number | undefined, descent: number | undefined, leading: number | undefined;
+  if (fontFlagsHasLayout && codeTableOffset > 0) {
+    try {
+      br.seek(pos + codeTableOffset + numGlyphs * (fontFlagsWideCodes ? 2 : 1));
+      ascent = br.u16();
+      descent = br.u16();
+      leading = br.s16();
+      advances = [];
+      for (let i = 0; i < numGlyphs; i++) advances.push(br.s16());
+    } catch {
+      advances = undefined;
+    }
+  }
+  const outline: SwfFontOutline = {
+    name: name.replace(/\u0000+$/, ''), bold: fontFlagsBold, italic: fontFlagsItalic,
+    em: tag.type === 75 ? 20480 : 1024, glyphs,
+    ...(advances ? { advances, ascent, descent, leading } : {}),
+  };
   const attrs: Record<string, string> = {
     fontID: String(fontID), fontName: name,
     fontFlagsHasLayout: String(fontFlagsHasLayout),
@@ -641,7 +675,83 @@ function parseFont23(tag: RawTag): FontInfo {
     fontFlagsBold: String(fontFlagsBold),
     languageCode: String(languageCode),
   };
-  return { id: fontID, codeTable, name, attrs };
+  return { id: fontID, codeTable, name, attrs, outline };
+}
+
+/**
+ * A DefineSound's data as a playable file (SWF 19 spec, DefineSound: id UI16, then
+ * format UB4, rate UB2, 16-bit UB1, stereo UB1, sample count UI32, sound data).
+ */
+function soundFile(data: Uint8Array): { ext: string; bytes: Uint8Array } | null {
+  if (data.length < 7) return null;
+  const flags = data[2];
+  const format = flags >> 4;
+  const rate = [5512, 11025, 22050, 44100][(flags >> 2) & 3];
+  const is16 = (flags & 2) !== 0;
+  const channels: 1 | 2 = flags & 1 ? 2 : 1;
+  const body = data.subarray(7);
+  if (format === 2) return { ext: 'mp3', bytes: body.subarray(2) }; // SI16 seek samples, then MP3 frames
+  let samples: Int16Array;
+  if (format === 1) samples = decodeAdpcm(body, channels);
+  else if (format === 0 || format === 3) {
+    if (is16) {
+      samples = new Int16Array(body.length >> 1);
+      for (let i = 0; i < samples.length; i++) samples[i] = (body[2 * i] | (body[2 * i + 1] << 8)) << 16 >> 16;
+    } else samples = Int16Array.from(body, (b) => (b - 128) << 8);
+  } else return null;
+  return { ext: 'wav', bytes: new Uint8Array(encodeWav({ samples, rate, channels })) };
+}
+
+/**
+ * The closed contours a glyph's shape records draw. A glyph has one fill: each
+ * move-to starts a contour, straight edges add on-curve points and curved edges a
+ * control point and an anchor. A contour drawn with the fill on its left (`fill0`)
+ * runs the other way round from one with it on its right (`fill1`); reversing those
+ * gives every contour the same sense, so a non-zero fill sees outlines and holes.
+ */
+function glyphContours(records: SvgShapeRecord[]): GlyphPoint[][] {
+  const out: GlyphPoint[][] = [];
+  let x = 0, y = 0;
+  let current: GlyphPoint[] = [];
+  let fill0 = 0, fill1 = 0;
+  let leftFilled = false;
+  const close = () => {
+    // A zero-length edge repeats its point; a closed contour returns to its start.
+    // Neither is outline. Under three points a contour encloses nothing.
+    const points = current.filter((p, i) => i === 0 || !(p.on && current[i - 1].on && p.x === current[i - 1].x && p.y === current[i - 1].y));
+    const first = points[0], last = points[points.length - 1];
+    if (points.length > 1 && last.on && last.x === first.x && last.y === first.y) points.pop();
+    if (points.length > 2) out.push(leftFilled ? reverseContour(points) : points);
+    current = [];
+  };
+  for (const r of records) {
+    if (r.kind === 'style') {
+      if (r.fill0 != null) fill0 = r.fill0;
+      if (r.fill1 != null) fill1 = r.fill1;
+      if (r.move) {
+        close();
+        x = r.move.x; y = r.move.y;
+        leftFilled = fill0 !== 0 && fill1 === 0;
+        current.push({ x, y, on: true });
+      }
+    } else if (r.kind === 'straight') {
+      if (!current.length) current.push({ x, y, on: true });
+      x += r.dx; y += r.dy;
+      current.push({ x, y, on: true });
+    } else {
+      if (!current.length) current.push({ x, y, on: true });
+      current.push({ x: x + r.cx, y: y + r.cy, on: false });
+      x += r.cx + r.ax; y += r.cy + r.ay;
+      current.push({ x, y, on: true });
+    }
+  }
+  close();
+  return out;
+}
+
+/** The same closed contour traversed the other way, still starting on the curve. */
+function reverseContour(points: GlyphPoint[]): GlyphPoint[] {
+  return [points[0], ...points.slice(1).reverse()];
 }
 
 // text tags -----------------------------------------------------------------
@@ -1208,6 +1318,11 @@ export async function parseSwfBinary(
             const br2 = new BitReader(tag.data);
             const id = br2.u16();
             addChar(id, type, 'sound', { attrs: { soundId: String(id) } });
+            // The sound itself, as a file a browser plays: MP3 frames as they are,
+            // ADPCM and PCM decoded to WAV. Nellymoser/Speex have no browser codec.
+            const sound = soundFile(tag.data);
+            if (sound) addFile('sounds', id, sound.ext, sound.bytes);
+            else warnings.push(`DefineSound ${id}: sound format ${tag.data[2] >> 4} has no playable encoding`);
             break;
           }
           case 11: case 33: {
@@ -1243,10 +1358,14 @@ export async function parseSwfBinary(
             // the binary path must register the character the same way.
             const info = parseFont23(tag);
             // an absent/empty table stays absent, like parseSwfXml's `<codeTable>` check
-            addChar(info.id, type, 'font', {
+            const fontChar = addChar(info.id, type, 'font', {
               ...(info.codeTable.length ? { codeTable: info.codeTable } : {}),
               attrs: info.attrs,
             });
+            if (info.outline.glyphs.length) {
+              fontChar.font = info.outline;
+              addFile('fonts', info.id, 'ttf', buildTrueType(info.outline, info.codeTable));
+            }
             break;
           }
           case 73: { // DefineFontAlignZones

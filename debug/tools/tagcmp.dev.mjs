@@ -3,7 +3,7 @@ import zlib from 'node:zlib';
 import { JSDOM } from 'jsdom';
 
 const name = process.argv[2];
-const xml = readFileSync(`game-files/fish-full/external/${name}/${name}.xml`, 'utf8');
+const xml = readFileSync(`fixtures/ffdec/gaia-fishing/${name}/${name}.xml`, 'utf8');
 const dom = new JSDOM(xml, { contentType: 'text/xml' });
 const doc = dom.window.document;
 const tagsWrap = doc.querySelector('tags');

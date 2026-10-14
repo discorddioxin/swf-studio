@@ -586,6 +586,13 @@ export class AS2Player {
   trackSocket(socket: GameSocket) { if (!this.disposed) this.gameSockets.add(socket); }
   untrackSocket(socket: GameSocket) { this.gameSockets.delete(socket); }
 
+  /**
+   * Advance by `ms` of player time (default: one frame) through `step`, the path the
+   * running app takes — timers (`setInterval`/`setTimeout`) fire as well as frames.
+   * For tests and tools that drive the player without an animation loop.
+   */
+  advanceTime(ms = 1000 / this.frameRate) { this.step(this.last + ms); }
+
   /** Advance by real time: timers + as many ticks as are due. */
   step(now: number) {
     const dt = Math.max(0, Math.min(250, now - this.last));
