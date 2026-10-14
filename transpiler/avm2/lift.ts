@@ -207,12 +207,73 @@ export function liftMethod(ctx: MethodContext): LiftResult {
     return { stmts: null, diagnostics: [{ offset: 0, message: `body does not disassemble: ${dis.errors.join('; ')}` }] };
   }
   try {
-    const l = new Lifter(ctx, dis.instructions);
+    const canonical = absorbMarkers(dis.instructions, body.exceptions);
+    const l = new Lifter({ ...ctx, body: { ...body, exceptions: canonical.exceptions } }, canonical.instructions);
     return { stmts: l.run(), diagnostics: [] };
   } catch (e) {
     if (e instanceof Refuse) return { stmts: null, diagnostics: [{ offset: e.offset, message: e.message }] };
     throw e;
   }
+}
+
+/**
+ * `label` (and `nop`) do nothing, so a branch onto one and a branch past it go to
+ * the same place. haXe enters a bottom-tested loop past its `label` and jumps back
+ * onto the `label` (`jump L+1; L: label; body; iftrue L`); taken literally that is
+ * a loop with two entries. Each run of markers is absorbed into the instruction
+ * after it — which takes the run's offset — so every way of reaching it (a branch
+ * to the marker, a branch past it, falling into it, a switch's end, a protected
+ * range) names one offset. A `jump` to the instruction after it is a marker too.
+ */
+function absorbMarkers(instructions: AbcInstruction[], exceptions: AbcMethodBody['exceptions']): {
+  instructions: AbcInstruction[]; exceptions: AbcMethodBody['exceptions'];
+} {
+  const isMarker = (ins: AbcInstruction) => ins.name === 'label' || ins.name === 'nop';
+  // A run in front of a `try` or a handler stays as it is: the protected range
+  // starts exactly where it says, and a loop head in front of it stays apart.
+  const pinned = new Set((exceptions ?? []).flatMap((ex) => [ex.from, ex.target]));
+  /** Each absorbable run's first marker, by the offset of the instruction after it. */
+  const runsOf = (list: AbcInstruction[]) => {
+    const runOf = new Map<number, number>();   // marker or real offset -> the run's start
+    for (let k = 0; k < list.length; k++) {
+      if (!isMarker(list[k]) || k === list.length - 1) continue;
+      let j = k;
+      while (j < list.length - 1 && isMarker(list[j])) j++;
+      if (!pinned.has(list[j].offset)) for (let m = k; m <= j; m++) runOf.set(list[m].offset, list[k].offset);
+      k = j;
+    }
+    return runOf;
+  };
+  // A `jump` to the instruction after it (markers aside) is a marker itself.
+  const first = runsOf(instructions);
+  const realOf = (list: AbcInstruction[], runOf: Map<number, number>) => {
+    const real = new Map<number, number>();
+    for (let k = list.length - 1, next = -1; k >= 0; k--) {
+      if (!runOf.has(list[k].offset) || !isMarker(list[k]) || next < 0) next = list[k].offset;
+      real.set(list[k].offset, next);
+    }
+    return (to: number) => real.get(to) ?? to;
+  };
+  const before = realOf(instructions, first);
+  const marked = instructions.map((ins) => (ins.name === 'jump' && ins.target != null
+    && before(ins.target) === before(ins.offset + ins.size) ? { ...ins, name: 'nop', target: undefined } : ins));
+  const runOf = runsOf(marked);
+  const out: AbcInstruction[] = [];
+  for (const ins of marked) {
+    const start = runOf.get(ins.offset);
+    if (start == null) { out.push(ins); continue; }
+    if (isMarker(ins)) continue;
+    out.push({ ...ins, offset: start, size: ins.offset + ins.size - start });
+  }
+  const at = (to: number) => runOf.get(to) ?? to;
+  return {
+    instructions: out.map((ins) => (ins.target == null && !ins.targets ? ins : {
+      ...ins,
+      ...(ins.target != null ? { target: at(ins.target) } : {}),
+      ...(ins.targets ? { targets: ins.targets.map(at) } : {}),
+    })),
+    exceptions: exceptions?.map((ex) => ({ ...ex, from: at(ex.from), to: at(ex.to), target: at(ex.target) })),
+  };
 }
 
 class Lifter {
@@ -412,6 +473,16 @@ class Lifter {
         // A `try` whose both sides land exactly on this region's stop *is* this
         // region reaching its stop — the caller must be able to tell.
         return end.kind === 'jump' && stop != null && end.target === stop ? { kind: 'stop' } : end;
+      }
+      if (!this.active.has(cur)) {
+        const loop = this.tryDoWhile(cur);
+        if (loop) {
+          first = false;
+          if (loop.next == null) return loop.end;
+          if (stop != null && loop.next > stop) return { kind: 'jump', target: loop.next };
+          cur = loop.next;
+          continue;
+        }
       }
       if (this.active.has(cur)) {
         if (first && !enter) { first = false; }
@@ -667,7 +738,7 @@ class Lifter {
         if (exit <= target) return null;
         const frame: LoopFrame = { head, exit, test: target };
         this.loops.push(frame);
-        const arm = this.emitArm(head, target);
+        const arm = this.emitArmTo(head, target);
         this.loops.pop();
         if (arm.end.kind !== 'stop' && arm.end.kind !== 'end') throw new Refuse(jump.offset, 'an endless loop leaves through an unexpected edge');
         this.out.push({ k: 'while', test: lit('true'), body: block(arm.stmts) });
@@ -693,12 +764,108 @@ class Lifter {
       }
       const frame: LoopFrame = { head, exit, test: target };
       this.loops.push(frame);
-      const arm = this.emitArm(head, target);
+      const arm = this.emitArmTo(head, target);
       this.loops.pop();
-      if (arm.end.kind !== 'stop' && arm.end.kind !== 'end') throw new Refuse(jump.offset, 'loop body leaves through an unexpected edge');
+      if (arm.end.kind !== 'stop' && arm.end.kind !== 'end') throw new Refuse(jump.offset, `loop body leaves through an unexpected edge (${JSON.stringify(arm.end)})`);
       this.out.push({ k: 'while', test: info.jump, body: block(arm.stmts) });
       return { done: false, end: { kind: 'stop' }, next: exit };
     }
+  }
+
+  /**
+   * `do { body } while (test)`: the head is reached by falling into it, and a
+   * conditional branch further down jumps back to it — the loop's latch. haXe
+   * compiles every `do … while` this way, and ASC does too. The test is the latch's
+   * own block (folded with the blocks a compound condition spans); a jump there
+   * from the body is `continue`, which in a `do` evaluates the test, exactly as the
+   * bytecode does. Speculative: anything else is rolled back.
+   */
+  private tryDoWhile(head: number): { done: boolean; end: RegionEnd; next: number | null } | null {
+    if (this.loops.some((f) => f.head === head)) return null;
+    let latch: AbcInstruction | null = null;
+    for (const [at, block] of this.blocks) {
+      const last = block.at(-1);
+      if (at < head || !last || !branch(last) || last.target !== head) continue;
+      if (!latch || last.offset > latch.offset) latch = last;
+    }
+    if (!latch || this.stack.length) return null;
+    const exit = latch.offset + latch.size;
+    // Only the latch may go back to the head: a jump there skips the test, and that
+    // is no `continue`.
+    for (const [at, block] of this.blocks) {
+      const last = block.at(-1);
+      if (at < head || at >= exit || !last || last === latch) continue;
+      if (targets(last).includes(head)) return null;
+    }
+    const snap = this.snapshot();
+    try {
+      for (const testStart of this.latchStarts(head, latch)) {
+        const frame: LoopFrame = { head, exit, test: testStart };
+        this.loops.push(frame);
+        let arm: { stmts: Stmt[]; end: RegionEnd } = { stmts: [], end: { kind: 'stop' } };
+        try {
+          // A test that starts at the head: the body is empty (`while (busy) {}`).
+          if (testStart !== head) arm = this.emitArmTo(head, testStart);
+        } catch (e) {
+          if (!(e instanceof Refuse)) throw e;
+          this.restore(snap);
+          continue;
+        } finally {
+          this.loops.pop();
+        }
+        if (arm.end.kind !== 'stop' && arm.end.kind !== 'end') { this.restore(snap); continue; }
+        const saved = this.out;
+        const testStmts: Stmt[] = [];
+        this.out = testStmts;
+        let test: ReturnType<Lifter['foldTestRegion']> = null;
+        try {
+          test = this.foldTestRegion(testStart);
+        } finally {
+          this.out = saved;
+        }
+        if (!test || test.decide !== latch) { this.restore(snap); continue; }
+        const info = this.branchInfo(latch);
+        if (!info || this.stack.length) { this.restore(snap); continue; }
+        // What the test runs before deciding (`i--` in `while (i-- > 0)`) is part of
+        // the condition — `while ((t = i, i = i - 1, t > 0))` — so a `continue`
+        // runs it too.
+        // A temp the test takes (`var __h = i`) is declared before the loop.
+        const effects: Expr[] = [];
+        const declared: Stmt[] = [];
+        let plain = true;
+        for (const st of testStmts) {
+          if (st.k === 'expr') effects.push(st.e);
+          else if (st.k === 'var' && st.decls.length === 1 && st.decls[0].init) {
+            declared.push({ k: 'var', decls: [{ ...st.decls[0], init: null }] });
+            effects.push(assign(id(st.decls[0].name), st.decls[0].init));
+          } else plain = false;
+        }
+        if (!plain) { this.restore(snap); continue; }
+        const cond: Expr = effects.length ? { k: 'seq', items: [...effects, info.jump] } : info.jump;
+        this.out.push(...declared, { k: 'dowhile', body: block(arm.stmts), test: cond });
+        return { done: false, end: { kind: 'stop' }, next: exit };
+      }
+    } catch (e) {
+      if (!(e instanceof Refuse)) throw e;
+    }
+    this.restore(snap);
+    return null;
+  }
+
+  /** Where a latch's test may start: its own block, then earlier blocks that fall or branch forward into it. */
+  private latchStarts(head: number, latch: AbcInstruction): number[] {
+    const starts: number[] = [];
+    let at = this.blockStart(latch.offset);
+    if (at === head) return [head];
+    for (let guard = 0; guard < 6 && at > head; guard++) {
+      starts.push(at);
+      const before = this.blockStart(at - 1);
+      const last = this.blocks.get(before)?.at(-1);
+      if (!last || last.name === 'jump' || TERMINATORS.has(last.name) || last.name === 'lookup_switch') break;
+      if (branch(last) && ((last.target as number) <= at || (last.target as number) > latch.offset + latch.size)) break;
+      at = before;
+    }
+    return starts;
   }
 
   /**
@@ -1664,6 +1831,9 @@ class Lifter {
       }
       case 'inc_local': case 'dec_local': case 'inc_local_i': case 'dec_local_i': {
         const target = this.local(o[0]);
+        // `a[i++]` is `getlocal i; inclocal i; …`: the copy already on the stack is
+        // the old value.
+        if (target.k === 'id') this.holdReaders(target.name);
         this.statement({ k: 'update', op: i.name.startsWith('inc') ? '++' : '--', prefix: false, arg: target });
         return;
       }
@@ -1851,10 +2021,7 @@ class Lifter {
       for (let k = 0; k < this.stack.length; k++) if (this.stack[k].e === v.e) this.stack[k] = { e: id(name) };
       return;
     }
-    for (let k = 0; k < this.stack.length; k++) {
-      const e = this.stack[k].e;
-      if (e.k === 'id' && e.name === name) this.hold(k);
-    }
+    this.holdReaders(name, v.e);
     // The compiler leaves the stored value on the stack: those copies read the local,
     // so they must be rewritten *before* the store emits (nothing else may re-run).
     for (let k = 0; k < this.stack.length; k++) {
@@ -1870,6 +2037,24 @@ class Lifter {
     const name = `__h${this.temps++}`;
     this.out.push({ k: 'var', decls: [{ name, type: null, init: this.stack[index].e }] });
     this.stack[index] = { e: { k: 'id', name, line: 0 } };
+  }
+
+  /**
+   * Before a local changes, every value on the stack computed from it gets a temp:
+   * those values were read already (`int(i)`, `i + 1`, not just `i`). `dup` copies
+   * share one temp. `except` (the value being stored) is rewritten by the caller.
+   */
+  private holdReaders(name: string, except?: Expr) {
+    const held = new Map<Expr, Expr>();
+    for (let k = 0; k < this.stack.length; k++) {
+      const e = this.stack[k].e;
+      if (e === except) continue;
+      const done = held.get(e);
+      if (done) { this.stack[k] = { e: done }; continue; }
+      if (!readsName(e, name)) continue;
+      this.hold(k);
+      held.set(e, this.stack[k].e);
+    }
   }
 
   /** Temp every other stack copy of `e`, so a store cannot change what they see. */
@@ -2421,6 +2606,18 @@ function isTrivial(e: Expr): boolean {
 }
 function isLiteralTrue(e: Expr): boolean { return e.k === 'lit' && e.v === 'true'; }
 function branch(i: AbcInstruction): boolean { return i.name.startsWith('if_'); }
+/** Does `e` read the variable `name` when evaluated (a closure's body reads it later)? */
+function readsName(e: unknown, name: string): boolean {
+  if (!e || typeof e !== 'object') return false;
+  const node = e as Record<string, unknown>;
+  if (node.k === 'id') return node.name === name;
+  if (node.k === 'func') return false;
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value) ? value.some((x) => readsName(x, name)) : readsName(value, name)) return true;
+  }
+  return false;
+}
+
 function targets(i: AbcInstruction): number[] {
   return [i.target, ...(i.targets ?? [])].filter((t): t is number => t != null);
 }
