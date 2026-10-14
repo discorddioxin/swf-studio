@@ -6,10 +6,20 @@
 // control flow. Nothing in it is a VM — the bytecode has already been lifted by
 // `lift.ts`, and every import is a name the ABC itself carried in its pools.
 
+import type { Stmt } from '../as2/ast';
 import type { AbcClassDef, AbcFile, AbcMethodInfo, AbcTrait } from '../../decompiler/swf/abc';
+import { FLASH_DEFINITIONS, TOP_LEVEL } from '../../src/engine/flash/packages';
 import { liftMethod, type LiftDiagnostic } from './lift';
 
 export interface EmittedFile { path: string; text: string }
+
+/** The names a module's bodies use, split by how they use them. */
+interface NameUse {
+  /** Named as a value: `new Foo`, `Foo.bar`, `x instanceof Foo`, `extends`. */
+  values: Set<string>;
+  /** Named in a position TypeScript erases: `x as Foo`. */
+  types: Set<string>;
+}
 export interface EmitDiagnostic extends LiftDiagnostic { where: string }
 export interface EmitResult {
   files: EmittedFile[];
@@ -37,6 +47,11 @@ export interface AbcModuleOptions {
    * names it rejects become loud stand-ins instead of imports that cannot resolve,
    * and are listed in `unsupported`.
    */
+  /**
+   * Which `flash.*` / `fl.*` names the player can actually provide. Defaults to
+   * the engine's own table, so an unavailable class becomes a loud
+   * `unsupportedFlash(...)` stub instead of an import that fails to link.
+   */
   flashAvailable?: (dotted: string) => boolean;
 }
 
@@ -62,18 +77,18 @@ export function transpileAbc(options: AbcModuleOptions): EmitResult {
     const script = abc.scripts[scriptIndex];
     for (const trait of script.traits) {
       if (trait.kind === 'class' && trait.classIndex != null && abc.classes[trait.classIndex]) {
-        const result = emitClassModule({ abc, classIndex: trait.classIndex, projectClasses, pathOf, flashAvailable: options.flashAvailable, unsupported });
+        const result = emitClassModule({ abc, classIndex: trait.classIndex, projectClasses, pathOf, flashAvailable: flashAvailableOf(options), unsupported });
         files.push(...result.files);
         diagnostics.push(...result.diagnostics);
       } else if (trait.kind === 'function' && trait.method != null) {
-        files.push({ path: `functions/${simpleName(trait.name)}.ts`, text: emitFunctionModule(abc, trait) });
+        files.push({ path: `functions/${simpleName(trait.name)}.ts`, text: emitFunctionModule(abc, trait, pathOf) });
       } else if (trait.kind === 'slot' || trait.kind === 'const') {
         if (trait.value !== undefined) {
           files.push({ path: `constants/${simpleName(trait.name)}.ts`, text: `export const ${simpleName(trait.name)} = ${JSON.stringify(trait.value)};\n` });
         }
       }
     }
-    const init = emitScriptInit(abc, script.init);
+    const init = emitScriptInit(abc, script.init, script.traits);
     if (init) files.push(init);
   }
 
@@ -85,7 +100,7 @@ export function transpileAbc(options: AbcModuleOptions): EmitResult {
     if (emitted.has(path)) continue;
     const bound = scriptBoundClasses(abc);
     if (bound.has(i)) continue;
-    const result = emitClassModule({ abc, classIndex: i, projectClasses, flashAvailable: options.flashAvailable, unsupported });
+    const result = emitClassModule({ abc, classIndex: i, projectClasses, flashAvailable: flashAvailableOf(options), unsupported });
     files.push(...result.files);
     diagnostics.push(...result.diagnostics);
   }
@@ -100,7 +115,9 @@ const UNSUPPORTED_HELPER_TEXT = [
   '// Emitted with an ABC transpile: stands in for flash.* definitions this engine',
   '// does not implement. It throws where the movie uses it, not at load time.',
   'export function unsupportedFlash(name: string): any {',
-  '  const fail = () => { throw new Error("flash definition " + name + " is not implemented by this engine"); };',
+  '  // A real function, not an arrow: a movie extends flash classes, so the stub has',
+  '  // to be constructible for the class definition itself to succeed.',
+  '  const fail = function (): never { throw new Error("flash definition " + name + " is not implemented by this engine"); };',
   '  const stub: any = new Proxy(fail, { get: () => stub, apply: fail, construct: fail });',
   '  return stub;',
   '}',
@@ -120,12 +137,25 @@ export function simpleName(qualified: string): string {
 
 // ------------------------------------------------------------------ classes
 
+/** Packages the player itself owns: anything else in the movie folder is game code. */
+const PLAYER_PACKAGE = /^(flash|fl|adobe|mx|air)[.]/;
+
+/** The engine's own `flash.*` table unless the caller overrides it. */
+function flashAvailableOf(options: { flashAvailable?: (dotted: string) => boolean }) {
+  return options.flashAvailable ?? ((dotted: string) => !PLAYER_PACKAGE.test(dotted) || FLASH_DEFINITIONS.has(dotted));
+}
+
 export interface ClassModuleOptions {
   abc: AbcFile;
   /** Simple name → module path, for every class/function this project emits. */
   pathOf?: Map<string, string>;
   classIndex: number;
   projectClasses: Set<string>;
+  /**
+   * Which `flash.*` / `fl.*` names the player can actually provide. Defaults to
+   * the engine's own table, so an unavailable class becomes a loud
+   * `unsupportedFlash(...)` stub instead of an import that fails to link.
+   */
   flashAvailable?: (dotted: string) => boolean;
   unsupported?: Set<string>;
 }
@@ -143,7 +173,9 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
   const qualifiedName = instance.name || `__class${classIndex}`;
   const simple = simpleName(qualifiedName);
   const diagnostics: EmitDiagnostic[] = [];
-  const valueNames = new Set<string>();                  // what this module's bodies use as values
+  // What this module's bodies name, and how: a value use needs a real import (or a
+  // require at the point of use), a type use only needs `import type`.
+  const used: NameUse = { values: new Set(), types: new Set() };
   const isInterface = instance.isInterface;
 
   // Timeline frame scripts are ordinary instance traits named `frameN` (namespace
@@ -153,66 +185,80 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
   const staticMembers = new Set<string>(def.traits.filter((t) => t.kind !== 'class').map((t) => simpleName(t.name)));
   const globals = new Set<string>();
   for (const script of abc.scripts) for (const trait of script.traits) if (trait.kind === 'function') globals.add(simpleName(trait.name));
+  // Classes are globals too (`flash.utils.getDefinitionByName`, unqualified use in
+  // another class): a body names one by its simple name and the import machinery
+  // brings it in, instead of the body pointing at `this.RequestRetry`.
+  for (const qualified of projectClasses) globals.add(simpleName(qualified));
   const instanceScope: LiftScope = { target: 'instance', memberNames: instanceMembers, staticMembers, staticOwner: simple, globals };
   const staticScope: LiftScope = { target: 'class', memberNames: staticMembers, staticMembers, staticOwner: simple, globals };
 
-  const members: string[] = [];
+  // Bodies are lifted first and printed afterwards: which names need to be
+  // required on first use (see `lazy` below) is only known once every body of the
+  // module has been lifted, and the printer has to write those as property reads.
+  const members: MemberPiece[] = [];
 
   if (!isInterface && instance.iinit >= 0) {
-    const ctor = hoistSuper(liftBody(abc, instance.iinit, instanceScope, diagnostics, `${qualifiedName}::constructor`, valueNames));
-    members.push(`  public constructor(${paramsOf(abc, instance.iinit)}) {\n${ctor}\n  }`);
+    const where = `${qualifiedName}::constructor`;
+    members.push({
+      open: `  public constructor(${paramsOf(abc, instance.iinit)}) {\n`,
+      close: '\n  }',
+      stmts: liftStmts(abc, instance.iinit, instanceScope, diagnostics, where),
+      where,
+      hoistSuper: true,
+    });
   }
 
   for (const trait of instance.traits) {
-    const text = memberOf(abc, trait, instanceScope, diagnostics, qualifiedName, isInterface, false, valueNames);
-    if (text) members.push(text);
+    const piece = memberPiece(abc, trait, instanceScope, diagnostics, qualifiedName, isInterface, false);
+    if (piece) members.push(piece);
   }
   for (const trait of def.traits) {
-    const text = memberOf(abc, trait, staticScope, diagnostics, qualifiedName, isInterface, true, valueNames);
-    if (text) members.push(text);
+    const piece = memberPiece(abc, trait, staticScope, diagnostics, qualifiedName, isInterface, true);
+    if (piece) members.push(piece);
   }
   for (const [frameName, method] of [...frames.entries()].sort()) {
-    const lifted = liftBody(abc, method, instanceScope, diagnostics, `${qualifiedName}::${frameName}`, valueNames);
-    members.push(`  public ${frameName}(): any {\n${lifted}\n  }`);
+    const where = `${qualifiedName}::${frameName}`;
+    members.push({
+      open: `  public ${frameName}(): any {\n`, close: '\n  }',
+      stmts: liftStmts(abc, method, instanceScope, diagnostics, where), where,
+    });
   }
 
   const supers = [...instance.interfaces].map((i) => simpleName(i));
   const superName = instance.superName ? simpleName(instance.superName) : '';
+  const withBase = !!(superName && superName !== 'Object');
+  if (superName) used.values.add(superName);
+
+  // The module's own class and its base are named by the class declaration itself,
+  // so those two keep their real import and print as plain names.
+  const refs: RefMaps = {
+    pathOf: options.pathOf ?? new Map<string, string>(),
+    self: qualifiedName,
+    skip: new Set([simple, superName].filter(Boolean)),
+    // `T(x)` is a cast when T is a class, so the printer has to know the movie's and
+    // the engine's class names — not the function names that look like them.
+    classNames: new Set([...projectClasses, ...FLASH_DEFINITIONS.keys()].map(simpleName)),
+  };
+  const body = members.map((m) => {
+    if (m.stmts === undefined) return m.open;
+    const printed = m.stmts === null ? refusalStub(m.where, diagnostics) : printStmts(m.stmts, used, refs);
+    return `${m.open}${m.hoistSuper ? hoistSuper(printed) : printed}${m.close}`;
+  });
   // JavaScript has no `super` without a base class, so one that uses `super` gets `extends Object`.
-  const withBase = superName && superName !== 'Object';
-  const needsBase = !withBase && members.some((m) => /\bsuper\b/.test(m));
+  const needsBase = !withBase && body.some((text) => /\bsuper\b/.test(text));
   const header = isInterface
     ? `export interface ${simple}${supers.length ? ` extends ${supers.join(', ')}` : ''} {`
     : `export class ${simple}${withBase || needsBase ? ` extends ${withBase ? superName : 'Object'}` : ''}${supers.length ? ` implements ${supers.join(', ')}` : ''} {`;
+  const text = [header, ...body, '}'].join('\n');
 
-  const text = [header, ...members, '}'].join('\n');
   const uses = namesUsed(text);
-  // A name the body never used as a value is a type here: import it as one, so a
-  // module-level `import type` cannot become part of a runtime import cycle.
-  if (superName) valueNames.add(superName);
-  // Other project classes this module only touches inside method bodies: require
-  // them on first use. An eager import of a class that a sibling requires back
-  // would make the cycle resolve to `undefined` at `extends` time.
-  const lazy = new Set<string>();
-  const lazyLines: string[] = [];
-  for (const name of [...valueNames].sort()) {
-    if (name === simple || name === superName || BUILTINS.has(name)) continue;
-    const target = options.pathOf?.get(name);
-    if (!target) continue;
-    lazy.add(name);
-    lazyLines.push(`  get ${name}(): any { return require('${specifier(qualifiedName, target.replace(/\.ts$/, ''))}').${name}; },`);
-  }
-  const typeOnly = new Set([...uses].filter((n) => !valueNames.has(n)));
-  const imports = importLines(uses, abc, projectClasses, qualifiedName, simple, options.flashAvailable, options.unsupported, typeOnly, lazy);
-  if (lazyLines.length) {
-    imports.push(
-      '// AS3 resolves classes lazily; requiring these on first use keeps a class cycle',
-      '// from freezing into a broken `extends`.',
-      'const __m: Record<string, any> = {',
-      ...lazyLines,
-      '};',
-    );
-  }
+  // A name in the text that no body printed as a value is a type here (a slot's
+  // declared type, an interface, an `as` cast): importing it as a value would put
+  // the module back into a runtime import graph it does not belong to.
+  const types = new Set([...used.types, ...[...uses].filter((name) => !used.values.has(name))]);
+  for (const name of types) if (projectClasses.has(name) || abc.classes.some((c) => c.instance.name === name)) uses.add(name);
+  const required = new Set([...used.values].filter((name) => options.pathOf?.has(name) && !refs?.skip?.has(name)));
+  const imports = importLines(uses, abc, projectClasses, qualifiedName, simple, options.flashAvailable, options.unsupported, types, used.values, options.pathOf ? required : undefined);
 
   return {
     files: [{ path: classPath(qualifiedName), text: `${imports.join('\n')}${imports.length ? '\n\n' : ''}${text}\n` }],
@@ -221,6 +267,17 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
     provides: [simple, ...frames.keys()],
     qualifiedName,
   };
+}
+
+/** One class member: literal text, or an opening line plus a body printed later. */
+interface MemberPiece {
+  open: string;
+  close: string;
+  /** `undefined` for a member that is a single line, `null` for a refused body. */
+  stmts?: Stmt[] | null;
+  /** `where` names the body in a refusal; the constructor's `super()` is hoisted. */
+  where: string;
+  hoistSuper?: boolean;
 }
 
 /** Everything a member body needs in order to resolve names against its class. */
@@ -246,8 +303,8 @@ function hoistSuper(body: string): string {
   return lines.join('\n');
 }
 
-/** A member method / accessor / slot of a class, or '' for traits that are not members. */
-function memberOf(
+/** A member method / accessor / slot of a class, or null for traits that are not members. */
+function memberPiece(
   abc: AbcFile,
   trait: AbcTrait,
   scope: LiftScope,
@@ -255,62 +312,86 @@ function memberOf(
   owner: string,
   isInterface: boolean,
   isStatic: boolean,
-  valueNames: Set<string>,
-): string {
+): MemberPiece | null {
   const name = simpleName(trait.name);
   const stat = isStatic ? 'static ' : '';
+  const literal = (text: string): MemberPiece => ({ open: text, close: '', where: '' });
   if (trait.kind === 'slot' || trait.kind === 'const') {
     const init = trait.value !== undefined && trait.value !== null ? ` = ${JSON.stringify(trait.value)}` : '';
-    if (isInterface) return `  ${name}: ${trait.type ? typeName(trait.type) : 'any'};`;
-    return `  public ${stat}${name}: ${trait.type ? typeName(trait.type) : 'any'}${init};`;
+    if (isInterface) return literal(`  ${name}: ${trait.type ? typeName(trait.type) : 'any'};`);
+    return literal(`  public ${stat}${name}: ${trait.type ? typeName(trait.type) : 'any'}${init};`);
   }
-  if (trait.kind !== 'method' && trait.kind !== 'getter' && trait.kind !== 'setter') return '';
-  if (trait.method == null) return `  public ${stat}${name}: any;`;
+  if (trait.kind !== 'method' && trait.kind !== 'getter' && trait.kind !== 'setter') return null;
+  if (trait.method == null) return literal(`  public ${stat}${name}: any;`);
   const info = abc.methods[trait.method];
   const params = paramsOf(abc, trait.method);
   const ret = info?.returnType ? typeName(info.returnType) : 'any';
   const hasBody = abc.bodies.some((b) => b.method === trait.method);
   if (isInterface) {
-    if (trait.kind === 'getter') return `  get ${name}(): ${ret};`;
-    if (trait.kind === 'setter') return `  set ${name}(${params});`;
-    return `  ${name}(${params}): ${ret};`;
+    if (trait.kind === 'getter') return literal(`  get ${name}(): ${ret};`);
+    if (trait.kind === 'setter') return literal(`  set ${name}(${params});`);
+    return literal(`  ${name}(${params}): ${ret};`);
   }
-  if (!hasBody) return `  public ${stat}${name}(${params}): ${ret} { throw new Error(${JSON.stringify(`${owner}::${name} has no body in the ABC`)}); }`;
-  const lifted = liftBody(abc, trait.method, scope, diagnostics, `${owner}::${name}`, valueNames);
-  if (trait.kind === 'getter') return `  public ${stat}get ${name}()${ret === 'void' ? '' : `: ${ret}`} {\n${lifted}\n  }`;
-  if (trait.kind === 'setter') return `  public ${stat}set ${name}(${params}) {\n${lifted}\n  }`;
-  return `  public ${stat}${name}(${params}): ${ret} {\n${lifted}\n  }`;
+  if (!hasBody) return literal(`  public ${stat}${name}(${params}): ${ret} { throw new Error(${JSON.stringify(`${owner}::${name} has no body in the ABC`)}); }`);
+  const where = `${owner}::${name}`;
+  const stmts = liftStmts(abc, trait.method, scope, diagnostics, where);
+  if (trait.kind === 'getter') return { open: `  public ${stat}get ${name}()${ret === 'void' ? '' : `: ${ret}`} {\n`, close: '\n  }', stmts, where };
+  if (trait.kind === 'setter') return { open: `  public ${stat}set ${name}(${params}) {\n`, close: '\n  }', stmts, where };
+  return { open: `  public ${stat}${name}(${params}): ${ret} {\n`, close: '\n  }', stmts, where };
 }
 
-/** Lift a method body, indented as a member; a refusal becomes a loud stub. */
-function liftBody(abc: AbcFile, method: number, scope: LiftScope, diagnostics: EmitDiagnostic[], where: string, valueNames: Set<string>, lazy: Set<string> = new Set()): string {
+/** Lift a method body to statements; a refusal is recorded and reported as `null`. */
+function liftStmts(abc: AbcFile, method: number, scope: LiftScope, diagnostics: EmitDiagnostic[], where: string): Stmt[] | null {
   const body = abc.bodies.find((b) => b.method === method);
-  if (!body) return `    throw new Error(${JSON.stringify(`${where}: no body in the ABC`)});`;
-  const result = liftMethod({ abc, body, ...scope, ...abiFlags(abc, method), paramNames: paramNamesOf(abc, method) });
-  if (!result.stmts) {
-    const first = result.diagnostics[0];
-    diagnostics.push({ offset: first?.offset ?? 0, message: first?.message ?? 'unknown', where });
-    const detail = first ? `byte ${first.offset}: ${first.message}` : 'unknown reason';
-    // Loud and honest: the method exists, and calling it says exactly why it cannot run.
-    return `    throw new Error(${JSON.stringify(`${where}: not lifted yet (${detail})`)});`;
+  if (!body) {
+    diagnostics.push({ offset: 0, message: 'no body in the ABC', where });
+    return null;
   }
-  const printer = new Printer(valueNames, lazy);
-  const printed = printer.print(result.stmts);
+  const result = liftMethod({ abc, body, ...scope, ...abiFlags(abc, method), paramNames: paramNamesOf(abc, method) });
+  if (result.stmts) return result.stmts;
+  const first = result.diagnostics[0];
+  diagnostics.push({ offset: first?.offset ?? 0, message: first?.message ?? 'unknown', where });
+  return null;
+}
+
+/** Print a lifted body as a member body. */
+function printStmts(
+  stmts: Stmt[],
+  used: NameUse,
+  refs: RefMaps | undefined,
+): string {
+  const printed = new Printer(used, refs).print(stmts);
   return printed.split('\n').map((l) => `    ${l}`).join('\n');
 }
 
+/**
+ * The stub a body that could not be lifted becomes: the method exists, and calling
+ * it says exactly which byte of which method is missing.
+ */
+function refusalStub(where: string, diagnostics: EmitDiagnostic[]): string {
+  const detail = diagnostics.find((d) => d.where === where);
+  return `    throw new Error(${JSON.stringify(`${where}: not lifted yet (${detail ? `byte ${detail.offset}: ${detail.message}` : 'unknown reason'})`)});`;
+}
+
 /** The module that runs a script's top level (its trait bindings are the class objects). */
-function emitScriptInit(abc: AbcFile, method: number): EmittedFile | null {
+function emitScriptInit(abc: AbcFile, method: number, traits: AbcTrait[]): EmittedFile | null {
   const body = abc.bodies.find((b) => b.method === method);
   if (!body) return null;
   const result = liftMethod({ abc, body, target: 'none' });
   if (!result.stmts) return null;
-  const valueNames = new Set<string>();
+  const used: NameUse = { values: new Set(), types: new Set() };
+  // Names the module itself defines: a script init that only re-states them
+  // (`this.Thing = Thing`, the class/function slots) says nothing new.
+  const own = new Set(traits.map((t) => simpleName(t.name)));
+  const restatesOwnSlot = (text: string) => {
+    const m = /^this\.([\w$]+) = (this|[\w$]+);$/.exec(text.trim());
+    return !!m && own.has(m[1]) && (m[2] === 'this' || m[2] === m[1]);
+  };
   // The structural part of a script init (`newclass`, `initproperty`) *is* the
   // TypeScript class declaration, so statements that only build class objects go.
   const kept = result.stmts
-    .map((s) => ({ stmt: s, text: new Printer(valueNames).print([s]) }))
-    .filter((r) => r.text.trim() && !/__class\d+/.test(r.text) && r.stmt.k !== 'return');
+    .map((s) => ({ stmt: s, text: new Printer(used).print([s]) }))
+    .filter((r) => r.text.trim() && !/__class\d+/.test(r.text) && r.stmt.k !== 'return' && !restatesOwnSlot(r.text));
   if (!kept.length) return null;
   const printed = kept.map((r) => r.text).join('\n');
   const header = `// Script init from the ABC — runs when the module is linked.\n`;
@@ -318,13 +399,13 @@ function emitScriptInit(abc: AbcFile, method: number): EmittedFile | null {
 }
 
 /** An `internal function frame1()` binding, for the rare block that names a function. */
-function emitFunctionModule(abc: AbcFile, trait: AbcTrait): string {
+function emitFunctionModule(abc: AbcFile, trait: AbcTrait, pathOf?: Map<string, string>): string {
   const name = simpleName(trait.name);
   const body = trait.method != null ? abc.bodies.find((b) => b.method === trait.method) : undefined;
   if (!body) return `export function ${name}(...args: any[]): any { throw new Error("no body"); }\n`;
   const result = liftMethod({ abc, body, target: 'none', paramNames: paramNamesOf(abc, trait.method as number) });
-  const valueNames = new Set<string>();
-  const text = result.stmts ? new Printer(valueNames).print(result.stmts) : `throw new Error("not lifted yet");`;
+  const refs: RefMaps = { pathOf: pathOf ?? new Map<string, string>(), self: `functions/${name}` };
+  const text = result.stmts ? new Printer({ values: new Set(), types: new Set() }, refs).print(result.stmts) : `throw new Error("not lifted yet");`;
   return `export function ${name}(${paramsOf(abc, trait.method as number)}): any {\n${text.split('\n').map((l) => `  ${l}`).join('\n')}\n}\n`;
 }
 
@@ -378,11 +459,21 @@ function namesUsed(text: string): Set<string> {
   return used;
 }
 
-const BUILTINS = new Set(['any', 'Array', 'Boolean', 'const', 'else', 'Error', 'export', 'false', 'for', 'function',
+/**
+ * Names a module can use without an import: JavaScript's own globals, ActionScript's
+ * int/uint/Number spellings, and everything the engine puts at the top level
+ * (`trace`, `Vector`, the error classes). The list is derived from the engine's own
+ * table so a name cannot be imported here while the loader also injects it.
+ */
+const BUILTINS = new Set([
+  ...Object.keys(TOP_LEVEL),
+  'any', 'Array', 'Boolean', 'const', 'else', 'Error', 'export', 'false', 'for', 'function',
   'if', 'import', 'in', 'instanceof', 'let', 'number', 'new', 'null', 'of', 'return', 'string', 'super', 'this',
   'throw', 'true', 'typeof', 'undefined', 'var', 'void', 'while', 'NaN', 'JSON', 'Math', 'Object', 'String',
   'Number', 'delete', 'as', 'is', 'interface', 'extends', 'implements', 'class', 'get', 'set', 'static', 'public',
-  'catch', 'try', 'break', 'continue', 'do', 'switch', 'case', 'default', 'int', 'uint', 'trace', 'Date', 'RegExp']);
+  'catch', 'try', 'break', 'continue', 'do', 'switch', 'case', 'default', 'int', 'uint', 'trace', 'Date', 'RegExp',
+  'Function', 'Proxy',
+]);
 
 /** Imports for everything the module body references and the ABC knows the package of. */
 function importLines(
@@ -393,8 +484,12 @@ function importLines(
   simple: string,
   flashAvailable?: (dotted: string) => boolean,
   unsupported?: Set<string>,
-  typeOnly?: Set<string>,
-  lazy?: Set<string>,
+  /** Names a body only names as a type: an `import type` suffices. */
+  types?: Set<string>,
+  /** Names a body uses as a value. */
+  values?: Set<string>,
+  /** Project classes a body requires at the point of use, so no import is needed. */
+  required?: Set<string>,
 ): string[] {
   const packageOf = new Map<string, string>();
   const poolNames = abc.multinames.map((m) => (m.nsKind === 'package' || m.nsKind === 'packageInternal' || m.nsKind === 'namespace') && m.ns ? `${m.ns}.${m.name}` : m.name);
@@ -413,20 +508,24 @@ function importLines(
   const typeLines: string[] = [];
   for (const name of [...uses].sort()) {
     if (BUILTINS.has(name) || name === simple) continue;
+    const asValue = values?.has(name) ?? true;
+    const asType = types?.has(name) ?? false;
     const project = bySimple.get(name);
     if (project) {
       const from = classPath(project).replace(/\.ts$/, '');
-      if (lazy?.has(name)) {
-        typeLines.push(`import type { ${name} } from '${specifier(self, from)}';`);
+      // Required at the point of use: import it as a type only if a type position
+      // names it too, and otherwise not at all.
+      if (required?.has(name)) {
+        if (asType) typeLines.push(`import type { ${name} } from '${specifier(self, from)}';`);
         continue;
       }
       const line = `import { ${name} } from '${specifier(self, from)}';`;
-      (typeOnly?.has(name) ? typeLines : lines).push(line);
+      (asType && !asValue ? typeLines : lines).push(line);
       continue;
     }
     const qualified = packageOf.get(name);
     if (!qualified || qualified === name) continue;
-    if (typeOnly?.has(name)) {
+    if (!asValue && asType) {
       typeLines.push(`import type { ${name} } from '${qualified.split('.').join('/')}';`);
       continue;
     }
@@ -439,6 +538,16 @@ function importLines(
     lines.push(`import { ${name} } from '${qualified.split('.').join('/')}';`);
   }
   return [...lines, ...typeLines];
+}
+
+/** What the printer needs to know about the module it is printing. */
+interface RefMaps {
+  pathOf: Map<string, string>;
+  self: string;
+  /** Names of this module's own classes: print them bare. */
+  skip?: Set<string>;
+  /** Simple names of every class in the movie and the engine. */
+  classNames?: Set<string>;
 }
 
 /** A relative import specifier between two project modules, both root-relative. */
@@ -460,9 +569,20 @@ class Printer {
    * `lazy` names live in other modules and are required on first use, so they print
    * as reads of the module's `__m` accessor instead of a bare identifier.
    */
-  constructor(private readonly valueNames: Set<string> = new Set(), private readonly lazy: Set<string> = new Set()) {}
+  /**
+   * `refs` maps every project class/function to the module that defines it. A
+   * name in it is printed as a `require` at the point of use: a module-level
+   * import of a class a sibling requires back would freeze that sibling's
+   * `extends` at `undefined`, while a require here resolves after both modules
+   * are on the way up.
+   */
+  constructor(
+    private readonly used: NameUse = { values: new Set(), types: new Set() },
+    private readonly refs?: RefMaps,
+  ) {}
 
   print(stmts: import('../as2/ast').Stmt[]): string {
+    if (process.env.EMIT_STMT) for (const s of stmts) console.log(JSON.stringify(s));
     for (const s of stmts) this.stmt(s);
     return this.out.join('\n');
   }
@@ -566,6 +686,21 @@ class Printer {
     return text;
   }
 
+  /**
+   * A class named in a class position. A class the lifter had to reach through
+   * `this` (`this.RequestRetry` — an unqualified name in the movie's own scope) is a
+   * name, not a member: `x as this.T` is not even TypeScript, and `this.T` is
+   * undefined at runtime.
+   */
+  private classText(e: import('../as2/ast').Expr, how: 'type' | 'value'): string {
+    const named = e.k === 'id' ? e.name
+      : e.k === 'member' && e.obj.k === 'id' && e.obj.name === 'this' ? e.prop
+        : null;
+    if (named == null || !/^[A-Z]/.test(named)) return this.expr(e);
+    if (how === 'type') { this.used.types.add(named); return named; }
+    return this.expr({ k: 'id', name: named, line: 0 });
+  }
+
   /** An operand of an operator: parenthesised when it is an operator itself. */
   private operand(e: import('../as2/ast').Expr): string {
     return isOperator(e) ? `(${this.expr(e)})` : this.expr(e);
@@ -581,9 +716,14 @@ class Printer {
       case 'num': return e.v;
       case 'str': return JSON.stringify(e.v);
       case 'lit': return e.v;
-      case 'id':
-        this.valueNames.add(e.name);
-        return this.lazy.has(e.name) ? `__m.${e.name}` : e.name;
+      case 'id': {
+        this.used.values.add(e.name);
+        const refs = this.refs;
+        if (!refs || refs.skip?.has(e.name)) return e.name;
+        const target = refs.pathOf.get(e.name);
+        if (!target) return e.name;
+        return `require('${specifier(refs.self, target.replace(/\.ts$/, ''))}').${e.name}`;
+      }
       case 'array': return `[${e.items.map((i) => (i ? this.expr(i) : '')).join(', ')}]`;
       case 'object': return `{ ${e.props.map((p) => `${key(p.key)}: ${this.expr(p.value)}`).join(', ')} }`;
       case 'func': {
@@ -602,8 +742,23 @@ class Printer {
         return /^[A-Za-z_$][\w$]*$/.test(e.prop) ? `${obj}.${e.prop}` : `${obj}[${JSON.stringify(e.prop)}]`;
       }
       case 'index': return `${this.atom(e.obj)}[${this.expr(e.index)}]`;
-      case 'call': return `${this.atom(e.callee)}(${e.args.map((a) => this.expr(a)).join(', ')})`;
-      case 'new': return `new ${this.atom(e.callee)}(${e.args.map((a) => this.expr(a)).join(', ')})`;
+      case 'call': {
+        // `T(x)` on a class is a cast in ActionScript: a class object called as a
+        // function coerces its one argument. A JavaScript class cannot be called, so
+        // the cast is what the movie means and what the engine can run.
+        if (e.args.length === 1 && e.callee.k === 'id' && this.refs?.classNames?.has(e.callee.name)) {
+          return `(${this.expr(e.args[0])} as ${this.classText(e.callee, 'type')})`;
+        }
+        return `${this.atom(e.callee)}(${e.args.map((a) => this.expr(a)).join(', ')})`;
+      }
+      case 'new': {
+        // `new f().g()` is `(new f()).g()` in JavaScript, so a callee that carries a
+        // call of its own (a class required at the point of use) needs parentheses.
+        const callee = this.expr(e.callee);
+        const loose = e.callee.k === 'call' || e.callee.k === 'cond' || e.callee.k === 'assign'
+          || e.callee.k === 'binary' || e.callee.k === 'unary' || e.callee.k === 'update' || /\brequire\(/.test(callee);
+        return `new ${loose ? `(${callee})` : callee}(${e.args.map((a) => this.expr(a)).join(', ')})`;
+      }
       case 'unary': {
         const op = e.op.trim();
         const arg = isOperator(e.arg) ? `(${this.expr(e.arg)})` : this.expr(e.arg);
@@ -611,12 +766,10 @@ class Printer {
       }
       case 'update': return e.prefix ? `${e.op}${this.atom(e.arg)}` : `${this.atom(e.arg)}${e.op}`;
       case 'binary': {
-        // `x as Foo` names a type: importing `Foo` as a value would create a cycle.
-        if (e.op === 'as') {
-          if (e.right.k === 'id') { this.valueNames.delete(e.right.name); return `(${this.atom(e.left)} as ${e.right.name})`; }
-          return `(${this.atom(e.left)} as ${this.expr(e.right)})`;
-        }
-        if (e.op === 'is') return `(${this.atom(e.left)} instanceof ${this.expr(e.right)})`;
+        // `x as Foo` is a type: TypeScript erases it, so it must not force a value
+        // import for `Foo`.
+        if (e.op === 'as') return `(${this.atom(e.left)} as ${this.classText(e.right, 'type')})`;
+        if (e.op === 'is') return `(${this.atom(e.left)} instanceof ${this.classText(e.right, 'value')})`;
         return `${this.operand(e.left)} ${e.op} ${this.operand(e.right)}`;
       }
       case 'assign': return `${this.atom(e.target)} ${e.op} ${this.expr(e.value)}`;

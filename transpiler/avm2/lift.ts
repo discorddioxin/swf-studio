@@ -99,6 +99,18 @@ type RegionEnd =
   | { kind: 'backEdge'; target: number }    // jumped backwards, to a loop head
   | { kind: 'end' };                        // returned or threw
 
+/**
+ * The complement of a condition. `==`/`!=` and `===`/`!==` are exact inverses in
+ * ActionScript, so `if_ne` prints as `a == b` (what the source said) instead of
+ * `!(a != b)`. Ordering comparisons keep the `!` form: `!(a < b)` is true for NaN
+ * where `a >= b` is false, and the branch really does test the former.
+ */
+function notOf(e: Expr): Expr {
+  const inverse: Record<string, string> = { '==': '!=', '!=': '==', '===': '!==', '!==': '===' };
+  if (e.k === 'binary' && inverse[e.op]) return { k: 'binary', op: inverse[e.op], left: e.left, right: e.right };
+  return { k: 'unary', op: '!', arg: e };
+}
+
 /** Default-package names the AS3 runtime provides as globals (not `this` members). */
 const GLOBALS = new Set([
   'trace', 'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'escape', 'unescape', 'encodeURI', 'decodeURI',
@@ -140,11 +152,17 @@ class Lifter {
   private loops: LoopFrame[] = [];
 
   constructor(private ctx: MethodContext, instructions: AbcInstruction[]) {
+    // Only an instruction start can begin a block. A jump target that lands in the
+    // middle of an instruction or past the end of the body (dead code in several
+    // uploaded movies) is not one, and a branch to it is refused rather than
+    // silently attaching its instructions to the wrong block.
+    const starts = new Set(instructions.map((i) => i.offset));
     for (const i of instructions) this.blocks.set(i.offset, []);
     this.leaders.add(0);
     for (const i of instructions) {
-      for (const t of targets(i)) if (t < ctx.body.code.length) this.leaders.add(t);
+      for (const t of targets(i)) if (starts.has(t)) this.leaders.add(t);
       const next = i.offset + i.size;
+      if (!starts.has(next)) continue;
       if (branch(i) || TERMINATORS.has(i.name) || i.name === 'jump' || i.name === 'lookup_switch') this.leaders.add(next);
     }
     for (const i of instructions) {
@@ -449,6 +467,8 @@ class Lifter {
   private snapshot(): {
     stack: Value[];
     locals: Map<number, string>;
+    types: Map<number, string>;
+    killed: Set<string>;
     active: Set<number>;
     temps: number;
     used: Set<number>;
@@ -456,7 +476,11 @@ class Lifter {
     out: number;
     pc: number;
   } {
-    return { stack: [...this.stack], locals: new Map(this.locals), active: new Set(this.active), temps: this.temps, used: new Set(this.usedLocals), loops: [...this.loops], out: this.out.length, pc: this.pc };
+    return {
+      stack: [...this.stack], locals: new Map(this.locals), types: new Map(this.localTypes),
+      killed: new Set(this.killed), active: new Set(this.active), temps: this.temps,
+      used: new Set(this.usedLocals), loops: [...this.loops], out: this.out.length, pc: this.pc,
+    };
   }
 
   private restore(snap: ReturnType<Lifter['snapshot']>) {
@@ -464,6 +488,8 @@ class Lifter {
     this.pc = snap.pc;
     this.stack = snap.stack;
     this.locals = snap.locals;
+    this.localTypes = snap.types;
+    this.killed = snap.killed;
     this.active = snap.active;
     this.temps = snap.temps;
     this.usedLocals = snap.used;
@@ -599,7 +625,11 @@ class Lifter {
         // Values already on the stack keep the local's old value.
         const name = (this.local(o[0]) as { name: string }).name;
         for (let k = 0; k < this.stack.length; k++) if (isId(this.stack[k].e, name)) this.hold(k);
-        this.assign(this.local(o[0]), { k: 'id', name: 'undefined', line: 0 });
+        // `kill` releases the register, so there is nothing to print: the compiler
+        // only kills a local it is finished with. A read that still follows reads
+        // `undefined`, which is what the register holds from here on.
+        this.killed.add(name);
+        this.localTypes.delete(o[0]);
         return;
       }
       case 'push_byte': case 'push_short': case 'push_int': case 'push_uint':
@@ -919,6 +949,7 @@ class Lifter {
     for (let k = 0; k < this.stack.length; k++) {
       if (this.stack[k].e === v.e) this.stack[k] = { e: { k: 'id', name, line: 0 }, coerced: v.coerced };
     }
+    this.killed.delete(name);
     if (v.coerced) this.localTypes.set(index, v.coerced);
     this.assign({ k: 'id', name, line: 0 }, v.e);
   }
@@ -1059,17 +1090,24 @@ class Lifter {
   private methodOwners?: Map<number, AbcTrait>;
   /** A local as a value: the expression plus whatever type a `coerce` proved for it. */
   private readLocal(index: number): Value {
-    return { e: this.local(index), coerced: this.localTypes.get(index) };
+    const e = this.local(index);
+    if (e.k === 'id' && this.killed.has(e.name)) return { e: lit('undefined') };
+    return { e, coerced: this.localTypes.get(index) };
   }
 
   /** Types proved for a local slot by a `coerce` before its store. */
   private localTypes = new Map<number, string>();
+  /** Locals released by `kill`: a read of one is `undefined` until the next store. */
+  private killed = new Set<string>();
 
   private local(index: number): Expr {
     const known = this.locals.get(index);
     if (known) return { k: 'id', name: known, line: 0 };
     const declared = index > 0 ? this.ctx.paramNames?.[index - 1] : undefined;
-    const name = index === 0 && this.ctx.target === 'instance' ? 'this' : declared || this.extraArgName(index) || `local${index}`;
+    // Local 0 is the receiver: the instance in a constructor/method, the class
+    // object in a static method (where TypeScript's `this` is that class object).
+    const receiver = index === 0 && (this.ctx.target === 'instance' || this.ctx.target === 'class');
+    const name = receiver ? 'this' : declared || this.extraArgName(index) || `local${index}`;
     this.locals.set(index, name);
     // `this` needs no declaration, parameters come from the signature, and the ABI
     // extra locals (`rest`, `arguments`) exist as real names already.
@@ -1087,8 +1125,8 @@ class Lifter {
     if (name === 'true' || name === 'false') {
       const value = this.pop().e;
       const jumpOnTruthy = name === 'true';
-      const jump = jumpOnTruthy ? value : { k: 'unary' as const, op: '!', arg: value };
-      const stay = jumpOnTruthy ? { k: 'unary' as const, op: '!', arg: value } : value;
+      const jump = jumpOnTruthy ? value : notOf(value);
+      const stay = jumpOnTruthy ? notOf(value) : value;
       return { jump, stay, value, jumpOnTruthy };
     }
     const ops: Record<string, string> = {
@@ -1099,7 +1137,7 @@ class Lifter {
     if (!op) return null;
     const right = this.pop(), left = this.pop();
     const jump: Expr = { k: 'binary', op, left: left.e, right: right.e };
-    return { jump, stay: { k: 'unary', op: '!', arg: jump } };
+    return { jump, stay: notOf(jump) };
   }
 
   private branchTest(i: AbcInstruction): Expr {

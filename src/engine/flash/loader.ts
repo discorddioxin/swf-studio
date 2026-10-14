@@ -159,7 +159,8 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
       const name = exportName === 'default' ? fileBase : exportName;
       // A class is an exported function named like its file, or capitalised. Timeline
       // symbol classes are lower-case (`mcRampBank_Gate_113`), so the file name counts.
-      if (typeof value !== 'function' || (!/^[A-Z_$]/.test(name) && name !== fileBase)) continue;
+      // `__`-prefixed exports are a module's own helpers (`__scriptInit`), never a game class.
+      if (typeof value !== 'function' || name.startsWith('__') || (!/^[A-Z_$]/.test(name) && name !== fileBase)) continue;
       const qualifiedName = qualify(pkgSegments, name);
       if (!byQualified.has(qualifiedName)) { classes.push({ name, qualifiedName, path }); byQualified.set(qualifiedName, value); }
       setQualifiedName(value, qualifiedName);
@@ -176,9 +177,13 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
       if (!n) return undefined;
       // 1. unambiguous name / package-qualified suffix of a loaded class
       if (index.has(n) && !ambiguous.has(n)) return index.get(n);
-      // 2. ambiguous: prefer the class whose qualified name matches exactly
-      const exact = classes.filter((c) => c.qualifiedName === n || c.qualifiedName.endsWith(`.${n}`));
+      // 2. ambiguous: the qualified name decides — exactly first, then by package
+      // suffix. A default-package `starBurst` and a packaged `….flowerJong.starBurst`
+      // both answer to the simple name; the SWF's SymbolClass named one of them.
+      const exact = classes.filter((c) => c.qualifiedName === n);
       if (exact.length === 1) return byQualified.get(exact[0].qualifiedName);
+      const suffix = classes.filter((c) => c.qualifiedName.endsWith(`.${n}`));
+      if (suffix.length === 1) return byQualified.get(suffix[0].qualifiedName);
       // 3. flash.* / fl.* / AS3 top level
       const flash = FLASH_DEFINITIONS.get(n);
       if (flash !== undefined) return flash;

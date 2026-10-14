@@ -66,6 +66,9 @@ export const TOP_LEVEL: Record<string, unknown> = {
   DefinitionError: utils.DefinitionError,
   SecurityError: utils.SecurityError,
   VerifyError: utils.VerifyError,
+  // Helpers a transpiled ABC module calls directly (see `engine/flash/utils.ts`).
+  __applyType: utils.__applyType,
+  __coerceObject: utils.__coerceObject,
 };
 
 /** Every class/function in the table by simple and qualified name. */

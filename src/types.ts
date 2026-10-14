@@ -147,6 +147,13 @@ export interface SwfDocument {
   root: Timeline;
   /** SymbolClass table: character id → AS3 class name (id 0 = document class). */
   symbolClasses?: Map<number, string>;
+  /**
+   * DoABC / DoABC2 payloads found while reading, one per tag and in tag order.
+   * Each still carries its tag header (flags + name) — `abcSources()` in
+   * `src/engine/flash/abc.ts` turns them into the modules the loader compiles.
+   * Kept out of the JSON export: the reader hands back binary bytes.
+   */
+  abc?: Uint8Array[];
   warnings: string[];
   stats: { tags: number; unknownTags: Record<string, number> };
 }

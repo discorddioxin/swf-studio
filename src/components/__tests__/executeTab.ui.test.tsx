@@ -8,6 +8,7 @@ import { AssetCache, ingestFiles, type SwfPackage } from '../../lib/assets';
 import { parseSwfXml } from '../../lib/parser';
 import { ExecuteTab } from '../ExecuteTab';
 import { GAME_XML, SOURCES } from '../../engine/flash/__tests__/gameFixture';
+import { deckAbcPayload } from '../../engine/flash/__tests__/abcFixture';
 
 const rafQueue: FrameRequestCallback[] = [];
 let now = 0;
@@ -150,9 +151,26 @@ describe('ExecuteTab', () => {
 
   it('without transpiled code it says so and plays the SWF timeline', async () => {
     await mount(false);
-    await waitFor(() => expect(screen.getByText(/No transpiled code/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/No code in this movie/)).toBeTruthy());
     await runFrames(50);
     expect(screen.getByText(/Timeline only · frame \d\/3/)).toBeTruthy();
     expect(screen.getByText(/Document class com\.game\.Main was not found/)).toBeTruthy();
+  });
+
+  it("runs an AVM2 movie by lifting the code out of the movie's own DoABC tags", async () => {
+    // No .ts files anywhere: the only code is the SWF's own DoABC payload, the
+    // way a real AS3 game folder is uploaded.
+    const bundle = ingestFiles([file('game.xml', GAME_XML)]);
+    const doc = parseSwfXml(await bundle.xmlFile!.text(), { fileName: 'game.xml' });
+    doc.abc = [deckAbcPayload()];
+    const cache = new AssetCache(bundle, () => {});
+    render(<ExecuteTab doc={doc} cache={cache} assets={bundle} />);
+
+    await waitFor(() => expect(screen.queryByText(/No code in this movie/)).toBeNull());
+    // The movie's class is compiled and linked, so the tab is on the AS3 engine.
+    await waitFor(() => expect(screen.getByText(/AS3 engine/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/^Program/));
+    expect(screen.getByText('1 file(s) compiled, 1 class(es) exported.')).toBeTruthy();
+    expect(screen.getByText(/Lifted from the movie's own DoABC code \(1 payload, 1 file, 1 class\)\./)).toBeTruthy();
   });
 });

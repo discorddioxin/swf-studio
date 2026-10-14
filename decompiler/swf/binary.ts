@@ -1128,11 +1128,11 @@ export async function parseSwfBinary(
             break;
           }
           case 76: { // SymbolClass
+            // `UI16 count` then `count` records of (`UI16 tagId`, `STRING name`):
+            // the pairs are interleaved, and id 0 is the document class.
             const br2 = new BitReader(tag.data);
             const count = br2.u16();
-            const ids: number[] = [];
-            for (let i = 0; i < count; i++) ids.push(br2.u16());
-            for (const id of ids) symbolClasses.set(id, br2.str());
+            for (let i = 0; i < count; i++) symbolClasses.set(br2.u16(), br2.str());
             break;
           }
           case 8: // JPEGTables
@@ -1634,9 +1634,21 @@ export async function parseSwfBinary(
     });
   }
 
+  // AVM2 code lives in DoABC tags (optionally inside a sprite). Keep the payloads
+  // here so the transpiler can read the movie's own code without any folder export.
+  const abc: Uint8Array[] = [];
+  const collectAbc = (tags: RawTag[]) => {
+    for (const tag of tags) {
+      if (tag.type === 82 || tag.type === 72) abc.push(tag.data);
+      if (tag.children?.length) collectAbc(tag.children);
+    }
+  };
+  collectAbc(rootTags);
+
   const doc: SwfDocument = {
     header, characters, timelines, root,
     symbolClasses: symbolClasses.size ? symbolClasses : undefined,
+    abc: abc.length ? abc : undefined,
     warnings,
     stats: { tags: countTags(rootTags), unknownTags: {} },
   };

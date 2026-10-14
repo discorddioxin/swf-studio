@@ -153,3 +153,28 @@ export class IOError extends Error { constructor(message = '', public errorID = 
 export class EOFError extends IOError { constructor(message = '', errorID = 0) { super(message, errorID); this.name = 'EOFError'; } }
 
 export function isXMLName(s: string) { return /^[A-Za-z_][\w.-]*$/.test(s); }
+
+// ---------------------------------------------------------------------------
+// Emitter helpers: the three bytecodes whose ActionScript semantics have no
+// JavaScript spelling. A transpiled module calls these by name — the loader puts
+// every top-level name in scope — so they live here rather than in the emitter.
+
+/**
+ * `applytype` — `Vector.<int>`: the class is asked to specialise itself with the
+ * type arguments. The engine's Vector is untyped at runtime (TypeScript erases the
+ * type), so the class itself is the answer.
+ */
+export function __applyType(base: unknown, ...types: unknown[]): unknown {
+  const klass = base as { applyType?: (...t: unknown[]) => unknown } | null;
+  if (klass && typeof klass === 'object' || typeof klass === 'function') {
+    if (klass && typeof klass.applyType === 'function') return klass.applyType(...types);
+    return klass;
+  }
+  throw new TypeError('applytype of a non-class');
+}
+
+/** `convert_o` — coercing to Object throws on null and undefined. */
+export function __coerceObject(value: unknown): unknown {
+  if (value === null || value === undefined) throw new TypeError('null or undefined cannot be coerced to Object');
+  return value;
+}
