@@ -73,7 +73,9 @@ export class Dictionary {
       get: (_t, k) => (k === 'size' ? map.size : k in api && !map.has(k) ? api[k as string] : map.get(k)),
       set: (_t, k, v) => { map.set(k, v); return true; },
       has: (_t, k) => map.has(k),
-      deleteProperty: (_t, k) => map.delete(k),
+      // AS3 `delete d[k]` is true whether or not the key was there (so is JavaScript's,
+      // and a false here is a TypeError in strict code).
+      deleteProperty: (_t, k) => { map.delete(k); return true; },
       ownKeys: () => [...map.keys()].filter((k): k is string | symbol => typeof k === 'string' || typeof k === 'symbol'),
       getOwnPropertyDescriptor: (_t, k) => (map.has(k) ? { enumerable: true, configurable: true, writable: true, value: map.get(k) } : undefined),
     });

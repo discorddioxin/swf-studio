@@ -957,7 +957,6 @@ class Lifter {
    * the region is not one of these chains.
    */
   private foldTestRegion(entry: number, max = 512): { decide: AbcInstruction; value: Expr; insns: AbcInstruction[] } | null {
-    if (process.env.SWF_NOFOLD) return null;
     const base = this.stack.length;
     const arrivals = new Map<number, { value: Expr; cond: Expr }[]>();
     const insns: AbcInstruction[] = [];
@@ -1530,15 +1529,7 @@ class Lifter {
 
   // -- instruction emission --------------------------------------------------
 
-  /** Wrap the instruction dispatch with an optional stack trace for debugging. */
   private step(i: AbcInstruction) {
-    if (!process.env.ABC_DEBUG) return this.stepInner(i);
-    console.log(`${String(i.offset).padStart(4)} ${i.name} stack=[${this.stack.map((v) => v.e.k).join(',')}]`);
-    this.stepInner(i);
-    console.log(`     -> [${this.stack.map((v) => v.e.k).join(',')}]`);
-  }
-
-  private stepInner(i: AbcInstruction) {
     const o = i.operands;
     const mn = (k = 0) => this.multiname(o[k]);
     switch (i.name) {

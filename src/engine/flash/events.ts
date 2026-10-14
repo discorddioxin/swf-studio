@@ -116,7 +116,8 @@ export class EventDispatcher {
     return !ev._prevented;
   }
 
-  toString() { return '[object EventDispatcher]'; }
+  // Object.prototype.toString in AS3: the class of the object, `[object URLLoader]`.
+  toString() { return `[object ${this.constructor.name || 'EventDispatcher'}]`; }
 }
 
 /** Display objects override this through `_eventParent`. */

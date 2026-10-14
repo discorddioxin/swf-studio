@@ -497,7 +497,7 @@ export default function App() {
         </div>
       </div>
 
-      <ErrorBoundary label={WORKSPACE_LABEL[workspace]} resetKeys={[doc, workspace]} className="flex min-h-0 flex-1 items-center justify-center p-4">
+      <ErrorBoundary label={WORKSPACE_LABEL[workspace]} resetKeys={[doc, workspace]} className="flex min-h-0 flex-1 items-start justify-center overflow-auto p-4">
       {workspace === 'execute' ? (
         <ExecuteTab
           doc={doc}

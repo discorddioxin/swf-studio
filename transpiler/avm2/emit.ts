@@ -743,7 +743,6 @@ class Printer {
   ) {}
 
   print(stmts: import('../as2/ast').Stmt[]): string {
-    if (process.env.EMIT_STMT) for (const s of stmts) console.log(JSON.stringify(s));
     for (const s of stmts) this.stmt(s);
     return this.out.join('\n');
   }
