@@ -46,6 +46,22 @@ export interface MethodContext {
   staticMembers?: Set<string>;
   /** The simple name of the class being emitted, for static member access. */
   staticOwner?: string;
+  /** The superclass's simple name: `super.m(...)` and `super.m` read against it. */
+  superOwner?: string;
+  /**
+   * Instance methods reachable from this class, inherited ones included. A method
+   * read as a *value* is a closure bound to its receiver in AVM2, so knowing which
+   * names are methods (and not fields) is what lets a read emit that binding.
+   */
+  instanceMethods?: Set<string>;
+  /** Static methods of the enclosing class, same reasoning. */
+  staticMethods?: Set<string>;
+  /**
+   * The enclosing script's traits by slot id. `getglobalscope; getslot N` is how a
+   * Flex-compiled class reaches itself: N is the slot the script put the class (or
+   * function) trait in, and the value is the class object.
+   */
+  scriptSlots?: Map<number, string>;
   /** Parameter names when the ABC carries them (usually it does not). */
   paramNames?: string[];
   /** The method takes `...rest`: its array arrives as an extra local after the parameters. */
@@ -90,6 +106,8 @@ interface Value {
   owner?: Expr;
   /** The type a `coerce` proved this value has, so redundant `Number(...)` wrappers vanish. */
   coerced?: string;
+  /** This value is the script's global object (`getglobalscope`), whose slots are its traits. */
+  globals?: boolean;
 }
 
 /** The types that widen into each other for free: `Number(int(x))` is just `x`. */
@@ -114,6 +132,21 @@ function notOf(e: Expr): Expr {
   const inverse: Record<string, string> = { '==': '!=', '!=': '==', '===': '!==', '!==': '===' };
   if (e.k === 'binary' && inverse[e.op]) return { k: 'binary', op: inverse[e.op], left: e.left, right: e.right };
   return { k: 'unary', op: '!', arg: e };
+}
+
+/** Structural equality of two expressions: same code, whatever line it came from. */
+function sameExpr(a: Expr, b: Expr): boolean {
+  return JSON.stringify(a, (key, value) => (key === 'line' ? undefined : value))
+    === JSON.stringify(b, (key, value) => (key === 'line' ? undefined : value));
+}
+
+/** Is `cond` the exact negation of `value`? (`!(x)`, or `a != b` of `a == b`.) */
+function isNegationOf(cond: Expr, value: Expr): boolean {
+  if (cond.k === 'unary' && cond.op === '!') return sameExpr(cond.arg, value);
+  const inverse: Record<string, string> = { '==': '!=', '!=': '==', '===': '!==', '!==': '===' };
+  return cond.k === 'binary' && value.k === 'binary'
+    && inverse[cond.op] === value.op
+    && sameExpr(cond.left, value.left) && sameExpr(cond.right, value.right);
 }
 
 /** Default-package names the AS3 runtime provides as globals (not `this` members). */
@@ -497,48 +530,169 @@ class Lifter {
    * in between, and the test at the bottom jumping back into the body.
    *
    *     33: jump 78        ; entry: run the test first (so the body is guarded)
-   *     37: …body…
-   *     78: get_local3; get_local2; if_lt 37   ; test: back into the body while true
+   *     37: …body…         ; and the latch, for a `for`
+   *     78: …test…; if_lt 37   ; test: back into the body while true
    *     84: …             ; exit
    *
    * Lifting it as a real loop keeps the body's statements reachable *once*, instead
    * of leaving a region that starts at the test and jumps backwards into code the
-   * entry already covered.
+   * entry already covered. The test itself is a region of its own (see
+   * `foldTestRegion`) because ASC writes a compound condition as several blocks.
    */
   private tryPreTestedWhile(jump: AbcInstruction, target: number): { done: boolean; end: RegionEnd; next: number | null } | null {
     if (target <= jump.offset) return null;
-    const testBlock = this.blocks.get(target);
-    if (!testBlock?.length) return null;
-    const test = testBlock[testBlock.length - 1];
-    if (!branch(test)) return null;
-    const head = test.target as number;
-    if (head <= jump.offset || head >= target) return null;         // the test must jump back into the body
-    const exit = test.offset + test.size;
-    if (exit <= target) return null;
+    // A loop is *recognised* speculatively here: the condition region is walked
+    // before we know it is one. Whatever the walk did has to be undone if it turns
+    // out not to be — the instructions it read belong to the region that follows.
     const snap = this.snapshot();
+    let lifted: { done: boolean; end: RegionEnd; next: number | null } | null = null;
     try {
+      lifted = this.liftPreTestedWhile(jump, target);
+    } catch (e) {
+      if (!(e instanceof Refuse)) throw e;
+      lifted = null;
+    }
+    if (!lifted) this.restore(snap);
+    return lifted;
+  }
+
+  private liftPreTestedWhile(jump: AbcInstruction, target: number): { done: boolean; end: RegionEnd; next: number | null } | null {
+    {
+      // `while (true)`: the entry jumps to the bottom, and the bottom is an
+      // unconditional jump back into the body — the loop's only exits are `break`s,
+      // which land on the instruction after the latch.
+      const latch = this.blocks.get(target)?.at(-1);
+      if (latch?.name === 'jump') {
+        const head = latch.target as number;
+        if (head <= jump.offset || head >= target) return null;
+        const exit = latch.offset + latch.size;
+        if (exit <= target) return null;
+        const frame: LoopFrame = { head, exit, test: target };
+        this.loops.push(frame);
+        const arm = this.emitArm(head, target);
+        this.loops.pop();
+        if (arm.end.kind !== 'stop' && arm.end.kind !== 'end') throw new Refuse(jump.offset, 'an endless loop leaves through an unexpected edge');
+        this.out.push({ k: 'while', test: lit('true'), body: block(arm.stmts) });
+        return { done: false, end: { kind: 'stop' }, next: exit };
+      }
+      const test = this.foldTestRegion(target);
+      if (!test) return null;
+      const head = test.decide.target as number;
+      if (head <= jump.offset || head >= target) return null;       // the test must jump back into the body
+      const exit = test.decide.offset + test.decide.size;
+      if (exit <= target) return null;
       // A `for-in` compiles to the same shape with `hasnext2` as the test: its cursor
       // register is what the body's `nextname`/`nextvalue` reads.
-      for (const i of testBlock) if (i.name === 'has_next2' && i.operands.length >= 2) this.lastIterCursor = i.operands[1];
+      for (const i of test.insns) if (i.name === 'has_next2' && i.operands.length >= 2) this.lastIterCursor = i.operands[1];
+      // The test consumed its own operands, so the body starts on the stack the
+      // test started on — which is where the loop head is entered from.
+      const info = this.branchInfo(test.decide);
+      if (!info) throw new Refuse(test.decide.offset, `${test.decide.name} is not a supported loop test`);
       const frame: LoopFrame = { head, exit, test: target };
       this.loops.push(frame);
       const arm = this.emitArm(head, target);
       this.loops.pop();
       if (arm.end.kind !== 'stop' && arm.end.kind !== 'end') throw new Refuse(jump.offset, 'loop body leaves through an unexpected edge');
-      for (const i of testBlock) {
-        if (i === test) continue;
-        this.pc = i.offset;
-        this.step(i);
-      }
-      const info = this.branchInfo(test);
-      if (!info) throw new Refuse(test.offset, `${test.name} is not a supported loop test`);
       this.out.push({ k: 'while', test: info.jump, body: block(arm.stmts) });
       return { done: false, end: { kind: 'stop' }, next: exit };
-    } catch (e) {
-      this.restore(snap);
-      if (e instanceof Refuse) return null;
-      throw e;
     }
+  }
+
+  /**
+   * The region that computes a loop's condition, folded into one expression.
+   *
+   * The entry jump of a pre-tested loop lands on the test, and the test is *not*
+   * one basic block: ASC writes a boolean condition as a chain of
+   * `dup / if_* / pop` diamonds — `a && (b || c)` is a diamond per operand — whose
+   * arms converge on the branch that decides the loop (with shared tails between
+   * them, like the `not` of `!(a && b)`). The value that reaches the deciding
+   * branch is the phi of those arms, and each arm's branch condition selects its
+   * value, so the phi is expressible:
+   *
+   *     c ? c : b   is exactly   c || b        (AS3's `||` returns the left operand)
+   *    !c ? c : b   is exactly   c && b        (… and `&&` returns the false one)
+   *
+   * which is what makes the folded condition print as the source's `&&`/`||` rather
+   * than a nest of `?:`. Returns the deciding branch, its value, and the
+   * instructions the region ran (so the caller can see its `hasnext2`), or null if
+   * the region is not one of these chains.
+   */
+  private foldTestRegion(entry: number, max = 512): { decide: AbcInstruction; value: Expr; insns: AbcInstruction[] } | null {
+    if (process.env.SWF_NOFOLD) return null;
+    const base = this.stack.length;
+    const arrivals = new Map<number, { value: Expr; cond: Expr }[]>();
+    const insns: AbcInstruction[] = [];
+    const bail = () => {
+      while (this.stack.length > base) this.stack.pop();
+      return null;
+    };
+    let cur: number | null = entry;
+    let decide: AbcInstruction | null = null;
+    while (cur != null && insns.length <= max) {
+      const block = this.blocks.get(cur);
+      if (!block?.length) break;
+      const merged = arrivals.get(cur);
+      if (merged) {
+        arrivals.delete(cur);
+        const top = this.stack[this.stack.length - 1];
+        if (!top) return bail();
+        let value = top.e;
+        for (const arm of [...merged].reverse()) {
+          const joined = joinValue(arm.cond, arm.value, value);
+          if (!joined) return bail();
+          value = joined;
+        }
+        this.stack[this.stack.length - 1] = { e: value };
+      }
+      const last = block[block.length - 1];
+      for (const i of block) {
+        if (i === last && (branch(i) || i.name === 'jump' || i.name === 'lookup_switch' || TERMINATORS.has(i.name))) continue;
+        this.pc = i.offset;
+        insns.push(i);
+        const mark = this.out.length;
+        this.step(i);
+        // A `pop` of a `dup` copy: the branch kept the other copy, so the value's
+        // evaluation is already in the condition — emitting it again as a statement
+        // would run its side effects twice.
+        if (this.out.length > mark) {
+          const added = this.out.splice(mark);
+          for (const st of added) {
+            // The value is still live if it is on the stack *or* if an arm already
+            // jumped away carrying it (an arrival recorded below) — either way its
+            // evaluation is in the condition, and repeating it would repeat its
+            // side effects.
+            const live = st.k === 'expr' && (this.stack.some((v) => sameExpr(v.e, st.e))
+              || [...arrivals.values()].some((list) => list.some((a) => sameExpr(a.value, st.e) || sameExpr(a.cond, st.e))));
+            if (live) continue;
+            this.out.push(st);
+          }
+        }
+      }
+      this.pc = last.offset;
+      if (!branch(last)) {
+        // A condition is written across as many blocks as it has operands; a block
+        // that simply falls through is still part of it. Anything else (a jump, a
+        // return) ends the region without deciding anything.
+        if (last.name === 'jump' || i_is_control(last)) break;
+        const next = last.size ? last.offset + last.size : (this.nextAt.get(last.offset) ?? last.offset + last.size);
+        if (next > last.offset && this.blocks.get(next)?.length) { cur = next; continue; }
+        break;
+      }
+      const to = last.target as number;
+      if (to <= entry) { decide = last; break; }                    // it decides the loop
+      if (to <= last.offset) break;                                 // backwards inside the region: not a chain
+      const info = this.branchInfo(last);
+      if (!info) break;
+      const list = arrivals.get(to) ?? [];
+      list.push({ value: info.value ?? info.jump, cond: info.jump });
+      arrivals.set(to, list);
+      cur = last.offset + last.size;
+      continue;
+    }
+    if (!decide || arrivals.size) return bail();
+    const value = this.stack[this.stack.length - 1]?.e;
+    if (value == null) return bail();
+    return { decide, value, insns };
   }
 
   /**
@@ -749,7 +903,7 @@ class Lifter {
       else if (arm.end.kind === 'backEdge') {
         const loop = this.loops[this.loops.length - 1];
         if (!loop || (arm.end.target !== loop.head && arm.end.target !== loop.exit)) {
-          throw new Refuse(i.offset, 'a switch case leaves through an unknown loop edge');
+          throw new Refuse(i.offset, `a switch case at ${target} leaves through an unknown loop edge (to ${arm.end.target})`);
         }
         body.push(arm.end.target === loop.head ? { k: 'continue', label: null } : { k: 'break', label: null });
       }
@@ -873,7 +1027,10 @@ class Lifter {
         this.scopeObjects.pop();
         return;
       case 'get_global_scope':
-        this.push({ k: 'id', name: 'this', line: 0 });
+        // The script's global object. A class reaches itself through it — the script's
+        // traits are its slots (`getglobalscope; getslot N`) — and everything else that
+        // goes through it (`getlex`, `findproperty`) is the scope already modelled.
+        this.pushValue({ e: thisRef(), globals: true });
         return;
       case 'get_scope_object': {
         const index = o[0] ?? 0;
@@ -955,6 +1112,13 @@ class Lifter {
         // `getslot` without an object on the stack is the compiler reading a slot of
         // the scope it just pushed (a catch object): the scope frame has it.
         const recv = this.stack.length ? this.pop() : this.scopeValue();
+        // A slot of the script's global object is one of the script's traits: the
+        // class or function it defines. That is how a class fetches its own class
+        // object, and the emitted module already *has* that name.
+        if (recv.globals && this.ctx.scriptSlots?.has(o[0])) {
+          this.push({ k: 'id', name: this.ctx.scriptSlots.get(o[0])!, line: 0 });
+          return;
+        }
         this.push(this.memberOfValue(recv, { name: this.slotProp(o[0], recv.e) }));
         return;
       }
@@ -968,12 +1132,12 @@ class Lifter {
       }
       case 'get_property': case 'get_descendants': {
         const { recv, prop } = this.popAccess(mn());
-        this.push(this.memberOfValue(recv, prop));
+        this.push(this.propertyRead(recv, prop));
         return;
       }
       case 'get_super': {
         const { prop } = this.popAccess(mn());
-        this.push(this.memberOfValue({ e: superRef() }, prop));
+        this.push(this.propertyRead({ e: superRef() }, prop, true));
         return;
       }
       case 'set_super': {
@@ -1026,9 +1190,11 @@ class Lifter {
         return;
       }
       case 'call_super': case 'call_super_void': {
+        // `callsuper`'s operand is a *multiname* — the same pool `callproperty` uses —
+        // and its namespace is the class that declares the method. Resolving it as a
+        // method index instead picks up whichever trait happens to share that number.
         const args = this.popArgs(argCountOf(i, o));
-        const trait = this.traitByMethod(o[0]);
-        const name = trait ? simpleName(trait.name) : `__method${o[0]}`;
+        const name = this.multiname(o[0]).name;
         this.resultOrStatement({ k: 'call', callee: member(superRef(), name), args }, i.name === 'call_super_void');
         return;
       }
@@ -1402,6 +1568,72 @@ class Lifter {
     }
     return member(recv.e, name);
   }
+  /**
+   * A property *read*. In AVM2 a method name read as a value is not the method
+   * itself but a closure bound to the receiver — that is how `addEventListener(Event.ADDED,
+   * this.addedHandler)` keeps working with the right `this`, and how removing it by
+   * the same expression finds the same listener. Emitting the read as a binding keeps
+   * that meaning; a field (or a getter) is a plain read.
+   */
+  private propertyRead(recv: Value, prop: PropExpr, superRead = false): Expr {
+    const name = prop.name;
+    if (!prop.index && name) {
+      if (this.isMethodName(name, recv, superRead)) {
+        // `super.m` reads the version the superclass declares, not an override.
+        const owner = superRead ? this.ctx.superOwner : undefined;
+        return this.methodRef(superRead ? thisRef() : recv.e, name, owner);
+      }
+    }
+    return this.memberOfValue(recv, prop);
+  }
+
+  /** A method read as a value: the closure bound to its receiver. */
+  private methodRef(recv: Expr, name: string, owner?: string): Expr {
+    const args: Expr[] = [recv, { k: 'str', v: name }];
+    if (owner) args.push({ k: 'id', name: owner, line: 0 });
+    return { k: 'call', callee: { k: 'id', name: '__method', line: 0 }, args };
+  }
+
+  /**
+   * Is `name` a method — not a field — on the receiver? `this` and `super` are
+   * answered from the enclosing class; anything else only when the value's type was
+   * proved by a `coerce`, so an unknown receiver is never guessed at.
+   */
+  private isMethodName(name: string, recv: Value, superRead: boolean): boolean {
+    if (superRead) return this.methodsOf(this.ctx.superOwner).has(name) || this.ctx.instanceMethods?.has(name) === true;
+    const isThis = recv.e.k === 'id' && (recv.e.name === 'this' || recv.e.name === (this.ctx.staticOwner ?? '\u0000'));
+    if (isThis) {
+      if (recv.find === name && this.ctx.staticMethods?.has(name)) return true;
+      return this.ctx.instanceMethods?.has(name) === true;
+    }
+    if (recv.find === name && this.ctx.staticMethods?.has(name)) return true;
+    const type = recv.coerced;
+    if (type) return this.methodsOf(type).has(name);
+    return false;
+  }
+
+  /** The instance method names a class and its supers declare; empty when unknown. */
+  private methodsOf(className?: string): Set<string> {
+    if (!className) return EMPTY_NAMES;
+    const cached = this.methodNames?.get(className);
+    if (cached) return cached;
+    const byName = new Map(this.ctx.abc.classes.map((c) => [c.instance.name, c]));
+    const names = new Set<string>();
+    let cls = byName.get(className) ?? [...byName.values()].find((c) => simpleName(c.instance.name) === className);
+    const seen = new Set<string>();
+    for (let depth = 0; cls && depth < 32; depth++) {
+      for (const trait of cls.instance.traits) if (trait.kind === 'method') names.add(simpleName(trait.name));
+      const superName = cls.instance.superName;
+      if (!superName || seen.has(superName)) break;
+      seen.add(superName);
+      cls = byName.get(superName);
+    }
+    (this.methodNames ??= new Map()).set(className, names);
+    return names;
+  }
+
+  private methodNames?: Map<string, Set<string>>;
+
   /** A multiname used as a *type* (`x as Foo`, `x is Foo`): always a bare class name. */
   private multinameExpr(index: number): Expr {
     const m = this.multiname(index);
@@ -1415,7 +1647,11 @@ class Lifter {
   private findReference(m: MnInfo): Value {
     const name = m.name;
     const ownNamespace = m.nsKind === 'private' || m.nsKind === 'protected' || m.nsKind === 'staticProtected' || m.ns === '';
-    if (ownNamespace && this.ctx.staticMembers?.has(name)) {
+    // In class code the class object is the scope the name is found on, so a static is
+    // a static whatever namespace it was declared in — Adobe's own framework classes
+    // put some of theirs in a namespace of their own (`http://www.adobe.com/...`).
+    const staticHit = this.ctx.staticMembers?.has(name) && (ownNamespace || this.ctx.target === 'class');
+    if (staticHit) {
       const owner: Expr = { k: 'id', name: this.ctx.staticOwner ?? 'this', line: 0 };
       return { e: owner, find: name, owner };
     }
@@ -1429,14 +1665,20 @@ class Lifter {
   private reference(name: string, ns: string, nsKind?: string): Expr {
     if (this.knownLocal(name)) return { k: 'id', name, line: 0 };
     if (GLOBALS.has(name) || this.ctx.globals?.has(name)) return { k: 'id', name, line: 0 };
-    // A trait of the class being emitted — frame scripts included — is a member.
-    if (this.ctx.target === 'instance' && this.ctx.memberNames?.has(name)) return member(thisRef(), name);
+    // A trait of the class being emitted — frame scripts included — is a member, and
+    // a *method* read this way is the bound closure `obj.method` means in AVM2.
+    if (this.ctx.target === 'instance' && this.ctx.memberNames?.has(name)) {
+      return this.ctx.instanceMethods?.has(name) ? this.methodRef(thisRef(), name) : member(thisRef(), name);
+    }
     if (this.ctx.staticMembers?.has(name)) {
-      return member({ k: 'id', name: this.ctx.staticOwner ?? 'this', line: 0 }, name);
+      const owner: Expr = { k: 'id', name: this.ctx.staticOwner ?? 'this', line: 0 };
+      return this.ctx.staticMethods?.has(name) ? this.methodRef(owner, name) : member(owner, name);
     }
     const ownNamespace = nsKind === 'private' || nsKind === 'protected' || nsKind === 'staticProtected' || ns === '';
     if (!ownNamespace) return { k: 'id', name, line: 0 };
-    if (this.ctx.target === 'instance') return member(thisRef(), name);
+    if (this.ctx.target === 'instance') {
+      return this.ctx.instanceMethods?.has(name) ? this.methodRef(thisRef(), name) : member(thisRef(), name);
+    }
     return { k: 'id', name, line: 0 };
   }
   /**
@@ -1520,15 +1762,16 @@ class Lifter {
       const stay = jumpOnTruthy ? notOf(value) : value;
       return { jump, stay, value, jumpOnTruthy };
     }
-    const ops: Record<string, string> = {
-      eq: '==', ne: '!=', lt: '<', le: '<=', gt: '>', ge: '>=',
-      strict_eq: '===', strict_ne: '!==', nlt: '<', nle: '<=', ngt: '>', nge: '>=',
-    };
-    const op = ops[name];
+    // `ifNxx` jumps on the *negation* of the comparison: `ifngt` is `!(a > b)`, not
+    // `a > b`, so its two arms read the other way round. That is also why the staying
+    // arm keeps the bare comparison — `a <= b` would differ from `!(a > b)` on NaN.
+    const order: Record<string, string> = { lt: '<', le: '<=', gt: '>', ge: '>=' };
+    const negated = name.startsWith('n') && order[name.slice(1)] != null;
+    const op = order[name] ?? OPS[negated ? name.slice(1) : name];
     if (!op) return null;
     const right = this.pop(), left = this.pop();
-    const jump: Expr = { k: 'binary', op, left: left.e, right: right.e };
-    return { jump, stay: notOf(jump) };
+    const test: Expr = { k: 'binary', op, left: left.e, right: right.e };
+    return negated ? { jump: notOf(test), stay: test } : { jump: test, stay: notOf(test) };
   }
 
   private branchTest(i: AbcInstruction): Expr {
@@ -1540,11 +1783,31 @@ class Lifter {
 
 // ------------------------------------------------------------------ helpers
 
+/**
+ * The value that reaches a join: `then` if that arm's condition held, the other
+ * arm's value when it did not. The two simplifications are exact, not cosmetic —
+ * they are how AS3's `&&`/`||` are defined on non-boolean operands — and they keep
+ * the evaluation count the bytecode had (the condition is written once).
+ */
+function joinValue(cond: Expr, then: Expr, otherwise: Expr): Expr | null {
+  if (sameExpr(cond, then)) return { k: 'binary', op: '||', left: then, right: otherwise };
+  if (isNegationOf(cond, then)) return { k: 'binary', op: '&&', left: then, right: otherwise };
+  return null;
+}
+
+/** Does this instruction end a region rather than fall into the next block? */
+function i_is_control(i: AbcInstruction): boolean {
+  return TERMINATORS.has(i.name) || i.name === 'lookup_switch';
+}
+
 function block(body: Stmt[]): Stmt { return { k: 'block', body }; }
 function lit(v: 'true' | 'false' | 'null' | 'undefined' | 'this'): Expr { return { k: 'lit', v }; }
 function member(obj: Expr, prop: string): Expr { return { k: 'member', obj, prop }; }
 function thisRef(): Expr { return { k: 'lit', v: 'this' }; }
 function superRef(): Expr { return { k: 'id', name: 'super', line: 0 }; }
+
+/** No method names known: a receiver nothing is proved about. */
+const EMPTY_NAMES: Set<string> = new Set();
 function simpleName(qualified: string): string {
   const cut = Math.max(qualified.lastIndexOf('.'), qualified.lastIndexOf(':'));
   return cut >= 0 ? qualified.slice(cut + 1) : qualified;
@@ -1593,6 +1856,11 @@ function branch(i: AbcInstruction): boolean { return i.name.startsWith('if_'); }
 function targets(i: AbcInstruction): number[] {
   return [i.target, ...(i.targets ?? [])].filter((t): t is number => t != null);
 }
+/** The comparison an `if_xx` opcode tests, by the name after `if_`. */
+const OPS: Record<string, string> = {
+  eq: '==', ne: '!=', strict_eq: '===', strict_ne: '!==', lt: '<', le: '<=', gt: '>', ge: '>=',
+};
+
 function opOf(name: string): string {
   const ops: Record<string, string> = {
     add: '+', subtract: '-', multiply: '*', divide: '/', modulo: '%',

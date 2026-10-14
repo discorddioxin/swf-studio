@@ -63,6 +63,13 @@ export const TOP_LEVEL: Record<string, unknown> = {
   uint: utils.uint,
   Vector: utils.Vector,
   ArgumentError: utils.ArgumentError,
+  // AVM2's class-of-classes, and the casts built on it (`x as Class`, `Class(x)`).
+  Class: utils.Class,
+  // Interfaces are runtime values in AVM2, so the emitted modules build them.
+  __interface: utils.__interface,
+  __implements: utils.__implements,
+  // `obj.method` read as a value: a closure bound to `obj`.
+  __method: utils.__method,
   DefinitionError: utils.DefinitionError,
   SecurityError: utils.SecurityError,
   VerifyError: utils.VerifyError,

@@ -33,9 +33,11 @@ describe('transpileAbc', () => {
     expect(text).toContain('export class deck extends MovieClip {');
 
     // The constructor is the script's `addFrameScript(0, this.frame1)`, and the
-    // frame body is a method the frame can call.
+    // frame body is a method the frame can call. The frame function is handed over as
+    // a *method value*, which AVM2 binds to its receiver — the sprite the frames run
+    // on — so the read is `__method(this, "frame1")`.
     expect(text).toContain('super();');
-    expect(text).toContain('this.addFrameScript(0, this.frame1);');
+    expect(text).toContain('this.addFrameScript(0, __method(this, "frame1"));');
     expect(text).toContain('public frame1(): any {');
     expect(text).toContain('this.stop();');
 

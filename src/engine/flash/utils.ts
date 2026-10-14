@@ -80,6 +80,126 @@ export class Dictionary {
   }
 }
 
+/**
+ * AVM2's `Class`: the type of class objects. Here a class *is* its constructor, so
+ * `x instanceof Class` asks whether x is one — which is what `getClassDef`-style
+ * code does with the result of `getDefinitionByName`.
+ *
+ * `Class(x)` is a cast, and like every other cast in AS3 it is identity on a value
+ * of the right kind and a `TypeError` otherwise.
+ */
+export function Class(value?: unknown): unknown {
+  if (arguments.length === 0) return Class;
+  if (isClassObject(value)) return value;
+  throw new TypeError(`Error #1034: Type Coercion failed: cannot convert ${String(value)} to Class.`);
+}
+export function isClassObject(value: unknown): boolean {
+  return typeof value === 'function' && (value as { prototype?: unknown }).prototype != null;
+}
+Object.defineProperty(Class, Symbol.hasInstance, { value: (value: unknown) => isClassObject(value) });
+
+/**
+ * A method read as a value: `obj.method` in AVM2 is a closure bound to `obj`, not the
+ * bare function. Emitted reads go through here so `addEventListener(..., this.onTick)`
+ * keeps its receiver, and so adding and removing the same listener pair up (the bound
+ * closure is cached per receiver, where AVM2 compares the receiver and the method).
+ */
+export function __method(recv: unknown, name: string, owner?: { prototype?: object; name?: string }): unknown {
+  if (recv == null) {
+    throw new TypeError(`TypeError: Error #1009: Cannot access a property or method of a null object reference`);
+  }
+  const holder = (owner?.prototype ?? recv) as Record<string, unknown>;
+  const fn = holder?.[name];
+  if (typeof fn !== 'function') return (recv as Record<string, unknown>)[name];
+  let cache = METHOD_CACHE.get(recv as object);
+  const key = owner ? `${name}#${owner.name ?? 'super'}` : name;
+  const hit = cache?.get(key);
+  if (hit) return hit;
+  const bound = fn.bind(recv);
+  if (!cache) METHOD_CACHE.set(recv as object, (cache = new Map()));
+  cache.set(key, bound);
+  return bound;
+}
+const METHOD_CACHE = new WeakMap<object, Map<string, unknown>>();
+
+/**
+ * AVM2 interfaces exist at runtime: `x is IFoo`, `x as IFoo` and
+ * `x instanceof IFoo` all work, and a class declares the interfaces it implements.
+ * TypeScript erases both the interface and the `implements` clause, so the engine
+ * keeps the two facts it needs explicitly:
+ *
+ *   const IFocusManagerComponent = __interface('fl.managers.IFocusManagerComponent');
+ *   __implements(UIComponent, IEventDispatcher, IFocusManagerComponent);
+ *
+ * `instanceof` then walks the class's own list (and its supers', which the helper
+ * flattens once at registration), including interfaces that extend interfaces.
+ */
+export interface InterfaceShape {
+  readonly name: string;
+  readonly parents: InterfaceShape[];
+  readonly implementors: WeakSet<object>;
+}
+
+const INTERFACES = new WeakMap<object, InterfaceShape>();
+
+/** An interface object: a value `instanceof` understands, and a type in AS3 terms. */
+export function __interface(name: string, ...parents: unknown[]): InterfaceShape {
+  const shape: InterfaceShape = {
+    name,
+    parents: parents.filter((p): p is InterfaceShape => INTERFACES.has(p as object) || (typeof p === 'object' && p !== null && 'implementors' in p)),
+    implementors: new WeakSet<object>(),
+  };
+  INTERFACES.set(shape, shape);
+  Object.defineProperty(shape, Symbol.hasInstance, {
+    value: (value: unknown) => implementsInterface(value, shape),
+    enumerable: false,
+  });
+  Object.defineProperty(shape, 'toString', { value: () => `[interface ${name}]`, enumerable: false });
+  return shape;
+}
+
+/** Declare (once per class) the interfaces a class implements. */
+export function __implements(owner: unknown, ...faces: InterfaceShape[]): void {
+  const target = classOf(owner);
+  if (!target) return;
+  const list = interfaceList(target);
+  for (const face of faces) {
+    if (!face) continue;
+    if (!list.includes(face)) list.push(face);
+    face.implementors.add(target);
+  }
+}
+
+/** Does `value` implement `iface`? Walks the class chain, interfaces included. */
+export function implementsInterface(value: unknown, iface: InterfaceShape): boolean {
+  if (value == null) return false;
+  const target = classOf(value);
+  if (!target) return false;
+  if (iface.implementors.has(target)) return true;
+  return interfaceList(target).some((face) => face === iface || face.parents.some((p) => p === iface));
+}
+
+/** The interfaces of a class, including the ones its superclasses declared. */
+function interfaceList(target: object): InterfaceShape[] {
+  const existing = interfaceLists.get(target);
+  if (existing) return existing;
+  const own = [...(Object.getOwnPropertyDescriptor(target, '__interfaces')?.value as InterfaceShape[] | undefined ?? [])];
+  const list: InterfaceShape[] = [];
+  for (const face of own) if (!list.includes(face)) list.push(face);
+  for (const face of [...list]) for (const parent of face.parents) if (!list.includes(parent)) list.push(parent);
+  interfaceLists.set(target, list);
+  return list;
+}
+const interfaceLists = new WeakMap<object, InterfaceShape[]>();
+
+/** The class of a value: instances give their constructor, class objects themselves. */
+function classOf(value: unknown): object | null {
+  if (typeof value === 'function') return value;
+  if (typeof value !== 'object' || value === null) return null;
+  const ctor = (value as { constructor?: unknown }).constructor;
+  return ctor && ctor !== Object ? (ctor as object) : null;
+}
+
 export function getDefinitionByName(name: string): unknown {
   const def = scheduler()?.getDefinition(String(name));
   if (def == null) throw new ReferenceError(`Error #1065: Variable ${name} is not defined.`);

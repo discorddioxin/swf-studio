@@ -72,6 +72,8 @@ export function transpileAbc(options: AbcModuleOptions): EmitResult {
   for (const def of abc.classes) if (!pathOf.has(simpleName(def.instance.name))) pathOf.set(simpleName(def.instance.name), classPath(def.instance.name));
   for (const script of abc.scripts) for (const trait of script.traits) {
     if (trait.kind === 'function' && !pathOf.has(simpleName(trait.name))) pathOf.set(simpleName(trait.name), `functions/${simpleName(trait.name)}.ts`);
+    else if ((trait.kind === 'slot' || trait.kind === 'const') && trait.value !== undefined
+      && !pathOf.has(simpleName(trait.name))) pathOf.set(simpleName(trait.name), `constants/${simpleName(trait.name)}.ts`);
   }
   for (let scriptIndex = 0; scriptIndex < abc.scripts.length; scriptIndex++) {
     const script = abc.scripts[scriptIndex];
@@ -83,8 +85,15 @@ export function transpileAbc(options: AbcModuleOptions): EmitResult {
       } else if (trait.kind === 'function' && trait.method != null) {
         files.push({ path: `functions/${simpleName(trait.name)}.ts`, text: emitFunctionModule(abc, trait, pathOf) });
       } else if (trait.kind === 'slot' || trait.kind === 'const') {
+        // A script-level constant: a package constant of the movie (`fl.video`'s
+        // `SKIN_AUTO_HIDE_INTERVAL`). The name it is written under may carry a
+        // namespace — the file name keeps a sanitised form of it, so two packages can
+        // each have their own.
         if (trait.value !== undefined) {
-          files.push({ path: `constants/${simpleName(trait.name)}.ts`, text: `export const ${simpleName(trait.name)} = ${JSON.stringify(trait.value)};\n` });
+          const name = simpleName(trait.name);
+          const where = `constants/${trait.name.replace(/[^\w$]+/g, '_').replace(/^_+|_+$/g, '')}.ts`;
+          pathOf.set(name, where);
+          files.push({ path: where, text: `export const ${name} = ${JSON.stringify(trait.value)};\n` });
         }
       }
     }
@@ -189,8 +198,40 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
   // another class): a body names one by its simple name and the import machinery
   // brings it in, instead of the body pointing at `this.RequestRetry`.
   for (const qualified of projectClasses) globals.add(simpleName(qualified));
-  const instanceScope: LiftScope = { target: 'instance', memberNames: instanceMembers, staticMembers, staticOwner: simple, globals, ownTraits: instance.traits };
-  const staticScope: LiftScope = { target: 'class', memberNames: staticMembers, staticMembers, staticOwner: simple, globals, ownTraits: def.traits };
+  // Which names are methods, walked up the superclass chain: a method read as a value
+  // is bound to its receiver in AVM2, a field read is not.
+  const byQualified = new Map(abc.classes.map((c) => [c.instance.name, c]));
+  const methodNames = (from?: string, statics = false): Set<string> => {
+    const names = new Set<string>();
+    let cls = from ? byQualified.get(from) : undefined;
+    const seen = new Set<string>();
+    for (let depth = 0; cls && depth < 64; depth++) {
+      for (const trait of statics ? cls.traits : cls.instance.traits) if (trait.kind === 'method') names.add(simpleName(trait.name));
+      const superName = cls.instance.superName;
+      if (!superName || seen.has(superName)) break;
+      seen.add(superName);
+      cls = byQualified.get(superName);
+    }
+    return names;
+  };
+  // The script this class belongs to: its slot table is what `getglobalscope; getslot N`
+  // reads, and slot N is the trait the script defined there (this class, usually).
+  const script = abc.scripts.find((s2) => s2.traits.some((t) => t.classIndex === classIndex));
+  const scriptSlots = new Map<number, string>();
+  for (const trait of script?.traits ?? []) if (trait.slotId != null && trait.slotId > 0) scriptSlots.set(trait.slotId, simpleName(trait.name));
+
+  const instanceScope: LiftScope = {
+    target: 'instance', memberNames: instanceMembers, staticMembers, staticOwner: simple,
+    scriptSlots,
+    superOwner: instance.superName ? simpleName(instance.superName) : undefined,
+    instanceMethods: methodNames(qualifiedName), staticMethods: methodNames(qualifiedName, true),
+    globals, ownTraits: instance.traits,
+  };
+  const staticScope: LiftScope = {
+    target: 'class', memberNames: staticMembers, staticMembers, staticOwner: simple, scriptSlots,
+    superOwner: instance.superName ? simpleName(instance.superName) : undefined,
+    staticMethods: methodNames(qualifiedName, true), globals, ownTraits: def.traits,
+  };
 
   // Bodies are lifted first and printed afterwards: which names need to be
   // required on first use (see `lazy` below) is only known once every body of the
@@ -205,6 +246,18 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
       stmts: liftStmts(abc, instance.iinit, instanceScope, diagnostics, where),
       where,
       hoistSuper: true,
+    });
+  }
+
+  // A class's static initializer (`cinit`): the compiler's static slot defaults, the
+  // values a static slot is first written with, and the class-level wiring. Nothing
+  // in a trait carries these, so without it every static starts out `undefined`.
+  const hasCinit = !isInterface && def.cinit >= 0 && abc.bodies.some((b) => b.method === def.cinit);
+  if (hasCinit) {
+    const where = `${qualifiedName}::<cinit>`;
+    members.push({
+      open: '  public static __cinit(): void {\n', close: '\n  }',
+      stmts: liftStmts(abc, def.cinit, staticScope, diagnostics, where), where,
     });
   }
 
@@ -252,16 +305,39 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
   const header = isInterface
     ? `export interface ${simple}${supers.length ? ` extends ${supers.join(', ')}` : ''} {`
     : `export class ${simple}${withBase || needsBase ? ` extends ${withBase ? superName : 'Object'}` : ''}${supers.length ? ` implements ${supers.join(', ')}` : ''} {`;
-  const text = [header, ...body, '}'].join('\n');
+  // An interface is a runtime object in AVM2 (`x is IFoo`), and a class records the
+  // interfaces it implements so that check can answer. TypeScript erases both facts,
+  // so the module states them: a value next to the interface, a registration after
+  // the class. Both are what makes `instanceof` work against an interface name.
+  //
+  // The names go through the same resolution bodies use: a module the project loads
+  // at the point of use (a cycle breaker) is fetched with `require`, not an import.
+  const refOf = (name: string): string => {
+    if (refs.skip?.has(name)) return name;
+    const target = refs.pathOf.get(name);
+    if (!target) return name;
+    return `require('${specifier(refs.self, target.replace(/\.ts$/, ''))}').${name}`;
+  };
+  const cinitCall = hasCinit ? `${simple}.__cinit();\n` : '';
+  const tail = isInterface
+    ? `\nexport const ${simple} = __interface('${qualifiedName}'${supers.length ? `, ${supers.map(refOf).join(', ')}` : ''});`
+    : supers.length
+      ? `\n${cinitCall}__implements(${simple}, ${supers.map(refOf).join(', ')});`
+      : `\n${cinitCall}`;
+  const text = [header, ...body, `}${tail}`].join('\n');
 
   const uses = namesUsed(text);
+  // Registration and construction are value positions for those names, and the
+  // interface value is exported by the interface's own module.
+  for (const face of supers) used.values.add(face);
   // A name in the text that no body printed as a value is a type here (a slot's
   // declared type, an interface, an `as` cast): importing it as a value would put
   // the module back into a runtime import graph it does not belong to.
   const types = new Set([...used.types, ...[...uses].filter((name) => !used.values.has(name))]);
   for (const name of types) if (projectClasses.has(name) || abc.classes.some((c) => c.instance.name === name)) uses.add(name);
   const required = new Set([...used.values].filter((name) => options.pathOf?.has(name) && !refs?.skip?.has(name)));
-  const imports = importLines(uses, abc, projectClasses, qualifiedName, simple, options.flashAvailable, options.unsupported, types, used.values, options.pathOf ? required : undefined);
+  const ownNames = new Set([...instanceMembers, ...staticMembers, ...frames.keys()]);
+  const imports = importLines(uses, abc, projectClasses, qualifiedName, simple, options.flashAvailable, options.unsupported, types, used.values, options.pathOf ? required : undefined, ownNames);
 
   return {
     files: [{ path: classPath(qualifiedName), text: `${imports.join('\n')}${imports.length ? '\n\n' : ''}${text}\n` }],
@@ -289,6 +365,14 @@ interface LiftScope {
   memberNames: Set<string>;
   staticMembers: Set<string>;
   staticOwner: string;
+  /** The superclass's simple name: `super.m(...)` / `super.m` read against it. */
+  superOwner?: string;
+  /** Instance methods reachable from this class: a read of one is a bound closure. */
+  instanceMethods?: Set<string>;
+  /** Static methods of this class: a read of one binds to the class object. */
+  staticMethods?: Set<string>;
+  /** The enclosing script's traits by slot id: `getglobalscope; getslot N` reads one. */
+  scriptSlots?: Map<number, string>;
   /** The class's own traits, so a `slot` index in a body can be named. */
   ownTraits?: AbcTrait[];
   globals: Set<string>;
@@ -495,6 +579,8 @@ function importLines(
   values?: Set<string>,
   /** Project classes a body requires at the point of use, so no import is needed. */
   required?: Set<string>,
+  /** Names this module declares itself (its class, its members): never imported. */
+  ownNames?: Set<string>,
 ): string[] {
   const packageOf = new Map<string, string>();
   const poolNames = abc.multinames.map((m) => (m.nsKind === 'package' || m.nsKind === 'packageInternal' || m.nsKind === 'namespace') && m.ns ? `${m.ns}.${m.name}` : m.name);
@@ -512,7 +598,7 @@ function importLines(
   const lines: string[] = [];
   const typeLines: string[] = [];
   for (const name of [...uses].sort()) {
-    if (BUILTINS.has(name) || name === simple) continue;
+    if (BUILTINS.has(name) || name === simple || ownNames?.has(name)) continue;
     const asValue = values?.has(name) ?? true;
     const asType = types?.has(name) ?? false;
     const project = bySimple.get(name);
@@ -530,6 +616,9 @@ function importLines(
     }
     const qualified = packageOf.get(name);
     if (!qualified || qualified === name) continue;
+    // A package path must be package segments; a namespace that is a URI (Adobe's
+    // `http://www.adobe.com/2007/flash/flvplayback/internal`) names no module.
+    if (!/^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)+$/.test(qualified)) continue;
     if (!asValue && asType) {
       typeLines.push(`import type { ${name} } from '${qualified.split('.').join('/')}';`);
       continue;

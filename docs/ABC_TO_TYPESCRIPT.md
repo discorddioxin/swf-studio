@@ -84,19 +84,29 @@ path serves the UI and the tests.
    `flash.net.URLRequest`, … The engine reports the missing ones by name
    (`engine APIs missing: …`), which is a work list, not a mystery.
 
-## 4. The refusals, by name (pinball `game.swf`, 2026‑10‑14)
+## 4. The refusals, by name (re-measured 2026‑10‑13)
 
-3,690 method bodies; **11 refused**, 0 syntax/type errors, 0 link errors, every
-symbol class linked. Tiles is at 0/35; towns2 at 80 refused of its bodies.
+| movie | method bodies | emitted modules | refused | syntax/type errors | link errors |
+|---|---|---|---|---|---|
+| pinball `game.swf` | 3,690 | 436 | **7** | 0 | 0 |
+| tiles `assets.swf` | 116 | 35 | **0** | 0 | 0 |
+| towns2 `towns2.swf` | 8,372 | 769 | **55** | 0 | 0 |
+
+Pinball:
 
 | count | reason | what it is |
 |---|---|---|
-| 5 | control flow re-enters a region still being lifted | a loop whose condition sits *before* the head and whose latch jumps back to it: the already-emitted statements need to be wrapped in a loop, not refused |
 | 2 | if/else arms leave different numbers of values | two arms that produce *different* stack shapes (a phi the lifter cannot materialise) |
-| 1 | if without else leaves values on the stack | same, one-armed |
+| 1 | control flow re-enters a region still being lifted | a latch that jumps back into a region whose statements are already emitted |
+| 1 | if without else leaves values on the stack | same as the first row, one-armed |
 | 1 | `with` (`pushwith`) | AS3's `with` re-binds name lookup; JavaScript cannot express the AVM2 rule |
 | 1 | `slot 32 has no trait in Ball` | a slot written that the class never declares (generated/obfuscated code) |
 | 1 | short-circuit join does not produce a single value | a `&&`/`\|\|` chain whose join pushes something other than the two operands |
+
+towns2: 12 re-entered regions, 9 mismatched if/else arms, 9 operand-stack
+underflows, 8 E4X default namespace (`dxns`), 4 jumps that leave the method body,
+3 `with`, 3 unknown loop edges, 3 short-circuit joins, 2 switch cases that jump out
+early, 1 `dup` on an empty stack, 1 one-armed `if` that leaves a value.
 
 Each of those is a *statement* in the emitted module's diagnostics, so a game
 that half-works says exactly which method of which class is missing, at which
@@ -122,20 +132,19 @@ byte. Nothing is silently dropped: a body either lifts or is refused.
 
 ## 6. What is left, in order
 
-1. **Condition-before-head loops** (the 5 `irreducible` refusals in pinball, 37 in
-   towns2): when a latch jumps back to a point inside the region being lifted, wrap
-   the statements already emitted for that region in a `while` whose condition is
-   the branch that closes it. That is one structural change in `emitRegionInner`
-   and it is the largest remaining class by far.
-2. **Mismatched joins** (`if`/`if-else` value counts, short-circuit joins): these
-   need a real phi/materialisation of *n* values instead of the current
-   single-value rule.
-3. **`with`**: either model the scope-object lookup (the AVM2 rule: an object
-   becomes a scope that name resolution consults first) or keep refusing it.
-4. **Engine surface**: `Class` as a global (a `ReferenceError` in the towns2
-   controls), `flash.text.StyleSheet`, `flash.geom.Vector3D`,
-   `flash.accessibility.*`, `flash.events.{HTTPStatusEvent,NetStatusEvent}`,
-   `flash.system.IME`, `flash.xml.XMLDocument` — these are the remaining
-   "is not implemented by this engine" messages.
-5. **Fidelity vs clean code**: the 1:1 output is the measurement above; the
-   actor/system target and its mapping live in `docs/GAME_FRAMEWORK.md`.
+1. **Mismatched joins and re-entered regions** (pinball 5 of 7, towns2 ~25 of 55):
+   a real phi/materialisation of *n* values instead of the single-value rule, and
+   wrapping already-emitted statements in a loop when a latch jumps back into them.
+2. **Stack underflow / jumps out of the body / unknown loop edges** (towns2 17):
+   mostly `try`/`finally` and compiler-generated tails; each needs its own look.
+3. **E4X** (`dxns`, towns2 8) and **`with`** (4): model the AVM2 scope rule or
+   keep refusing by name.
+4. **Engine surface for towns2** (the boot gate): 18 log entries on boot.
+   `flash.text.StyleSheet` is missing (PhoneScreen/PalBox); `HistorySettings`,
+   `Phone`, `SettingScreen` and `TownsDoc` read members that are still
+   `undefined` (not yet diagnosed; timeline-placed children are the likely cause); `NumericStepper` reads `toString` of an unset style; the gateway
+   host resolves to `undefined.gaiaonline.com` (a FlashVars/loader parameter the
+   page used to supply). The `TownsDoc` constructor fails, so towns2 does not run.
+   Pinball and tiles boot 120 frames with no log entries.
+5. **Clean code**: the 1:1 output is the measurement above; the actor/system
+   target and its mapping live in `docs/GAME_FRAMEWORK.md` and are not emitted yet.
