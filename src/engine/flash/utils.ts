@@ -4,6 +4,7 @@
 // player, advance with Step, and are cleared when the game is restarted.
 
 import { runtime } from './context';
+import { safeConstructor } from '../shared/hostGuard';
 import { EventDispatcher, TimerEvent } from './events';
 
 interface Scheduler {
@@ -15,11 +16,20 @@ const scheduler = () => runtime.player as unknown as Scheduler | null;
 
 export function getTimer(): number { return Math.floor((runtime.player?.time ?? 0) + 1e-6); }
 
+/** AVM2 coerces the closure argument to `Function`: a string is TypeError #1034, never source. */
+function closureOf(fn: unknown, caller: string): (...a: unknown[]) => unknown {
+  if (typeof fn !== 'function') {
+    throw new TypeError(`Error #1034: Type Coercion failed: cannot convert ${String(fn)} to Function (${caller}).`);
+  }
+  return fn as (...a: unknown[]) => unknown;
+}
 export function setTimeout(fn: (...a: unknown[]) => unknown, delay: number, ...args: unknown[]): number {
-  return scheduler()?.schedule(Number(delay) || 0, () => fn(...args), false) ?? 0;
+  const closure = closureOf(fn, 'setTimeout');
+  return scheduler()?.schedule(Number(delay) || 0, () => closure(...args), false) ?? 0;
 }
 export function setInterval(fn: (...a: unknown[]) => unknown, delay: number, ...args: unknown[]): number {
-  return scheduler()?.schedule(Number(delay) || 0, () => fn(...args), true) ?? 0;
+  const closure = closureOf(fn, 'setInterval');
+  return scheduler()?.schedule(Number(delay) || 0, () => closure(...args), true) ?? 0;
 }
 export function clearTimeout(id: number) { scheduler()?.cancel(id); }
 export function clearInterval(id: number) { scheduler()?.cancel(id); }
@@ -139,6 +149,8 @@ export function __method(recv: unknown, name: string, owner?: { prototype?: obje
   if (recv == null) {
     throw new TypeError(`TypeError: Error #1009: Cannot access a property or method of a null object reference`);
   }
+  // The guarded read the printer uses for `.constructor` (`engine/shared/hostGuard.ts`).
+  if (name === 'constructor') return safeConstructor(recv);
   const holder = (owner?.prototype ?? recv) as Record<string, unknown>;
   const fn = holder?.[name];
   if (typeof fn !== 'function') return (recv as Record<string, unknown>)[name];

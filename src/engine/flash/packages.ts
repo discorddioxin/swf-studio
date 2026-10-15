@@ -1,6 +1,7 @@
 // The AS3 package table: `flash.display` → { MovieClip, Sprite, … }.
 // The loader resolves every flash.* / fl.* import (in any spelling) here.
 
+import { safeConstructor, safeKey } from '../shared/hostGuard';
 import * as display from './display';
 import * as events from './events';
 import * as fl from './fl';
@@ -90,6 +91,10 @@ export const TOP_LEVEL: Record<string, unknown> = {
   __coerceObject: utils.__coerceObject,
   __iterAdvance: utils.__iterAdvance,
   __iterValue: utils.__iterValue,
+  // A `.constructor` read and a computed key: the guarded forms the emitter prints,
+  // so neither can reach the host's `Function` (`engine/shared/hostGuard.ts`).
+  __ctor: safeConstructor,
+  __key: safeKey,
 };
 
 /** Every class/function in the table by simple and qualified name. */

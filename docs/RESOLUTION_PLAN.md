@@ -136,6 +136,27 @@ browser globals.
 - pinball and tiles still boot to the same state;
 - pinball's refusal count stays at 11 of 3,690 (or drops).
 
+**As implemented (2026-10-15).** Two deviations from the steps above, both deliberate:
+- *No `__global` routing (steps 3 and 5).* The emitter's import machinery finds the names
+  a module needs by scanning the printed text for bare identifiers, so turning unresolved
+  names into `__global.x` would have broken import resolution. Instead, the loader wraps
+  each module in a sloppy outer function whose parameters shadow **every** name the
+  page's global object answers, other than ECMAScript builtins: `window`, `document`,
+  `fetch`, `eval`, `globalThis`, `Reflect` and the rest are `undefined` inside a module.
+  `Function`, `Object` and the four timers get AVM2 stand-ins (`src/engine/shared/hostGuard.ts`).
+  An unknown name therefore reads as `undefined`, not as AVM2's `ReferenceError #1065`.
+- *Reflection is guarded too.* `.constructor` reads print as `__ctor(x)`, which never
+  returns a host compiler. Computed keys that are not plainly numeric print as
+  `o[__key(k)]`, which holds `"constructor"` apart. `__proto__` is **not** guarded,
+  because AVM2 reads it as the prototype and pinball's Sushi `Serializer` relies on it.
+- Name checks live in `transcom/transpiler/avm2/names.ts`. An unprintable name refuses the
+  member (body) or the module (class, base or interface name) with a diagnostic.
+- Corpus result: identical file, class, refusal and link counts. The emitted text changes
+  only by the `__key`/`__ctor` wraps: all 5,396 changed lines map back to the old text
+  mechanically.
+- This remains a guard inside the page's realm. P-03b (iframe isolation) is the boundary;
+  once it lands, the `__key` wraps can be reconsidered.
+
 ### P-03 (part a) — AS2 reaches JavaScript's `Function` through `constructor`
 
 **Goal:** AS2 and AVM1 code can read `constructor` and `prototype` with Flash semantics,

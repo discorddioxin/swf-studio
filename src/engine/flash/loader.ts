@@ -19,6 +19,8 @@
 import { transform } from 'sucrase';
 import { runtime } from './context';
 import { FLASH_DEFINITIONS, PACKAGES, TOP_LEVEL } from './packages';
+import { HOST_STAND_INS, hostShadows } from '../shared/hostGuard';
+import { clearInterval, clearTimeout, setInterval, setTimeout } from './utils';
 
 export interface SourceFile { path: string; text: string }
 
@@ -71,6 +73,14 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
 
   const globalNames = Object.keys(TOP_LEVEL);
   const globalValues = globalNames.map((n) => TOP_LEVEL[n]);
+  // The page's own globals are not the movie's: every name the global object
+  // answers, other than ECMAScript's builtins, is bound to `undefined` around each
+  // module, and the few a movie legitimately names get AVM2's versions (a
+  // `Function` that compiles nothing, timers that take only functions). See
+  // `engine/shared/hostGuard.ts`.
+  const standIns: Record<string, unknown> = { ...HOST_STAND_INS, setTimeout, setInterval, clearTimeout, clearInterval };
+  const hostNames = [...new Set([...hostShadows(), ...Object.keys(standIns)])];
+  const hostValues = hostNames.map((n) => standIns[n]);
 
   // A module that throws is retried after the first pass: classes in this code are
   // defined eagerly, so a cyclic `class A extends B` can only link once B exists.
@@ -86,8 +96,12 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
     if (m.code == null) throw new LoadFailure(`${m.path} failed to compile: ${m.error}`);
     const dir = m.path.includes('/') ? m.path.slice(0, m.path.lastIndexOf('/')) : '';
     const require = (spec: string) => resolve(spec, m.path, dir);
-    const fn = new Function('exports', 'require', 'module', '__filename', '__dirname', ...globalNames,
-      `${m.code}\n//# sourceURL=swf-code:///${m.path}`);
+    // The outer function is sloppy so it can bind `eval`; the module itself starts
+    // with sucrase's "use strict" and runs as before, its own declarations free to
+    // reuse any host name.
+    const outer = new Function(...hostNames,
+      `return function (exports, require, module, __filename, __dirname, ${globalNames.join(', ')}) {${m.code}\n};\n//# sourceURL=swf-code:///${m.path}`);
+    const fn = outer(...hostValues) as (...args: unknown[]) => void;
     try {
       fn.call(module.exports, module.exports, require, module, m.path, dir, ...globalValues);
     } catch (e) {
