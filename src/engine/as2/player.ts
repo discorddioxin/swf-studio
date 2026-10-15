@@ -1,4 +1,4 @@
-// AS2 player: runs the TypeScript produced by as2ts (transpiler/as2)
+// AS2 player: runs the TypeScript produced by as2ts (transcom/transpiler/as2)
 // against a parsed SWF document.
 //
 // This is a Flash-7-style (AVM1) player. Its behaviour is modelled on how the

@@ -10,9 +10,9 @@ for AVM1 and **only a parser** for AVM2:
 | | AVM1 (AS1/AS2) | AVM2 (AS3) — before |
 |---|---|---|
 | SWF tag | `DoAction`, `DoInitAction` | `DoABC` |
-| bytecode reader | `transpiler/as2/*` (parse + expr) | `decompiler/swf/abc.ts` — existed |
-| IR / AST | the shared `transpiler/as2/ast.ts` | none |
-| code emitter | `transpiler/as2/emit.ts` → TS modules | none |
+| bytecode reader | `transcom/transpiler/as2/*` (parse + expr) | `transcom/decompiler/swf/abc.ts` — existed |
+| IR / AST | the shared `transcom/transpiler/as2/ast.ts` | none |
+| code emitter | `transcom/transpiler/as2/emit.ts` → TS modules | none |
 | engine side | the AS2 player drives the emitted code | nothing read `doc.abc` |
 
 So an AS3 movie parsed correctly (tags, tags inside `DefineSprite`, the ABC
@@ -30,13 +30,13 @@ is where the remaining refusals come from (§4).
 
 ```
 SWF bytes
-  └─ src/lib/swf/* … decompiler/swf/*        tags, DefineSprite, SymbolClass
-       └─ decompiler/swf/abc.ts               parseAbc()   → AbcFile
+  └─ src/lib/swf/* … transcom/decompiler/swf/*        tags, DefineSprite, SymbolClass
+       └─ transcom/decompiler/swf/abc.ts               parseAbc()   → AbcFile
        │    constants, methods, metadata, instances, classes, scripts, bodies
        │    disassemble()  → one record per instruction (operands, targets)
-       └─ transpiler/avm2/lift.ts             liftMethod() → Stmt[]  (the shared AST)
+       └─ transcom/transpiler/avm2/lift.ts             liftMethod() → Stmt[]  (the shared AST)
        │    values-first: the operand stack becomes expressions as it walks
-       └─ transpiler/avm2/emit.ts             TS module per class (+ imports)
+       └─ transcom/transpiler/avm2/emit.ts             TS module per class (+ imports)
        └─ src/engine/flash/loader.ts          compileSources() + linkProgram()
             └─ FlashPlayer (src/engine/flash/*)  the AS3 runtime and `flash.*`
 ```
@@ -116,7 +116,7 @@ byte. Nothing is silently dropped: a body either lifts or is refused.
 
 * **Oracle**: 435 hand-decompiled `.as` files for the pinball movie (FFDec
   output, `_loc2_` naming) — compared structurally, class by class and member by
-  member, in `transpiler/avm2/__tests__` and `zz_proof`. The oracle is a check,
+  member, in `transcom/transpiler/avm2/__tests__` and `zz_proof`. The oracle is a check,
   never an input: it is not in the repo and nothing reads it at runtime.
 * **Specification**: the ABC layout and opcode table are taken from the AVM2
   overview, with Ruffle's reader studied as a reference only (`swf/src/avm2/read.rs`,

@@ -27,5 +27,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "decompiler", "transpiler", "vite.config.ts"]
+  "include": ["src", "transcom", "vite.config.ts"]
 }

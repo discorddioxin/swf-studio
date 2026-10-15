@@ -12,9 +12,9 @@ This document prepares the project for its **next development phase** after the 
 
 | Phase | What | Where | Test that pins it |
 |---|---|---|---|
-| **0** | Inventory 121→122 files, 8 SWFs 776K, 5 circulars | `audits/phases/PHASE-0-*` | `vitest 51/3` |
+| **0** | Inventory 121→122 files, 8 SWFs 776K, 5 circulars | `docs/audits/archive/phases/PHASE-0-*` | `vitest 51/3` |
 | **1** | Isolated engine: `hostStack`/`_constructStack`, `constants.ts` `DEPTH_OFFSET/NODE`, `DebuggerStore Map+activeId`, `cacheGenerationRef`, `tintCache` prune, `emit try/catch` | `src/runtime/as2/index.ts`, `src/engine/as2/*`, `src/debug/store.tsx`, `src/App.tsx` | `assets.lifecycle`, `as2player.lifecycle`, `breakpointMatch 8` |
-| **2** | SWF-19 fidelity Ch.1-15, `avm1 534/249` oracle, `swf-roundtrip 6/6` | `decompiler/swf/binary.ts`, `tools/xml2swf/xml2swf.mjs` | `swf-roundtrip`, `avm1-action-audit` |
+| **2** | SWF-19 fidelity Ch.1-15, `avm1 534/249` oracle, `swf-roundtrip 6/6` | `transcom/decompiler/swf/binary.ts`, `tools/xml2swf/xml2swf.mjs` | `swf-roundtrip`, `avm1-action-audit` |
 | **3** | Engine tick/queue/guard: `advanceBy 4 ticks`, `queue 200k`, `bornTick`, `DEPTH_OFFSET`, `guard re-queue` | `src/engine/as2/player.ts`, `src/engine/flash/player.ts` | `as2player.test`, `flash/player.test`, `<game adapter>/__tests__/game421.dev.test` |
 | **4** | Assets/bundled: `deepest owner`, `segments.includes(frameToken)`, `MAX_LEVEL 12→20`, `expandUploadFiles` streaming guard `50M/200M`, sample-data regeneration repro (`3 SWFs +8/+134/+160 committed`) | `src/lib/assets.ts`, `src/lib/render.ts`, `tools/xml2swf/xml2swf.mjs`, `src/adapters/<game>/tools/generate-bundled.mjs` | `assets.lifecycle`, `render.lifecycle`, `bundled.test` |
 | **5** | Workbench: `TOKEN /* */` + `highlight`, `uid crypto.randomUUID`, `ExportOptions mergeVariants`, `usedBy useMemo` | `src/components/CodeWorkspace.tsx`, `src/lib/project.ts`, `src/lib/exporter.ts`, `src/components/inspector/LabelPanel.tsx` | `codeWorkspace.ui.test 7`, `project.variants`, `synergy` |
@@ -37,13 +37,13 @@ File[] → loadUploadedPackages / fetchBundledManifest → mergeBundledExternals
 
 | Seam | Env | Test without React? | Key file |
 |---|---|---|---|
-| Decompiler | node | ✅ `swf-roundtrip 6/6` | `decompiler/swf/binary.ts` |
-| Transpiler `transpileProject` → `ProjectResult` | node | ✅ diffable `ProjectResult.files` | `transpiler/as2/project.ts` |
+| Decompiler | node | ✅ `swf-roundtrip 6/6` | `transcom/decompiler/swf/binary.ts` |
+| Transpiler `transpileProject` → `ProjectResult` | node | ✅ diffable `ProjectResult.files` | `transcom/transpiler/as2/project.ts` |
 | Runtime `AS2Host/hostStack` | node | ✅ `RT.installHost(mock)` | `src/runtime/as2/index.ts` |
 | Engine AS2 `AS2Player` | node | ✅ stub `measureCtx` + `HtmlAudioBackend(null)` | `src/engine/as2/player.ts` |
 | Engine Flash `FlashPlayer` | node | ✅ mock `Stage` | `src/engine/flash/player.ts` |
 | Assets `ingestFiles`/`AssetCache`/`flatten` | node | ✅ `Image` mock | `src/lib/assets.ts`, `src/lib/render.ts` |
-| Workbench `useAS2Project`/`proposeActors` | jsdom | needs DOM | `src/components/CodeWorkspace.tsx`, `transpiler/as2/actorHeuristics.ts` |
+| Workbench `useAS2Project`/`proposeActors` | jsdom | needs DOM | `src/components/CodeWorkspace.tsx`, `transcom/transpiler/as2/actorHeuristics.ts` |
 | Final `App` | jsdom | needs DOM+File mock | `src/App.tsx`, `src/components/__tests__/timelineResize.pointer.test.tsx` |
 
 **Implication:** Change `resolveActionScriptFile` knowing only `ingestFiles` (input) and `hydrateActionScriptSources` (consumer) — `assets.lifecycle` catches drift <2s. Change `render` knowing only `flatten` and `Stage` — `render.lifecycle` catches drift. Change `guard` knowing only `findMatchingBreakpoint` and `store.pause`.
@@ -54,10 +54,10 @@ File[] → loadUploadedPackages / fetchBundledManifest → mergeBundledExternals
 
 ### Track A — Actor migration (highest value, corpus-driven)
 
-**Goal:** Replace Flash timeline scripts with typed `Actor` classes (`transpiler/as2/actorHeuristics.ts` → `src/types.ts:Actor`) for the bundled sample's game movies (8 proposals, 0 for its component/service movies via `isLibraryMovie`).
+**Goal:** Replace Flash timeline scripts with typed `Actor` classes (`transcom/transpiler/as2/actorHeuristics.ts` → `src/types.ts:Actor`) for the bundled sample's game movies (8 proposals, 0 for its component/service movies via `isLibraryMovie`).
 
 - **Entry:** `actors/hero_ball.ts` generated via `generateAS2Project` + `buildWorkbenchTimelineMetadata` (frameLabels + `idleClipFor`)
-- **Files:** `transpiler/as2/actorHeuristics.ts` (`isLibraryMovie`: sprite-heavy timeline set + >8 linked `mx.`/`__Packages.mx` export names — document-based, no file names), `transpiler/as2/project.ts:mergeVariants` (visualKey/actionKey cluster 9/18/19/24 fish)
+- **Files:** `transcom/transpiler/as2/actorHeuristics.ts` (`isLibraryMovie`: sprite-heavy timeline set + >8 linked `mx.`/`__Packages.mx` export names — document-based, no file names), `transcom/transpiler/as2/project.ts:mergeVariants` (visualKey/actionKey cluster 9/18/19/24 fish)
 - **Next:** Wire `ActorPanel` proposals into `Project.actors:Actor[]` → `GameEngine.normalizeProjectActors` → `RuntimeClip` at `275,200` — already deterministic, needs UI to promote `hero_ball` from timeline to actor state machine. Test: `actorProposal.ui.test` + `project.variants.test` + `inspectorExecutor.synergy` (shim `hero_ball.ts` → `_proposal.json`).
 
 ### Track B — Streaming for >50M uploads
@@ -73,8 +73,8 @@ File[] → loadUploadedPackages / fetchBundledManifest → mergeBundledExternals
 ### Track D — AS3 / DoABC
 
 - `EngineFlash` (`FlashPlayer 722 + loader 270`) is isolated from `EngineAS2`. `DoABC2` is currently alias-missing per SPEC — add `avm2` crate only if a bundled movie ever emits `DoABC` (the sample’s main movie doesn’t; it’s AVM1).
-- **Done:** the ABC reader + disassembler (`decompiler/swf/abc.ts`) pulls code out of `DoABC` tags per the AVM2 spec, so AS3 movies no longer depend on hand-supplied sources. Verified on the uploaded AS3 sets (pinball 435 classes / 3,690 bodies, towns2 762 / 8,372 — every body decodes to its exact length, every reachable jump lands on an instruction) and on a 4,916-SWF independent corpus.
-- **Done:** ABC → TypeScript (`transpiler/avm2/{lift,emit,index}.ts`). Lifts each method body (operand-stack simulation → expressions, branches → `if`/`while`/`?:`/`&&`, `dup`-join assignments → real statements/locals, traits → class members, `coerce` → imported types) and emits one module per class plus the script inits. All three uploaded AS3 movies **link through the real engine loader with 0 errors** and their SymbolClass tables resolve completely (pinball 311/311, tiles 35/35, towns2 192/192); 3,496/3,690 pinball bodies lift and a symbol class from each movie is constructible (`transpiler/avm2/transpile.test.ts` proves the standardDeck timeline class end to end; `debug/tools/vitest/avm2emitter.dev.test.ts` is the whole-movie gate and `avm2game.dev.test.ts` boots the movies in `FlashPlayer`).
+- **Done:** the ABC reader + disassembler (`transcom/decompiler/swf/abc.ts`) pulls code out of `DoABC` tags per the AVM2 spec, so AS3 movies no longer depend on hand-supplied sources. Verified on the uploaded AS3 sets (pinball 435 classes / 3,690 bodies, towns2 762 / 8,372 — every body decodes to its exact length, every reachable jump lands on an instruction) and on a 4,916-SWF independent corpus.
+- **Done:** ABC → TypeScript (`transcom/transpiler/avm2/{lift,emit,index}.ts`). Lifts each method body (operand-stack simulation → expressions, branches → `if`/`while`/`?:`/`&&`, `dup`-join assignments → real statements/locals, traits → class members, `coerce` → imported types) and emits one module per class plus the script inits. All three uploaded AS3 movies **link through the real engine loader with 0 errors** and their SymbolClass tables resolve completely (pinball 311/311, tiles 35/35, towns2 192/192); 3,496/3,690 pinball bodies lift and a symbol class from each movie is constructible (`transcom/transpiler/avm2/transpile.test.ts` proves the standardDeck timeline class end to end; `docs/debug/tools/vitest/avm2emitter.dev.test.ts` is the whole-movie gate and `avm2game.dev.test.ts` boots the movies in `FlashPlayer`).
 - **Done:** the app path — `src/engine/flash/abc.ts` reads the `DoABC` tags of the loaded document *and* its dependency SWFs, `transpileAbc` lifts them, the Execute tab compiles the result through the same loader, and the Program panel reports the payload/file/class counts.
 - **Left in the lifter:** 176 bodies that close over an activation (`newactivation`/`newfunction` — the last big feature, and what keeps `fl.managers.StyleManager` from running in pinball *and* towns2), 6 stack-underflow shapes, a few mixed-value `if`/`else` joins, `for-in`/`for-each`, E4X, `lookupswitch`. Each is a `Refuse` site in `lift.ts`, so the count only goes down.
 - **Left in the engine surface:** classes the movies reference that `src/engine/flash` does not provide yet (`flash.text.StyleSheet`, `flash.geom.Vector3D`, `flash.accessibility.*`, `flash.events.{HTTPStatusEvent,NetStatusEvent}`, `flash.system.IME`, `flash.xml.XMLDocument`, `setPropertyIsEnumerable` on the Array side). The emitter turns an unavailable `flash.*`/`fl.*` name into an explicit `unsupportedFlash(name)` stub, so a movie links and runs up to the first real use of something missing.
@@ -94,7 +94,7 @@ npx madge --circular src/main.tsx --extensions ts,tsx        # 92 files 5 circul
 node src/adapters/<game>/tools/generate-bundled.mjs && git diff --stat HEAD -- game-files  # 0 (manifest stable)
 ```
 
-- **AS3 corpus gate:** `npx vitest run debug/tools/vitest/avm2emitter.dev.test.ts debug/tools/vitest/avm2game.dev.test.ts` — needs the uploaded corpus at `/tmp/swf-forge2/games-swfs` (`SWF_CORPUS=` overrides); both skip without it. The emitter gate freezes each movie's refusal count (it may fall, never rise).
+- **AS3 corpus gate:** `npx vitest run docs/debug/tools/vitest/avm2emitter.dev.test.ts docs/debug/tools/vitest/avm2game.dev.test.ts` — needs the uploaded corpus at `/tmp/swf-forge2/games-swfs` (`SWF_CORPUS=` overrides); both skip without it. The emitter gate freezes each movie's refusal count (it may fall, never rise).
 
 - **New test goes next to code:** `src/lib/foo.test.ts` (node) or `src/components/__tests__/foo.ui.test.tsx` (jsdom). The audit pinned every seam to a file that will fail first — add the test that would have caught FINAL-08 (`timelineResize.pointer.test.tsx` is the template for DOM gaps).
 - **No new `any`:** `grep -R "any" src/` is 373 + header `runtime/as2/index.ts:1` — narrow to `unknown`/`AS2Value` at value seam only.
@@ -106,8 +106,8 @@ node src/adapters/<game>/tools/generate-bundled.mjs && git diff --stat HEAD -- g
 ## 5. Checklist before opening a PR (next phase)
 
 - [ ] `tsc --noEmit` 0, `vitest` 51/3·227/3, `vite` 228 modules, `madge` 5 circulars, `game-files` 0 diff after the adapter's `generate-bundled.mjs` (or `git add game-files/` if writer drift, like ASSET-10)
-- [ ] Updated `audits/phases/PHASE-*-*.json` disposition if you fix a `Keep — shovel-ready` (and matching `*.md` table row)
-- [ ] No `madge --orphans` new file without citation; `import.meta.glob ?raw` is a known blind spot (ARCH-06) — add to `knip.json` ignore if needed
+- [ ] Updated `docs/audits/archive/phases/PHASE-*-*.json` disposition if you fix a `Keep — shovel-ready` (and matching `*.md` table row)
+- [ ] No `madge --orphans` new file without citation; `import.meta.glob ?raw` is a known blind spot (ARCH-06): files reached only through it (`CodeWorkspace`'s engine view) are not orphans
 - [ ] One table per seam + one Mermaid diagram if you add a new seam (Phase docs §3+§4)
 - [ ] `git tag -a audit-checkpoint-next -m "..."` on the fix commit (like `audit-checkpoint-0..6` + `fix e0c6c3e`)
 
@@ -119,7 +119,7 @@ node src/adapters/<game>/tools/generate-bundled.mjs && git diff --stat HEAD -- g
 |---|---|---|
 | `MAX_ZIP 50M / MAX_EXPANDED 200M` streaming guard (ASSET-07 second half) | Corpus 776K, sequential warn is enough; true streaming needs `zip.js` + Worker | When a real >50M ZIP upload hits OOM or UI jank in `expandUploadFiles` |
 | `ARCH-05` `any` at value seam | `AS2Clip {[key:string]:any}` is spec-dynamic (`this._x`, `_global.sushi`); strict typing adds no safety | Never — narrow at call site to `unknown` only |
-| `ARCH-06` `import.meta.glob ?raw` blind spot | `madge` under-reports 12 engine files; `knip` would flag orphans | Add `knip.json` `ignore` for `engine/as2/**`, `runtime/as2/**`, `transpiler/as2/**` |
+| `ARCH-06` `import.meta.glob ?raw` blind spot | `madge` under-reports 12 engine files; a dead-code tool would flag them as orphans | Keep in mind when reading orphan reports: `src/engine/as2/**`, `src/runtime/as2/**` and `transcom/transpiler/as2/**` are read by `CodeWorkspace`'s glob. (`knip.json` was removed: knip was never installed or run.) |
 | `SPEC-02/05` filters/morph/video | 0 hits on the bundled sample corpus; `unknownTags` counts them | When a new SWF exercises the tag (add fixture + `swf-roundtrip` + `lossless-oracle` PNG) |
 
 All other shovel-ready Low are now Fixed at `e0c6c3e`/`513f2e3+` (see `FULL_AUDIT_SUMMARY.md` Low 28→22, `IMPLEMENTATION_CHECKLIST_e0c6c3e.md` §2).

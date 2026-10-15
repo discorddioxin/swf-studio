@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import type { ProjectResult } from '../../transpiler/as2/project';
+import type { ProjectResult } from '../../transcom/transpiler/as2/project';
 
 const runtime = import.meta.glob<string>('../runtime/as2/*.ts', { eager: true, query: '?raw', import: 'default' });
 

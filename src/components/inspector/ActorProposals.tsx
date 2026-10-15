@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { proposeActors } from '../../../transpiler/as2/actorHeuristics';
+import { proposeActors } from '../../../transcom/transpiler/as2/actorHeuristics';
 import type { ProjectApi } from '../../lib/project';
 import { buildFramesForContainer } from '../../lib/exporter';
 import type { SwfDocument } from '../../types';

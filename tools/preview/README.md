@@ -41,4 +41,4 @@ A browser-side object URL leak cannot itself stop the Node HTTP server. A
 `Sandbox not found` gateway response is also distinct from an app exception.
 No local server can survive the platform removing its VM; if that response
 persists in the authenticated preview UI, the Arena sandbox connection needs
-attention. See `audits/PREVIEW_DIAGNOSTICS.md` for the measurements and fixes.
+attention. See `docs/audits/archive/PREVIEW_DIAGNOSTICS.md` for the measurements and fixes.

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { decodeActionBytes } from '../../decompiler/parser';
+import { decodeActionBytes } from '../../transcom/decompiler/parser';
 import { disassembleAVM1Source } from './avm1Disassembly';
 
 describe('AVM1 source display', () => {

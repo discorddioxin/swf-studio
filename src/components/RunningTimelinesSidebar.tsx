@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Project, SwfCharacter, SwfDocument, Timeline } from '../types';
-import type { TimelineNameIndex, TimelineNameMetadata } from '../../transpiler/as2/project';
+import type { TimelineNameIndex, TimelineNameMetadata } from '../../transcom/transpiler/as2/project';
 import type { ActiveDisplaySnapshot, RunningTimelineSnapshot } from '../engine/as2/player';
 import { cn } from '../utils/cn';
 import { KIND_COLOR } from './ui';

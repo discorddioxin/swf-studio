@@ -5,7 +5,7 @@ import { WebSocketServer } from 'ws';
 /**
  * Small room relay for the optional multiplayer feature.
  *
- * Hardening (see audits/CODE_INSPECTOR_AUDIT.md §7):
+ * Hardening (see docs/audits/archive/CODE_INSPECTOR_AUDIT.md §7):
  * - Identity: a user id is unique per room. A second connection claiming a
  *   live id is refused unless it presents the same private session key (a
  *   reconnect, which replaces the stale socket), so guests cannot

@@ -12,7 +12,7 @@ process.env.LD_LIBRARY_PATH = [path.join(libraryRoot, 'lib'), process.env.LD_LIB
 process.env.FONTCONFIG_PATH ??= '/tmp/fonts';
 
 const APP = process.env.APP_URL ?? 'http://127.0.0.1:5173/';
-const OUT = path.resolve('debug/tools/e2e-output');
+const OUT = path.resolve('docs/debug/tools/e2e-output');
 await fs.mkdir(OUT, { recursive: true });
 const browser = await puppeteer.launch({
   executablePath: await chromium.executablePath(),
