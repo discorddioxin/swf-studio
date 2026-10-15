@@ -33,7 +33,7 @@ branches become ordinary expressions, assignments, functions, `if/else`, and
 
 ## Decoder architecture
 
-`transpiler/as2/avm1.ts` is DOM-independent and does not execute input code:
+`transcom/transpiler/as2/avm1.ts` is DOM-independent and does not execute input code:
 
 1. Validate Base64, record lengths, terminated UTF-8 strings, function bodies,
    and branch boundaries. Function bodies are outside the header's record length.
@@ -127,10 +127,10 @@ cannot in general be recovered. Original bytes remain available for comparison.
 
 ## Code references
 
-- `decompiler/swf/bitio.ts`: original ActionRecord transport.
-- `transpiler/as2/avm1.ts`: validated decoding, expression lifting and control flow.
-- `transpiler/as2/emit.ts`: executable decoder integration and diagnostics.
-- `transpiler/as2/project.ts`: timeline wiring and actor entry points.
+- `transcom/decompiler/swf/bitio.ts`: original ActionRecord transport.
+- `transcom/transpiler/as2/avm1.ts`: validated decoding, expression lifting and control flow.
+- `transcom/transpiler/as2/emit.ts`: executable decoder integration and diagnostics.
+- `transcom/transpiler/as2/project.ts`: timeline wiring and actor entry points.
 - `src/runtime/as2/actor.ts`: actor/renderer ports and the Flash adapter.
 - `src/runtime/as2/avm1.ts`: fallback interpreter and shared semantic helpers.
 - `src/lib/typescriptExport.ts`: editable project ZIP.

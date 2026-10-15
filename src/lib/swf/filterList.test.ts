@@ -14,7 +14,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseSwfBinary } from './binary';
 
-/** MSB-first bit writer, the counterpart of decompiler/swf/bitio.ts's BitReader. */
+/** MSB-first bit writer, the counterpart of transcom/decompiler/swf/bitio.ts's BitReader. */
 class BitWriter {
   bytes: number[] = [];
   private bit = 0;

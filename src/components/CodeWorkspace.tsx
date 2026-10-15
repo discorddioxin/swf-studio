@@ -23,7 +23,7 @@ type TreeRow = { kind: 'folder' | 'file'; path: string; name: string; depth: num
 const engineModules = {
   ...import.meta.glob<string>('../engine/as2/**/*.ts', { eager: true, query: '?raw', import: 'default' }),
   ...import.meta.glob<string>('../runtime/as2/**/*.ts', { eager: true, query: '?raw', import: 'default' }),
-  ...import.meta.glob<string>('../../transpiler/as2/**/*.ts', { eager: true, query: '?raw', import: 'default' }),
+  ...import.meta.glob<string>('../../transcom/transpiler/as2/**/*.ts', { eager: true, query: '?raw', import: 'default' }),
 };
 
 function engineProjectFiles(): CodeFile[] {

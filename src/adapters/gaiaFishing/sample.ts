@@ -44,7 +44,7 @@ export const SAMPLE_CHAT = 'game_chat';
 
 /**
  * Movies that are component kits / service helpers rather than game art: they
- * carry no actor proposals (see `transpiler/as2/actorHeuristics.ts`).
+ * carry no actor proposals (see `transcom/transpiler/as2/actorHeuristics.ts`).
  */
 export const SAMPLE_LIBRARY_NAMES = [SAMPLE_SERVICE, SAMPLE_CHAT] as const;
 

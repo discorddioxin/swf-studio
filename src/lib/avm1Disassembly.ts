@@ -1,5 +1,5 @@
-import { decodeAVM1Actions } from '../../transpiler/as2/avm1';
-import { decodeActionBytes } from '../../decompiler/parser';
+import { decodeAVM1Actions } from '../../transcom/transpiler/as2/avm1';
+import { decodeActionBytes } from '../../transcom/decompiler/parser';
 
 export interface AVM1Disassembly {
   /** Best-effort pseudo-source and ActionRecord listing for an encoded block. */

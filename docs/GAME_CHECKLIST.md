@@ -3,7 +3,7 @@
 Measured 2026-10-14 (re-measured after the Missing Dependencies work), on the six game sets uploaded to
 `discorddioxin/swf-forge` (`swf-uploads` branch, `games-swfs/`, 43 SWFs).
 
-**How it was measured.** `debug/tools/vitest/zz_census.dev.test.ts` handles every SWF
+**How it was measured.** `docs/debug/tools/vitest/zz_census.dev.test.ts` handles every SWF
 in every set the same way:
 
 1. Parse it.
@@ -19,7 +19,7 @@ Each set's entry movie is booted the way the game starts:
 
 The raw numbers are one JSON line per SWF, written to `/tmp/census.jsonl`:
 
-    SWF_CORPUS=/tmp/swf-forge2/games-swfs npx vitest run debug/tools/vitest/zz_census.dev.test.ts
+    SWF_CORPUS=/tmp/swf-forge2/games-swfs npx vitest run docs/debug/tools/vitest/zz_census.dev.test.ts
 
 ✅ works · ⚠️ works with a caveat · ❌ fails · ⬜ not reachable yet, so not tested
 

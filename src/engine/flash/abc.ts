@@ -3,7 +3,7 @@
 // AVM1 movies have never needed an export of the game's source: the code is in
 // the SWF as DoAction / DoInitAction bytecode and the AS2 side lifts it. `DoABC`
 // is the AVM2 counterpart, so an AS3 movie is run the same way — take the
-// payload, lift it to TypeScript (`transpiler/avm2`), hand the modules to the
+// payload, lift it to TypeScript (`transcom/transpiler/avm2`), hand the modules to the
 // flash loader. No folder of `.ts` files is involved.
 //
 // One payload is one ABC file, but a project is usually several SWFs (a shell
@@ -12,7 +12,7 @@
 // sibling movie's class stays an import instead of turning into a stub.
 
 import { abcClassNames, parseAbc, type AbcFile } from '../../lib/swf/abc';
-import { transpileAbc } from '../../../transpiler/avm2';
+import { transpileAbc } from '../../../transcom/transpiler/avm2';
 import type { SourceFile } from './loader';
 
 export interface AbcSources {

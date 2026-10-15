@@ -2,7 +2,7 @@
 // with an independent reader: table checksums, glyph count, loca, the cmap from
 // the SWF code table and every glyph point against the SWF outline.
 // (The same fonts pass OTS, the sanitizer Chrome and Firefox apply to web fonts;
-// see debug/tools/vitest/zz_fonts.dev.test.ts.)
+// see docs/debug/tools/vitest/zz_fonts.dev.test.ts.)
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseSwfBinary } from './swf/binary';

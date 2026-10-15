@@ -1,4 +1,4 @@
-import type { TimelineNameIndex, TimelineNameMetadata } from '../../../transpiler/as2/project';
+import type { TimelineNameIndex, TimelineNameMetadata } from '../../../transcom/transpiler/as2/project';
 import type { Project, SwfCharacter, SwfDocument } from '../../types';
 
 function workbenchCharacterName(character: SwfCharacter | undefined, id: number, project?: Project): string {

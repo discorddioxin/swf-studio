@@ -1,6 +1,6 @@
 # The game framework — what a Flash game becomes when the timeline goes away
 
-> 2026‑10‑14 · `src/game-framework/` · companion to `audits/FLASH_TO_ACTOR_DEEP_DIVE.md`
+> 2026‑10‑14 · `src/game-framework/` · companion to `docs/audits/archive/FLASH_TO_ACTOR_DEEP_DIVE.md`
 
 ## 1. Two outputs, on purpose
 
@@ -9,7 +9,7 @@ A SWF can be transcribed two ways, and both are wanted:
 | | **Tier 1 — 1:1** | **Tier 2 — clean** |
 |---|---|---|
 | What it is | the movie, as written | the game, restructured |
-| Where it lives | `transpiler/` → `src/engine/flash/*` | `src/game-framework/*` |
+| Where it lives | `transcom/transpiler/` → `src/engine/flash/*` | `src/game-framework/*` |
 | Vocabulary | `MovieClip`, `gotoAndPlay`, `addEventListener('enterFrame')`, timelines, `_root` | actors, materials, behaviours, signals, systems |
 | Why | fidelity: it *is* the Flash semantics, so behaviour is preserved exactly as the specifications define it | ownership: one place per concern, no display list, no frame scripts, no globals |
 | Use | running a shipped SWF | porting a game, extending it, testing it without a timeline |
@@ -149,8 +149,8 @@ What changed, and why it is the same game:
 
 ## 5. What a Tier‑2 transcription has to emit
 
-The lifter already produces an AST per class and per method (`transpiler/avm2/lift.ts`)
-and prints Tier‑1 modules (`transpiler/avm2/emit.ts`). The Tier‑2 printer is the same
+The lifter already produces an AST per class and per method (`transcom/transpiler/avm2/lift.ts`)
+and prints Tier‑1 modules (`transcom/transpiler/avm2/emit.ts`). The Tier‑2 printer is the same
 AST with a different vocabulary, and these are the rewrites it needs:
 
 1. `extends MovieClip` → `extends Actor`; display-list placement (`x`, `y`, `depth`,
@@ -204,7 +204,7 @@ a throwing listener not stopping the others, and input driven without a keyboard
 * **UI.** Buttons, text fields and the display list are not modelled (Tier 1 has them
   in `flash.*`); a tier‑2 game needs a `UiSystem` before ports like `fl.controls` land.
 * **The printer itself.** Section 5 is a design, not code: today the pipeline emits
-  Tier 1 for AVM2 and a proposal artifact for AVM1 (`transpiler/as2/project.ts`). The
+  Tier 1 for AVM2 and a proposal artifact for AVM1 (`transcom/transpiler/as2/project.ts`). The
   next step is a tier‑2 emitter that consumes the same lifted AST.
 * **AVM1.** The framework is AVM2‑shaped (classes, signals, materials); the AVM1 path
   keeps its in-host bridge (`src/runtime/as2/actor.ts`) until both tiers converge here.

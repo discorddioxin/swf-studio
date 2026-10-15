@@ -13,7 +13,7 @@ const libraryRoot = await inflate(path.join(packageBin, 'al2023.tar.br'));
 process.env.LD_LIBRARY_PATH = [path.join(libraryRoot, 'lib'), process.env.LD_LIBRARY_PATH].filter(Boolean).join(':');
 process.env.FONTCONFIG_PATH ??= '/tmp/fonts';
 const origin = process.env.APP_URL || 'http://127.0.0.1:5173/';
-const outDir = process.argv[2] || 'debug/tools/e2e-output/transpiler-names';
+const outDir = process.argv[2] || 'docs/debug/tools/e2e-output/transpiler-names';
 await fs.mkdir(outDir, { recursive: true });
 const browser = await puppeteer.launch({
   executablePath: await chromium.executablePath(),

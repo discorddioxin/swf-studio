@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import JSZip from 'jszip';
-import { transpileProject } from '../../transpiler/as2';
+import { transpileProject } from '../../transcom/transpiler/as2';
 import { createTypeScriptArchive } from './typescriptExport';
 
 describe('editable TypeScript export', () => {

@@ -4,7 +4,7 @@ Runs ActionScript 1/2 games (SWF ≤ 8), without Ruffle or any Flash bytecode:
 
 ```
 FFDec export (.xml + scripts/*.as + shapes/images/sounds/fonts)
-   │ decompiler (decompiler/)        │ transpiler (transpiler/as2)
+   │ decompiler (transcom/decompiler/)        │ transpiler (transcom/transpiler/as2)
    ▼                                   ▼
 SwfDocument (symbols, timelines)   TypeScript modules ──sucrase──▶ AS2Program
                    └──────────── AS2Player ────────────┘
@@ -67,4 +67,4 @@ it (offline network, boot scripts, URL policy) lives in its adapter in
 - All game traffic stays offline. A game adapter (src/adapters) supplies the mock HTTP backend and socket server a game needs — the engine itself only knows the `fetchText` / `gameServer` seams. Unhandled URL/socket requests are blocked, and request/response payloads (including blocked responses) are recorded in Req/Res.
 - Only `_level0` exists. `_lockroot` is not supported.
 
-Screenshots of the bundled sample game running on this player are in `audits/as2-player/`.
+Screenshots of the bundled sample game running on this player are in `docs/audits/archive/as2-player/`.

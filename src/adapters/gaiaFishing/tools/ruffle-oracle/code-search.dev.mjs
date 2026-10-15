@@ -6,7 +6,7 @@ import puppeteer from 'puppeteer-core';
 import chromium, { inflate } from '@sparticuz/chromium';
 import { SAMPLE_MAIN } from '../../sample.ts';
 
-const outDir = process.argv[2] || 'debug/tools/e2e-output/code-search';
+const outDir = process.argv[2] || 'docs/debug/tools/e2e-output/code-search';
 const query = process.env.CODE_SEARCH_QUERY || 'gotoAndStop';
 const origin = process.env.APP_URL || 'http://127.0.0.1:5173/';
 const appOrigin = new URL(origin).origin;

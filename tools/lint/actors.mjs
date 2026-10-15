@@ -28,7 +28,7 @@ function walk(dir) {
     }
   }
 }
-try { walk('transpiler/as2'); } catch {}
+try { walk('transcom/transpiler/as2'); } catch {}
 try { walk('src'); } catch {}
 if (errors) { console.error(`actor lint: ${errors} error(s)`); process.exit(1); }
 console.log('actor lint: ok');

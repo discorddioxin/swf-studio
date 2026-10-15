@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AssetBundle, AssetFile } from '../../types';
-import type { ProjectResult, TimelineNameIndex } from '../../../transpiler/as2/project';
+import type { ProjectResult, TimelineNameIndex } from '../../../transcom/transpiler/as2/project';
 import { buildAS2Program, generateAS2Project, type AS2Build, type SourceInput } from './program';
 
 export type AS2BuildState =

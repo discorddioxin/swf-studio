@@ -1,1 +1,1 @@
-export * from '../../../decompiler/swf/abc';
+export * from '../../../transcom/decompiler/swf/abc';
