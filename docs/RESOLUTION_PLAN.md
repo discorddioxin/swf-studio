@@ -143,7 +143,7 @@ browser globals.
   each module in a sloppy outer function whose parameters shadow **every** name the
   page's global object answers, other than ECMAScript builtins: `window`, `document`,
   `fetch`, `eval`, `globalThis`, `Reflect` and the rest are `undefined` inside a module.
-  `Function`, `Object` and the four timers get AVM2 stand-ins (`src/engine/shared/hostGuard.ts`).
+  `Function`, `Object` and the four timers get AVM2 stand-ins (`src/runtime/shared/hostGuard.ts`).
   An unknown name therefore reads as `undefined`, not as AVM2's `ReferenceError #1065`.
 - *Reflection is guarded too.* `.constructor` reads print as `__ctor(x)`, which never
   returns a host compiler. Computed keys that are not plainly numeric print as
@@ -198,6 +198,28 @@ but can never obtain a host JavaScript intrinsic (`Function`, `eval`, `globalThi
 
 **Done when:** the sandbox tests pass in both the transpiled and interpreted modes, and
 the fishing real-game tests stay green.
+
+**As implemented (2026-10-15).**
+- The guard is shared with P-01: `src/runtime/shared/hostGuard.ts`. It lives under
+  `runtime/` rather than `engine/shared/` because the engine depends on the runtime,
+  never the reverse.
+- **Interpreter.** Every member read (`getProp`, `findMember`) and every call or construct
+  (`callFunctionValue`, `constructValue`, `runConstructor`) maps a host compiler to
+  `Avm1Function`. This covers reflective routes too, such as a property descriptor's
+  `.value`.
+- **Transpiled code.** It prints `$rt.ctor(x)` for `.constructor` reads and
+  `[$rt.key(k)]` for computed keys that are not plainly numeric. `program.ts` links
+  modules through the same host-shadowing wrapper as the AS3 loader.
+- **Stand-ins.** `_global.Function` is `Avm1Function`: source text gives `undefined`
+  (AVM1 never threw), while AVM2's `AvmFunction` throws EvalError #1066. Both use the real
+  `Function.prototype`, so `Function.prototype.x = …` extensions keep working.
+- **Not guarded.** `__proto__` reads and writes keep their AS2 meaning.
+- **Debugger.** Both expression sites go through `src/debug/evaluate.ts`, which binds only
+  plain-identifier scope names. That stops a movie-chosen variable name from rewriting the
+  compiled parameter list.
+- **Verification.** The census of all 43 corpus SWFs (120 frames each) is identical before
+  and after P-01 and P-03a. The fishing real-game tests still cannot run here: they need
+  `game-files/fish-full` (P-02).
 
 ### P-06 — AS3 programs linked repeatedly; static initializers run on mount
 

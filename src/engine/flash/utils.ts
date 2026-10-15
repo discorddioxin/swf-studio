@@ -4,7 +4,7 @@
 // player, advance with Step, and are cleared when the game is restarted.
 
 import { runtime } from './context';
-import { safeConstructor } from '../shared/hostGuard';
+import { safeConstructor } from '../../runtime/shared/hostGuard';
 import { EventDispatcher, TimerEvent } from './events';
 
 interface Scheduler {
@@ -149,7 +149,7 @@ export function __method(recv: unknown, name: string, owner?: { prototype?: obje
   if (recv == null) {
     throw new TypeError(`TypeError: Error #1009: Cannot access a property or method of a null object reference`);
   }
-  // The guarded read the printer uses for `.constructor` (`engine/shared/hostGuard.ts`).
+  // The guarded read the printer uses for `.constructor` (`runtime/shared/hostGuard.ts`).
   if (name === 'constructor') return safeConstructor(recv);
   const holder = (owner?.prototype ?? recv) as Record<string, unknown>;
   const fn = holder?.[name];

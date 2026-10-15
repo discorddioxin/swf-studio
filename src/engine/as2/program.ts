@@ -5,6 +5,7 @@
 // and callback identifiers; the numeric SWF mappings remain unchanged.
 
 import { transform } from 'sucrase';
+import { Avm1Function, guardedModule, hostScope } from '../../runtime/shared/hostGuard';
 import * as runtime from '../../runtime/as2';
 import type { AS2Program } from '../../runtime/as2';
 import { transpileProject, type ProjectResult, type TimelineNameIndex } from '../../../transcom/transpiler/as2/project';
@@ -58,6 +59,9 @@ export function buildAS2Program(sources: SourceInput[], timelineMetadata?: Timel
 
 function link(compiled: Map<string, string>, errors: BuildIssue[]): AS2Program | null {
   const cache = new Map<string, { exports: any }>();
+  // The page's globals are not the movie's (`runtime/shared/hostGuard.ts`): the AS2
+  // runtime module provides everything Flash had, by import.
+  const host = hostScope({ Function: Avm1Function });
   // modules whose body threw (usually a static initializer reading a class that was still being
   // loaded through an import cycle); they are re-run once the other modules exist
   const failed = new Map<string, Error>();
@@ -87,7 +91,7 @@ function link(compiled: Map<string, string>, errors: BuildIssue[]): AS2Program |
       throw new Error(`${path}: cannot import "${spec}"`);
     };
     try {
-      new Function('exports', 'require', 'module', `${code}\n//# sourceURL=as2/${path}`)(mod.exports, require, mod);
+      guardedModule(host, ['exports', 'require', 'module'], code, `as2/${path}`)(mod.exports, require, mod);
       failed.delete(path);
     } catch (e) {
       failed.set(path, e as Error);

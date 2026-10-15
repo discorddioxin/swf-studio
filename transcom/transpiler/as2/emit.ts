@@ -604,7 +604,7 @@ export class ModuleEmitter {
       }
       case 'func': return this.wrap(this.funcExpr(e.name, e.params, e.ret, e.body, ctx), P_PRIMARY, min);
       case 'member': return this.member(e, ctx);
-      case 'index': return `${this.expr(e.obj, ctx, P_CALL)}${this.isSafe(e.obj, ctx) ? '' : '?.'}[${this.expr(e.index, ctx, 0)}]`;
+      case 'index': return `${this.expr(e.obj, ctx, P_CALL)}${this.isSafe(e.obj, ctx) ? '' : '?.'}[${this.key(e.index, ctx)}]`;
       case 'call': return this.call(e, ctx, min);
       case 'new': {
         const callee = this.expr(e.callee, ctx, P_CALL);
@@ -644,13 +644,16 @@ export class ModuleEmitter {
     }
   }
 
-  private member(e: Extract<Expr, { k: 'member' }>, ctx: Ctx): string {
+  private member(e: Extract<Expr, { k: 'member' }>, ctx: Ctx, asTarget = false): string {
     // fully-qualified project class reference: com.x.Foo
     const chain = memberChain(e);
     if (chain && !this.isLocal(chain.split('.')[0], ctx)) {
       const q = this.opts.classes?.has(chain) ? chain : null;
       if (q) return this.aliasFor(q);
     }
+    // A `.constructor` read is guarded: it may not hand out the host's `Function`
+    // (`runtime/shared/hostGuard.ts`). A write stays a plain write.
+    if (e.prop === 'constructor' && !asTarget) { this.useRuntime('$rt'); return `$rt.ctor(${this.expr(e.obj, ctx, 0)})`; }
     const obj = this.expr(e.obj, ctx, P_CALL);
     const q = this.isSafe(e.obj, ctx) ? '' : '?.';
     const prop = e.prop;
@@ -703,9 +706,25 @@ export class ModuleEmitter {
     }
     if (e.k === 'index' && !this.isSafe(e.obj, ctx)) {
       this.useRuntime('$rt');
-      return `(${this.expr(e.obj, ctx, PREC['?'] + 1)} ?? $rt.sink)[${this.expr(e.index, ctx, 0)}]`;
+      return `(${this.expr(e.obj, ctx, PREC['?'] + 1)} ?? $rt.sink)[${this.key(e.index, ctx)}]`;
     }
+    if (e.k === 'member') return this.member(e, ctx, true);
     return this.expr(e, ctx, P_POSTFIX);
+  }
+
+  /**
+   * A computed key. One that is plainly a number, or a string literal other than
+   * `"constructor"`, prints as itself; anything else goes through `$rt.key`, so a
+   * key built at runtime cannot reach the host's `Function`.
+   */
+  private key(index: Expr, ctx: Ctx): string {
+    const text = this.expr(index, ctx, 0);
+    if (index.k === 'num' || (index.k === 'str' && index.v !== 'constructor')) return text;
+    if (index.k === 'unary' && ['-', '~', '+'].includes(index.op.trim())) return text;
+    if (index.k === 'binary' && ['-', '*', '/', '%', '|', '&', '^', '<<', '>>', '>>>'].includes(index.op)) return text;
+    if (index.k === 'update') return text;
+    this.useRuntime('$rt');
+    return `$rt.key(${text})`;
   }
 
   private call(e: Extract<Expr, { k: 'call' }>, ctx: Ctx, min: number): string {

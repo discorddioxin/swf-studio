@@ -931,7 +931,7 @@ class Printer {
    * A property access as a place (or a plain read). A literal name prints as
    * `obj.name` / `obj["name"]`; a computed key that is not plainly a number goes
    * through `__key`, so a runtime-built `"constructor"` cannot reach the host's
-   * `Function` (`engine/shared/hostGuard.ts`). A write to a literal `.constructor`
+   * `Function` (`runtime/shared/hostGuard.ts`). A write to a literal `.constructor`
    * stays a plain write: only reads are guarded.
    */
   private target(e: import('../as2/ast').Expr): string {

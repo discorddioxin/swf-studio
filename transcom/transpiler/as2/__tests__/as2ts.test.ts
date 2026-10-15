@@ -321,8 +321,9 @@ describe('project mapping', () => {
         expect(() => transform(c, { transforms: ['typescript', 'imports'] })).not.toThrow();
       }
       mkdirSync(join(dir, 'runtime', 'as2'), { recursive: true });
-      for (const file of ['index.ts', 'avm1.ts', 'actor.ts']) {
-        writeFileSync(join(dir, 'runtime', 'as2', file), readFileSync(join(repo, 'src/runtime/as2', file), 'utf8'));
+      for (const file of ['as2/index.ts', 'as2/avm1.ts', 'as2/actor.ts', 'shared/hostGuard.ts']) {
+        mkdirSync(dirname(join(dir, 'runtime', file)), { recursive: true });
+        writeFileSync(join(dir, 'runtime', file), readFileSync(join(repo, 'src/runtime', file), 'utf8'));
       }
       writeFileSync(join(dir, 'tsconfig.json'), JSON.stringify({
         compilerOptions: { target: 'ES2020', module: 'ESNext', moduleResolution: 'bundler', strict: true, noEmit: true, skipLibCheck: true, isolatedModules: true, useDefineForClassFields: true, lib: ['ES2020', 'DOM'], types: [] },

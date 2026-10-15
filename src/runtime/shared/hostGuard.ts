@@ -27,15 +27,27 @@
 const EVAL_ERROR_1066 = "Error #1066: The form function('function body') is not supported.";
 
 /**
- * AVM2's `Function` class as a value: a type to test against, a constructor that
- * makes an empty function, never a compiler.
+ * A `Function` class as a movie sees it: a type to test against, a constructor
+ * that makes an empty function, never a compiler. `withSource` is what happens
+ * when it is handed source text.
  */
-export const AvmFunction = function Function(...args: unknown[]): () => void {
-  if (args.length) throw new EvalError(EVAL_ERROR_1066);
-  return function () { /* the empty function `new Function()` makes */ };
-} as unknown as FunctionConstructor;
-Object.defineProperty(AvmFunction, Symbol.hasInstance, { value: (v: unknown) => typeof v === 'function' });
-Object.defineProperty(AvmFunction, 'prototype', { value: Object.freeze(Object.create(null)), writable: false });
+function functionStandIn(withSource: () => unknown): FunctionConstructor {
+  const standIn = function Function(...args: unknown[]): unknown {
+    if (args.length) return withSource();
+    return function () { /* the empty function `new Function()` makes */ };
+  } as unknown as FunctionConstructor;
+  Object.defineProperty(standIn, Symbol.hasInstance, { value: (v: unknown) => typeof v === 'function' });
+  // The real `Function.prototype`: movies extend it (`Function.prototype.delegate = …`
+  // is a common AS1/AS2 idiom), and every way to read its `constructor` back is guarded.
+  Object.defineProperty(standIn, 'prototype', { value: Function.prototype, writable: false });
+  return standIn;
+}
+
+/** AVM2's `Function`: source text is EvalError #1066. */
+export const AvmFunction = functionStandIn(() => { throw new EvalError(EVAL_ERROR_1066); });
+
+/** AVM1's `Function`: AS1/AS2 had no string compiler, and its calls never throw — source text gives `undefined`. */
+export const Avm1Function = functionStandIn(() => undefined);
 
 /** The host constructors that compile source text. */
 const COMPILERS: ReadonlySet<unknown> = new Set([
@@ -60,10 +72,15 @@ export const ObjectFacade: ObjectConstructor = new Proxy(Object, {
   },
 });
 
+/** Any value a movie obtained: itself, unless it is a host compiler (then `AvmFunction`). */
+export function guardHostValue<T>(value: T, standIn: unknown = AvmFunction): T {
+  return (COMPILERS.has(value) ? standIn : value) as T;
+}
+
 /** A `.constructor` read: the real value, unless that is a door to the host. */
-export function safeConstructor(obj: unknown): unknown {
+export function safeConstructor(obj: unknown, standIn: unknown = AvmFunction): unknown {
   const value = (obj as { constructor?: unknown }).constructor;
-  if (COMPILERS.has(value)) return AvmFunction;
+  if (COMPILERS.has(value) || value === AvmFunction || value === Avm1Function) return standIn;
   if (value === Object) return ObjectFacade;
   return value;
 }
@@ -117,3 +134,25 @@ export function hostShadows(): string[] {
 
 /** Host names that generated code gets a safe stand-in for instead of `undefined`. */
 export const HOST_STAND_INS: Readonly<Record<string, unknown>> = { Function: AvmFunction, Object: ObjectFacade };
+
+/** The host names a module is shielded from, and what each is bound to. */
+export interface HostScope { names: string[]; values: unknown[] }
+
+/** Compute once per link: the shadows plus `standIns` (which win over `undefined`). */
+export function hostScope(standIns: Record<string, unknown> = {}): HostScope {
+  const all: Record<string, unknown> = { ...HOST_STAND_INS, ...standIns };
+  const names = [...new Set([...hostShadows(), ...Object.keys(all)])];
+  return { names, values: names.map((n) => all[n]) };
+}
+
+/**
+ * A CommonJS module body as a function of `params`, with every host name of
+ * `scope` bound around it. The outer function is sloppy so it can bind `eval`;
+ * the module keeps its own "use strict" and may declare any host name itself
+ * (`class Image`), since its declarations live in the inner function.
+ */
+export function guardedModule(scope: HostScope, params: string[], code: string, sourceURL: string): (...args: unknown[]) => unknown {
+  const outer = new Function(...scope.names,
+    `return function (${params.join(', ')}) {${code}\n};\n//# sourceURL=${sourceURL}`);
+  return outer(...scope.values) as (...args: unknown[]) => unknown;
+}

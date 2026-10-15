@@ -3,7 +3,7 @@
 // scope (jsdom: `window`, `document`, `fetch`-like APIs, hundreds of names).
 import { afterEach, describe, expect, it } from 'vitest';
 import { AvmFunction, hostShadows, ObjectFacade, safeConstructor, safeKey } from '../hostGuard';
-import { compileSources, linkProgram } from '../../flash/loader';
+import { compileSources, linkProgram } from '../../../engine/flash/loader';
 
 declare global { var __pwned: unknown }
 afterEach(() => { delete globalThis.__pwned; });

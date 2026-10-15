@@ -16,6 +16,9 @@
 // Semantics follow the AVM1 spec as implemented by Ruffle (swf/src/avm1,
 // core/src/avm1): scope chain = Local → With* → Target → Global, registers 0…n,
 // operand stack, `tellTarget` targets, closures in SWF ≥ 6.
+import { Avm1Function, guardHostValue as guardWith } from '../shared/hostGuard';
+
+const guardHostValue = <T>(value: T): T => guardWith(value, Avm1Function);
 
 /** Host services the interpreter needs.  Installed by src/runtime/as2/index.ts. */
 export interface Avm1Env {
@@ -282,7 +285,7 @@ function protoOf(v: any): any {
 function findMember(start: any, name: string): { owner: any; value: any } | undefined {
   for (let o = start; o !== null && o !== undefined; o = protoOf(o)) {
     try {
-      if (Object.prototype.hasOwnProperty.call(Object(o), name)) return { owner: o, value: (o as any)[name] };
+      if (Object.prototype.hasOwnProperty.call(Object(o), name)) return { owner: o, value: guardHostValue((o as any)[name]) };
     } catch { /* ignore */ }
   }
   return undefined;
@@ -300,6 +303,7 @@ function superFind(info: SuperInfo, name: string): { owner: any; value: any } | 
 /** `new Ctor(...)` / `super(...)`: AS2 constructors run on the object that was already
  *  created, with the class prototype as their home object. */
 function runConstructor(constr: any, thisVal: any, args: any[]): any {
+  constr = guardHostValue(constr);
   if (typeof constr !== 'function') return undefined;
   const home = constr.prototype && (typeof constr.prototype === 'object' || typeof constr.prototype === 'function')
     ? constr.prototype : undefined;
@@ -331,7 +335,10 @@ function getProp(obj: any, name: string): any {
   if (obj === null || obj === undefined) return undefined;
   const info = superInfo(obj);
   if (info) return superFind(info, name)?.value;
-  try { return obj[name]; } catch { return undefined; }
+  // Every member read of the interpreter passes here: a host compiler (`Function`,
+  // reached as `f.constructor`, a descriptor's `.value`, …) comes back as AVM2/AS2's
+  // `Function`, which compiles nothing (`runtime/shared/hostGuard.ts`).
+  try { return guardHostValue(obj[name]); } catch { return undefined; }
 }
 
 function setProp(obj: any, name: string, value: any): void {
@@ -520,6 +527,7 @@ function makeFunction(def: Avm1Def): any {
 }
 
 function constructValue(constr: any, args: any[]): any {
+  constr = guardHostValue(constr);
   if (typeof constr !== 'function') {
     warn(`new: ${stringValue(constr)} is not a constructor`);
     return undefined;
@@ -539,6 +547,8 @@ function constructValue(constr: any, args: any[]): any {
 }
 
 function callFunctionValue(fn: any, thisArg: any, args: any[], owner?: any): any {
+  // However a host compiler was obtained, calling it runs the stand-in instead.
+  fn = guardHostValue(fn);
   if (typeof fn !== 'function') return undefined;
   // `super(...)`: call the superclass constructor on the current instance.
   const info = superInfo(fn);
