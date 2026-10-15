@@ -1,0 +1,41 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader' 'C:\Users\vemig\Desktop\gaiacode\word-bump\swfs\avatarPngLoader.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 10/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_4_FScrollBarSymbol\frame_1\DoAction.as, 00:00.009
+Exported script 9/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_3\frame_1\DoAction.as, 00:00.009
+Exported script 14/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_37\frame_1\DoAction.as, 00:00.009
+Exported script 12/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_18\frame_1\DoAction.as, 00:00.009
+Exported script 15/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_38_UpArrow\frame_1\DoAction.as, 00:00.010
+Exported script 11/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_5_FUIComponentSymbol\frame_1\DoAction.as, 00:00.010
+Exported script 16/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_38_UpArrow\frame_2\DoAction.as, 00:00.004
+Exported script 17/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_38_UpArrow\frame_3\DoAction.as, 00:00.006
+Exported script 3/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\__Packages\GSItools\CallbackGroup.as, 00:00.019
+Exported script 13/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_28\frame_1\DoAction.as, 00:00.015
+Exported script 20/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_57\frame_1\DoAction.as, 00:00.010
+Exported script 19/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_52\frame_1\DoAction.as, 00:00.014
+Exported script 22/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_66\frame_1\DoAction.as, 00:00.011
+Exported script 23/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_74\frame_1\DoAction.as, 00:00.010
+Exported script 24/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_82\frame_1\DoAction.as, 00:00.012
+Exported script 18/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_45\frame_1\DoAction.as, 00:00.017
+Exported script 21/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_58_ScrollThumb\frame_1\DoAction.as, 00:00.018
+Exported script 28/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\frame_1\DoAction.as, 00:00.008
+Exported script 8/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\__Packages\GSItools\serializers\SushiSerializer.as, 00:00.041
+Exported script 27/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_83_DownArrow\frame_3\DoAction.as, 00:00.016
+Exported script 25/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_83_DownArrow\frame_1\DoAction.as, 00:00.026
+Exported script 6/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\__Packages\GSItools\serializers\CommonTools.as, 00:00.046
+Exported script 26/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\DefineSprite_83_DownArrow\frame_2\DoAction.as, 00:00.021
+Exported script 4/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\__Packages\GSItools\GSIGateway.as, 00:00.046
+Exported script 5/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\__Packages\GSItools\GSIRequest.as, 00:00.054
+Exported script 7/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\__Packages\GSItools\serializers\PHPSerializer.as, 00:00.060
+Exported script 2/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\FUIComponentSymbol.as, 00:00.062
+Exported script 1/28 C:\Users\vemig\Desktop\gaiacode\word-bump\code\avatarPngLoader\scripts\FScrollBarSymbol.as, 00:00.064
+Export finished. Total export time: 00:00.284
+OK
+
+--- stderr ---
+

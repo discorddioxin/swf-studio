@@ -1,0 +1,1 @@
+mcSound.startGameMusic();

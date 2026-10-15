@@ -1,0 +1,129 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat' 'C:\Users\vemig\Desktop\gaiacode\fishing\swfs\game_chat.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 10/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\FocusManager.as, 00:00.006
+Exported script 9/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\Defaults.as, 00:00.008
+Exported script 5/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\ButtonSkin.as, 00:00.008
+Exported script 1/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\Border.as, 00:00.008
+Exported script 11/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\FocusRect.as, 00:00.007
+Exported script 14/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\RectBorder.as, 00:00.007
+Exported script 7/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DataProvider.as, 00:00.007
+Exported script 2/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\BtnDownArrow.as, 00:00.008
+Exported script 12/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\HScrollBar.as, 00:00.007
+Exported script 4/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\Button.as, 00:00.009
+Exported script 3/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\BtnUpArrow.as, 00:00.009
+Exported script 13/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\List.as, 00:00.008
+Exported script 8/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DataSelector.as, 00:00.009
+Exported script 15/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\ScrollSelectList.as, 00:00.008
+Exported script 6/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\CustomBorder.as, 00:00.008
+Exported script 16/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\ScrollView.as, 00:00.005
+Exported script 22/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\UIObjectExtensions.as, 00:00.005
+Exported script 23/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\UIScrollBar.as, 00:00.006
+Exported script 19/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\UIComponent.as, 00:00.006
+Exported script 18/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\SimpleButton.as, 00:00.006
+Exported script 24/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\VScrollBar.as, 00:00.005
+Exported script 21/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\UIObject.as, 00:00.006
+Exported script 20/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\UIComponentExtensions.as, 00:00.006
+Exported script 17/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\SelectableRow.as, 00:00.007
+Exported script 25/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\View.as, 00:00.006
+Exported script 27/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\controls\HScrollBar.as, 00:00.018
+Exported script 31/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\controls\VScrollBar.as, 00:00.026
+Exported script 37/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\controls\scrollClasses\ScrollThumb.as, 00:00.030
+Exported script 28/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\controls\List.as, 00:00.058
+Exported script 38/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\core\ExternalContent.as, 00:00.055
+Exported script 40/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\core\UIComponent.as, 00:00.069
+Exported script 32/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\controls\listclasses\DataProvider.as, 00:00.075
+Exported script 42/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\core\View.as, 00:00.054
+Exported script 30/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\controls\UIScrollBar.as, 00:00.084
+Exported script 43/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\core\ext\UIComponentExtensions.as, 00:00.055
+Exported script 45/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\effects\Tween.as, 00:00.045
+Exported script 26/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\controls\Button.as, 00:00.108
+Exported script 47/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\events\UIEventDispatcher.as, 00:00.030
+Exported script 52/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\skins\Border.as, 00:00.007
+Exported script 53/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\skins\ColoredSkinElement.as, 00:00.009
+Exported script 46/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\events\EventDispatcher.as, 00:00.050
+Exported script 55/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\skins\RectBorder.as, 00:00.009
+Exported script 54/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\skins\CustomBorder.as, 00:00.013
+Exported script 51/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\managers\SystemManager.as, 00:00.030
+Exported script 39/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\core\ScrollView.as, 00:00.134
+Exported script 56/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\skins\SkinElement.as, 00:00.016
+Exported script 50/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\managers\OverlappedWindows.as, 00:00.055
+Exported script 62/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\styles\CSSStyleDeclaration.as, 00:00.007
+Exported script 48/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\managers\DepthManager.as, 00:00.081
+Exported script 44/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\core\ext\UIObjectExtensions.as, 00:00.109
+Exported script 35/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\controls\listclasses\SelectableRow.as, 00:00.168
+Exported script 65/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DoInitAction.as, 00:00.015
+Exported script 64/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\styles\StyleManager.as, 00:00.017
+Exported script 59/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\skins\halo\FocusRect.as, 00:00.047
+Exported script 68/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineButton2_155\BUTTONCONDACTION on(release).as, 00:00.001
+Exported script 33/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\controls\listclasses\DataSelector.as, 00:00.181
+Exported script 58/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\skins\halo\Defaults.as, 00:00.059
+Exported script 67/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineButton2_150\BUTTONCONDACTION on(release).as, 00:00.006
+Exported script 69/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineButton2_163\BUTTONCONDACTION on(release).as, 00:00.004
+Exported script 70/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_8_BrdrShdw\frame_1\DoAction.as, 00:00.006
+Exported script 71/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_10_BrdrFace\frame_1\DoAction.as, 00:00.005
+Exported script 73/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_15_BrdrHilght\frame_1\DoAction.as, 00:00.004
+Exported script 63/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\styles\CSSTextStyles.as, 00:00.039
+Exported script 72/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_13_BrdrBlk\frame_1\DoAction.as, 00:00.005
+Exported script 74/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_20_UIObject\frame_1\DoAction.as, 00:00.004
+Exported script 75/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_24\frame_1\DoAction.as, 00:00.003
+Exported script 66/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineButton2_23\BUTTONCONDACTION on(keyPress Tab).as, 00:00.021
+Exported script 76/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_26_FocusManager\frame_1\DoAction.as, 00:00.005
+Exported script 61/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\styles\CSSSetStyle.as, 00:00.058
+Exported script 78/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_29_SimpleButton\frame_1\DoAction.as, 00:00.007
+Exported script 77/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_28_UIComponent\frame_1\DoAction.as, 00:00.007
+Exported script 83/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_34_CustomBorder\frame_1\DoAction.as, 00:00.003
+Exported script 81/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_33_Button\frame_1\DoAction.as, 00:00.007
+Exported script 57/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\skins\halo\ButtonSkin.as, 00:00.075
+Exported script 79/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_30_Border\frame_1\DoAction.as, 00:00.011
+Exported script 80/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_31_RectBorder\frame_1\DoAction.as, 00:00.010
+Exported script 82/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_33_Button\frame_2\PlaceObject2_29_SimpleButton_1\CLIPACTIONRECORD on(initialize).as, 00:00.009
+Exported script 60/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\skins\halo\RectBorder.as, 00:00.064
+Exported script 85/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_48_ScrollThemeColor2\frame_1\DoAction.as, 00:00.006
+Exported script 88/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_68_ThumbThemeColor2\frame_1\DoAction.as, 00:00.006
+Exported script 86/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_59_ThumbThemeColor1\frame_1\DoAction.as, 00:00.008
+Exported script 87/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_61_ThumbThemeColor3\frame_1\DoAction.as, 00:00.012
+Exported script 84/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_46_ScrollThemeColor1\frame_1\DoAction.as, 00:00.014
+Exported script 41/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\core\UIObject.as, 00:00.197
+Exported script 92/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_93_HScrollBar\frame_1\DoAction.as, 00:00.013
+Exported script 89/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_92_VScrollBar\frame_1\DoAction.as, 00:00.014
+Exported script 95/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_94_UIScrollBar\frame_1\DoAction.as, 00:00.010
+Exported script 97/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_94_UIScrollBar\frame_2\PlaceObject2_93_HScrollBar_59\CLIPACTIONRECORD on(initialize).as, 00:00.005
+Exported script 90/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_92_VScrollBar\frame_2\PlaceObject2_33_Button_1\CLIPACTIONRECORD on(initialize).as, 00:00.015
+Exported script 96/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_94_UIScrollBar\frame_2\PlaceObject2_92_VScrollBar_1\CLIPACTIONRECORD on(initialize).as, 00:00.010
+Exported script 91/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_92_VScrollBar\frame_2\PlaceObject2_29_SimpleButton_31\CLIPACTIONRECORD on(initialize).as, 00:00.016
+Exported script 98/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_127_DataProvider\frame_1\DoAction.as, 00:00.008
+Exported script 100/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_129_SelectableRow\frame_1\DoAction.as, 00:00.009
+Exported script 94/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_93_HScrollBar\frame_2\PlaceObject2_29_SimpleButton_31\CLIPACTIONRECORD on(initialize).as, 00:00.020
+Exported script 93/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_93_HScrollBar\frame_2\PlaceObject2_33_Button_1\CLIPACTIONRECORD on(initialize).as, 00:00.022
+Exported script 102/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_131_ScrollView\frame_1\DoAction.as, 00:00.012
+Exported script 99/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_128_DataSelector\frame_1\DoAction.as, 00:00.014
+Exported script 105/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_132_ScrollSelectList\frame_1\DoAction.as, 00:00.012
+Exported script 101/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_130_View\frame_1\DoAction.as, 00:00.013
+Exported script 106/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_133_List\frame_1\DoAction.as, 00:00.012
+Exported script 109/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\frame_1\DoAction.as, 00:00.006
+Exported script 104/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_131_ScrollView\frame_2\PlaceObject2_92_VScrollBar_59\CLIPACTIONRECORD on(initialize).as, 00:00.014
+Exported script 36/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\controls\scrollClasses\ScrollBar.as, 00:00.227
+Exported script 103/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\DefineSprite_131_ScrollView\frame_2\PlaceObject2_93_HScrollBar_1\CLIPACTIONRECORD on(initialize).as, 00:00.016
+Exported script 111/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\frame_3\DoAction.as, 00:00.006
+Exported script 116/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\frame_13\DoAction.as, 00:00.004
+Exported script 112/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\frame_6\DoAction.as, 00:00.005
+Exported script 108/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\frame_1\PlaceObject2_94_UIScrollBar_8\CLIPACTIONRECORD on(construct).as, 00:00.010
+Exported script 115/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\frame_12\DoAction.as, 00:00.004
+Exported script 110/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\frame_1\DoAction_2.as, 00:00.011
+Exported script 107/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\frame_1\PlaceObject2_133_List_7\CLIPACTIONRECORD on(construct).as, 00:00.017
+Exported script 114/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\frame_12\PlaceObject2_94_UIScrollBar_9\CLIPACTIONRECORD on(construct).as, 00:00.008
+Exported script 113/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\frame_12\PlaceObject2_133_List_8\CLIPACTIONRECORD on(construct).as, 00:00.008
+Exported script 34/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\controls\listclasses\ScrollSelectList.as, 00:00.238
+Exported script 29/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\controls\SimpleButton.as, 00:00.245
+Exported script 49/116 C:\Users\vemig\Desktop\gaiacode\fishing\code\game_chat\scripts\__Packages\mx\managers\FocusManager.as, 00:00.182
+Export finished. Total export time: 00:00.769
+OK
+
+--- stderr ---
+

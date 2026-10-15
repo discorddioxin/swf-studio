@@ -1,0 +1,22 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\blackjack\code\preloader1_1' 'C:\Users\vemig\Desktop\gaiacode\blackjack\swfs\preloader1.1.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 1/9 C:\Users\vemig\Desktop\gaiacode\blackjack\code\preloader1_1\scripts\bgContainer.as, 00:00.005
+Exported script 8/9 C:\Users\vemig\Desktop\gaiacode\blackjack\code\preloader1_1\scripts\DefineSprite_29_bgSky\frame_18\DoAction.as, 00:00.005
+Exported script 6/9 C:\Users\vemig\Desktop\gaiacode\blackjack\code\preloader1_1\scripts\DefineSprite_18_bubble\frame_8\DoAction.as, 00:00.005
+Exported script 7/9 C:\Users\vemig\Desktop\gaiacode\blackjack\code\preloader1_1\scripts\DefineSprite_29_bgSky\frame_7\DoAction.as, 00:00.007
+Exported script 9/9 C:\Users\vemig\Desktop\gaiacode\blackjack\code\preloader1_1\scripts\frame_1\DoAction.as, 00:00.007
+Exported script 5/9 C:\Users\vemig\Desktop\gaiacode\blackjack\code\preloader1_1\scripts\__Packages\Vector.as, 00:00.027
+Exported script 2/9 C:\Users\vemig\Desktop\gaiacode\blackjack\code\preloader1_1\scripts\__Packages\PlayArea.as, 00:00.038
+Exported script 3/9 C:\Users\vemig\Desktop\gaiacode\blackjack\code\preloader1_1\scripts\__Packages\Preloader.as, 00:00.039
+Exported script 4/9 C:\Users\vemig\Desktop\gaiacode\blackjack\code\preloader1_1\scripts\__Packages\Sprite.as, 00:00.044
+Export finished. Total export time: 00:00.220
+OK
+
+--- stderr ---
+

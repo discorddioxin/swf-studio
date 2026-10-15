@@ -1,0 +1,38 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\pinball\code\gPinballAvatarStation' 'C:\Users\vemig\Desktop\gaiacode\pinball\swfs\gPinballAvatarStation.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 1/25 mx.core.mx_internal, 00:00.030
+Exported script 8/25 com.gaiaonline.serializers.JSONSerializer, 00:00.092
+Exported script 9/25 com.adobe.serialization.json.JSON, 00:00.094
+Exported script 14/25 com.adobe.serialization.json.JSONTokenType, 00:00.095
+Exported script 4/25 com.gaiaonline.gateway.IGaiaObject, 00:00.095
+Exported script 5/25 com.gaiaonline.gateway.GaiaIdentity, 00:00.111
+Exported script 13/25 com.adobe.serialization.json.JSONToken, 00:00.112
+Exported script 16/25 com.gaiaonline.gsi.GSITimeoutEvent, 00:00.084
+Exported script 15/25 com.gaiaonline.gsi.GSIEvent, 00:00.140
+Exported script 6/25 mx.utils.Base64Encoder, 00:00.141
+Exported script 10/25 com.adobe.serialization.json.JSONDecoder, 00:00.141
+Exported script 7/25 com.gaiaonline.serializers.SushiSerializer, 00:00.147
+Exported script 17/25 com.gaiaonline.gsi.GSIRetryEvent, 00:00.061
+Exported script 11/25 com.adobe.serialization.json.JSONEncoder, 00:00.157
+Exported script 18/25 com.gaiaonline.gsi.GSICompleteEvent, 00:00.063
+Exported script 2/25 com.gaiaonline.gameFramework.util.UrlUtil, 00:00.159
+Exported script 19/25 com.adobe.serialization.json.JSONParseError, 00:00.064
+Exported script 12/25 com.adobe.serialization.json.JSONTokenizer, 00:00.171
+Exported script 22/25 com.gaiaonline.gameFramework.util.TheStage, 00:00.062
+Exported script 3/25 com.gaiaonline.serializers.PHPSerializer, 00:00.174
+Exported script 25/25 com.gaiaonline.games.gPinball.gPinballAvatarStation, 00:00.059
+Exported script 24/25 com.gaiaonline.gameFramework.avatar.WordBalloon, 00:00.062
+Exported script 23/25 com.gaiaonline.gameFramework.avatar.AvatarStation, 00:00.095
+Exported script 20/25 com.gaiaonline.gateway.GaiaChatMessage, 00:00.116
+Exported script 21/25 com.gaiaonline.gsi.GSIGateway, 00:00.102
+Export finished. Total export time: 00:00.647
+OK
+
+--- stderr ---
+

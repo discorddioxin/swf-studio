@@ -1,0 +1,14 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\blackjack\code\blackjack4_14' 'C:\Users\vemig\Desktop\gaiacode\blackjack\swfs\blackjack4.14.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 1/1 C:\Users\vemig\Desktop\gaiacode\blackjack\code\blackjack4_14\scripts\frame_1\DoAction.as, 00:00.061
+Export finished. Total export time: 00:00.124
+OK
+
+--- stderr ---
+

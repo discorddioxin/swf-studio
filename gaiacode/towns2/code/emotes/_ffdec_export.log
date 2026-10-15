@@ -1,0 +1,25 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\towns2\code\emotes' 'C:\Users\vemig\Desktop\gaiacode\towns2\swfs\emotes.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 5/12 com.gaiaworld.sushi.vo.SRoomVo, 00:00.077
+Exported script 10/12 com.gaiaworld.hangouts.controller.events.CreateRoomEvent, 00:00.078
+Exported script 4/12 com.gaiaworld.global.vo.ColorVo, 00:00.080
+Exported script 7/12 com.gaiaworld.sushi.constants.ChatConstants, 00:00.080
+Exported script 9/12 com.gaiaworld.hangouts.controller.events.RoomEvent, 00:00.079
+Exported script 1/12 com.gaiaworld.sushi.controller.ChatController, 00:00.091
+Exported script 8/12 com.gaiaworld.sushi.controller.events.ChatEvent, 00:00.092
+Exported script 6/12 com.gaiaworld.sushi.vo.ServerVo, 00:00.093
+Exported script 3/12 com.gaiaworld.user.vo.UserVo, 00:00.094
+Exported script 2/12 com.gaiaworld.global.util.StringFunctions, 00:00.099
+Exported script 12/12 com.gaiaworld.global.view.panels.EmotePanel, 00:00.102
+Exported script 11/12 com.gaiaworld.sushi.model.ChatModel, 00:00.108
+Export finished. Total export time: 00:00.517
+OK
+
+--- stderr ---
+

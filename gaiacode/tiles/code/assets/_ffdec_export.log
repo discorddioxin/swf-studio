@@ -1,0 +1,48 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\tiles\code\assets' 'C:\Users\vemig\Desktop\gaiacode\tiles\swfs\assets.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 2/35 com.gaiaonline.games.flowerJong.hardButton, 00:00.037
+Exported script 6/35 simpleCheckButton, 00:00.037
+Exported script 8/35 startButton, 00:00.037
+Exported script 4/35 com.gaiaonline.games.flowerJong.okDialogButton, 00:00.037
+Exported script 3/35 com.gaiaonline.games.flowerJong.normalButton, 00:00.037
+Exported script 12/35 backgroundBevel, 00:00.038
+Exported script 14/35 borderToBurnBottom, 00:00.038
+Exported script 1/35 com.gaiaonline.games.flowerJong.easyButton, 00:00.038
+Exported script 7/35 simpleXButton, 00:00.038
+Exported script 9/35 submitButton, 00:00.039
+Exported script 10/35 upScrollButton, 00:00.039
+Exported script 15/35 borderToColor, 00:00.039
+Exported script 13/35 borderToBurn, 00:00.039
+Exported script 5/35 downScrollButton, 00:00.039
+Exported script 11/35 animatedTitle, 00:00.061
+Exported script 17/35 com.gaiaonline.games.flowerJong.starBurst, 00:00.025
+Exported script 29/35 genericButtonUp, 00:00.028
+Exported script 22/35 fireAnimation, 00:00.029
+Exported script 19/35 deckSelect, 00:00.031
+Exported script 18/35 deckContainer, 00:00.031
+Exported script 24/35 gameBoard, 00:00.030
+Exported script 27/35 genericButtonDown, 00:00.032
+Exported script 23/35 gaiaTicket, 00:00.033
+Exported script 21/35 dragHint, 00:00.034
+Exported script 28/35 genericButtonOver, 00:00.035
+Exported script 25/35 gameCardHighlight, 00:00.036
+Exported script 30/35 genericDialog, 00:00.014
+Exported script 32/35 mysteryBlock, 00:00.011
+Exported script 31/35 logo, 00:00.017
+Exported script 35/35 wildcardBlock, 00:00.011
+Exported script 33/35 rockBlock, 00:00.011
+Exported script 34/35 starBurst, 00:00.013
+Exported script 16/35 captchaDialog, 00:00.044
+Exported script 26/35 gameOverDialog, 00:00.044
+Exported script 20/35 difficultyCompleteWindow, 00:00.046
+Export finished. Total export time: 00:00.645
+OK
+
+--- stderr ---
+

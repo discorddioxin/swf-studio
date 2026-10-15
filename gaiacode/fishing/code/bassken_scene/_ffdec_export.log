@@ -1,0 +1,31 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene' 'C:\Users\vemig\Desktop\gaiacode\fishing\swfs\bassken_scene.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 7/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_18\frame_5\DoAction.as, 00:00.025
+Exported script 12/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_19\frame_10\DoAction.as, 00:00.026
+Exported script 6/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_18\frame_1\DoAction.as, 00:00.026
+Exported script 10/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_19\frame_1\DoAction.as, 00:00.026
+Exported script 14/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_24\frame_1\DoAction.as, 00:00.025
+Exported script 11/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_19\frame_5\DoAction.as, 00:00.025
+Exported script 9/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_18\frame_15\DoAction.as, 00:00.026
+Exported script 3/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_9\frame_10\DoAction.as, 00:00.026
+Exported script 8/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_18\frame_10\DoAction.as, 00:00.025
+Exported script 4/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_9\frame_15\DoAction.as, 00:00.025
+Exported script 2/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_9\frame_5\DoAction.as, 00:00.026
+Exported script 1/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_9\frame_1\DoAction.as, 00:00.026
+Exported script 15/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_24\frame_5\DoAction.as, 00:00.025
+Exported script 13/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_19\frame_15\DoAction.as, 00:00.026
+Exported script 5/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_11\frame_1\DoAction.as, 00:00.026
+Exported script 16/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_24\frame_10\DoAction.as, 00:00.002
+Exported script 17/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\DefineSprite_24\frame_15\DoAction.as, 00:00.002
+Exported script 18/18 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_scene\scripts\frame_1\DoAction.as, 00:00.002
+Export finished. Total export time: 00:00.112
+OK
+
+--- stderr ---
+
