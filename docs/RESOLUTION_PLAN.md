@@ -842,8 +842,8 @@ The agent updates this table as each item lands (commit hash, date).
 | P-33 | 9 | open | |
 | P-34 | 9 | open | |
 | P-36 | 9 | open | |
-| P-37 | 2 | done 2026-10-15 | v1 RGB colormaps, big-endian PIX15, missing palette index → transparent/black; 3 failing-first spec tests in `lossless.test.ts`. Corpus: 1 v1 colormap bitmap (towns2) was wrong; no format-4 bitmaps |
-| P-38 | 2 | open (found during P-02) | |
+| P-37 | 2 | done 2026-10-15 | `61436a3` — v1 RGB colormaps, big-endian PIX15, missing palette index → transparent/black; 3 failing-first spec tests in `lossless.test.ts`. Corpus: 1 v1 colormap bitmap (towns2) was wrong; no format-4 bitmaps |
+| P-38 | 2 | done 2026-10-15 | the AS2 player starts once the movie's (and external SWFs') embedded fonts are registered, instead of being rebuilt when they arrive; failing-first UI test holds font registration back until the game started (2 starts → 1) |
 
 ## 11. Risks and rollback
 

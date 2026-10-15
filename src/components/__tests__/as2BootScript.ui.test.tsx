@@ -1,12 +1,27 @@
 // @vitest-environment jsdom
 // P-26: an AS2 boot script belongs to the game it was written for. Saved while
 // game A is loaded, it must not run (or even show) when game B is loaded.
+// P-38: the game starts once — registering its embedded fonts does not restart it.
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssetCache, ingestFiles } from '../../lib/assets';
 import { parseSwfXml } from '../../lib/parser';
 import { ExecuteTab } from '../ExecuteTab';
 import { bootKey, LEGACY_BOOT_KEY, migrateLegacyBoot } from '../bootScripts';
+
+// Font registration (FontFace.load) finishes whenever the browser is done. With
+// `fontsHeld` set, it waits until the test lets it go, after the game started.
+const fonts = vi.hoisted(() => ({ held: false, release: [] as (() => void)[] }));
+vi.mock('../../engine/as2/audio', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../engine/as2/audio')>();
+  return {
+    ...real,
+    registerFonts: async (...args: Parameters<typeof real.registerFonts>) => {
+      if (fonts.held) await new Promise<void>((resolve) => fonts.release.push(resolve));
+      return real.registerFonts(...args);
+    },
+  };
+});
 
 const XML = `<?xml version="1.0" encoding="UTF-8"?>
 <swf type="SWF" version="7" frameRate="12" frameCount="1">
@@ -36,8 +51,10 @@ function file(path: string, text: string, game: string) {
   Object.defineProperty(f, 'webkitRelativePath', { value: `${game}/${path}` });
   return f;
 }
+const gameBundle = (game: string) => ingestFiles([file(`${game}.xml`, XML, game), file('scripts/frame_1/DoAction.as', 'stop();', game)]);
+const gameDoc = async (game: string) => parseSwfXml(await gameBundle(game).xmlFile!.text(), { fileName: `${game}.xml` });
 async function mount(game: string) {
-  const bundle = ingestFiles([file(`${game}.xml`, XML, game), file('scripts/frame_1/DoAction.as', 'stop();', game)]);
+  const bundle = gameBundle(game);
   const doc = parseSwfXml(await bundle.xmlFile!.text(), { fileName: `${game}.xml` });
   render(<ExecuteTab doc={doc} cache={new AssetCache(bundle, () => {})} assets={bundle} />);
   await waitFor(() => expect(screen.getByText(/AS2 engine/)).toBeTruthy());
@@ -92,6 +109,35 @@ describe('AS2 boot scripts are per game', () => {
     fireEvent.click(screen.getByText('Restart'));
     await runFrames(250);
     expect(screen.getAllByText(RAN).length).toBeGreaterThan(0);
+  });
+});
+
+describe('starting a game (P-38)', () => {
+  it('runs once: registering the embedded fonts does not restart it', async () => {
+    const g = globalThis as { __boots?: number };
+    const counting = "globalThis.__boots = (globalThis.__boots || 0) + 1; player.log('info', 'START ' + globalThis.__boots)";
+    await mount('gameA');
+    openProgram();
+    fireEvent.change(bootField(), { target: { value: counting } });
+    fireEvent.click(screen.getByText('Restart with script'));
+    await runFrames(250);
+    cleanup();
+
+    g.__boots = 0;
+    fonts.held = true;
+    try {
+      render(<ExecuteTab doc={await gameDoc('gameA')} cache={new AssetCache(gameBundle('gameA'), () => {})} assets={gameBundle('gameA')} />);
+      await act(() => new Promise((resolve) => setTimeout(resolve, 50)));   // the program is built meanwhile
+      await runFrames(250);
+      await act(async () => { fonts.release.splice(0).forEach((go) => go()); await new Promise((resolve) => setTimeout(resolve, 50)); });
+      await runFrames(250);
+      expect(g.__boots).toBe(1);
+      expect(screen.getAllByText(/START 1/).length).toBeGreaterThan(0);  // and its console was not wiped
+    } finally {
+      fonts.held = false;
+      fonts.release.splice(0).forEach((go) => go());
+      delete g.__boots;
+    }
   });
 });
 

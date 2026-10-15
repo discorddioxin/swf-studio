@@ -63,6 +63,7 @@ export const isAs2Bundle = (doc: SwfDocument, assets: AssetBundle | null) =>
 /** The default for `externals`: one shared array, because the player effect depends
  *  on it — a fresh `[]` per render would recreate the player on every render. */
 const NO_EXTERNALS: SwfPackage[] = [];
+const NO_FONTS = new Set<number>(); // shared and never written to
 
 /** An external SWF export with its key (used for its fonts). */
 interface ExternalEntry { pkg: SwfPackage; name: string; key: string }
@@ -102,8 +103,10 @@ export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNA
   const dependencies = useMissingDependencies(useCallback(() => playerRef.current?.dependencies, []));
   const missingFiles = dependencies.filter((d) => !d.service && !d.optional);
   const [size, setSize] = useState({ w: 800, h: 500 });
-  const [fontIds, setFontIds] = useState<Set<number>>(new Set());
-  const [extFontIds, setExtFontIds] = useState<Map<string, Set<number>>>(new Map());
+  // Embedded fonts registered for the current movie / external SWFs, tagged with
+  // what they were registered for (a stale result is not ready).
+  const [ownFonts, setOwnFonts] = useState<{ of: unknown; ids: Set<number> } | null>(null);
+  const [extFonts, setExtFonts] = useState<{ of: unknown; ids: Map<string, Set<number>> } | null>(null);
   const [loadedExternals, setLoadedExternals] = useState<{ name: string; ms: number; errors: number }[]>([]);
   const extEntries = useMemo<ExternalEntry[]>(() => externals.map((pkg, i) => {
     const name = swfNameOf(pkg.bundle.xmlName || pkg.doc.header.fileName || `external${i}`);
@@ -234,11 +237,14 @@ export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNA
     return () => dbg.unregisterCallbacks('as2');
   }, [dbg]);
 
-  // Embedded fonts are independent of the source project build.
+  // Embedded fonts are independent of the source project build. A SWF's fonts
+  // are there before its first frame runs, so the player starts once they are
+  // registered (below) rather than being rebuilt — restarting the game — when
+  // they arrive.
   useEffect(() => {
     let cancelled = false;
     const fontsController = new AbortController();
-    registerFonts(assets?.files ?? [], undefined, fontsController.signal).then((ids) => { if (!cancelled) setFontIds(ids); });
+    registerFonts(assets?.files ?? [], undefined, fontsController.signal).then((ids) => { if (!cancelled) setOwnFonts({ of: assets, ids }); });
     return () => { cancelled = true; fontsController.abort(); };
   }, [assets]);
 
@@ -246,14 +252,16 @@ export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNA
     let cancelled = false;
     const fontsController = new AbortController();
     Promise.all(extEntries.map(async (e) => [e.key, await registerFonts(e.pkg.bundle.files, e.key, fontsController.signal)] as const))
-      .then((pairs) => { if (!cancelled) setExtFontIds(new Map(pairs)); });
+      .then((pairs) => { if (!cancelled) setExtFonts({ of: extEntries, ids: new Map(pairs) }); });
     return () => { cancelled = true; fontsController.abort(); };
   }, [extEntries]);
+  const fontIds = ownFonts?.of === assets ? ownFonts.ids : null;
+  const extFontIds = extFonts?.of === extEntries ? extFonts.ids : null;
 
   const fontFamily = useCallback((f: number | string, movie?: Movie) => {
     const libs: { doc: SwfDocument; key?: string; ids: Set<number> }[] = [
-      { doc, ids: fontIds },
-      ...extEntries.map((e) => ({ doc: e.pkg.doc, key: e.key, ids: extFontIds.get(e.key) ?? new Set<number>() })),
+      { doc, ids: fontIds ?? NO_FONTS },
+      ...extEntries.map((e) => ({ doc: e.pkg.doc, key: e.key, ids: extFontIds?.get(e.key) ?? NO_FONTS })),
     ];
     const own = movie?.key ? libs.find((l) => l.key === movie.key) : libs[0];
     const fontName = (c: { attrs: Record<string, string> } | undefined) => (c?.attrs.fontName ?? '').replace(/\u0000/g, '');
@@ -274,9 +282,9 @@ export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNA
     return `${embedded}${name ? `"${name}", ` : ''}sans-serif`;
   }, [doc, fontIds, extEntries, extFontIds]);
 
-  // ---- a player per (document, build, restart)
+  // ---- a player per (document, build, restart), once the fonts are registered
   useEffect(() => {
-    if (build.status !== 'ready') return;
+    if (build.status !== 'ready' || !fontIds || !extFontIds) return;
     executionFaultRef.current = false;
     pendingLogs.current = [];
     runtimeTimelinesRef.current = [];
@@ -790,7 +798,7 @@ export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNA
           <UiTroubleshooter
             getPlayer={() => playerRef.current}
             canvasRef={canvasRef}
-            fontIds={fontIds}
+            fontIds={fontIds ?? NO_FONTS}
             epoch={playerEpoch}
             onSendToConsole={appendTroubleshooterFindings}
             onFocus={handleHighlight}
