@@ -805,10 +805,10 @@ The agent updates this table as each item lands (commit hash, date).
 
 | ID | Phase | Status | Commit |
 |---|---|---|---|
-| P-01 | 1 | open | |
-| P-03a | 1 | open | |
-| P-06 | 1 | open | |
-| P-26 | 1 | open | |
+| P-01 | 1 | done 2026-10-15 | `d13900e` |
+| P-03a | 1 | done 2026-10-15 | `f352959` |
+| P-06 | 1 | done 2026-10-15 | `78abc38` |
+| P-26 | 1 | done 2026-10-15 | `5196584` |
 | P-21 | 2 | open | |
 | P-02 | 2 | open | |
 | P-05 | 3 | open | |
@@ -824,7 +824,7 @@ The agent updates this table as each item lands (commit hash, date).
 | P-22 | 6 | open | |
 | P-14 | 6 | open | |
 | P-24 | 6 | open | |
-| P-25 | 6 | open | |
+| P-25 | 6 | open (unreadable DoABC payloads already reported, P-06) | |
 | P-15 | 7 | open | |
 | P-12 | 7 | open | |
 | P-16 | 7 | open | |
