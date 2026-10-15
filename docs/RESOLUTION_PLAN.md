@@ -297,6 +297,26 @@ the fishing real-game tests stay green.
 4. **Show it.** Display a visible "custom boot script active" badge in the Execute toolbar
    while a non-preset script runs, plus a console info line (that line already exists).
 
+**As implemented (2026-10-15).**
+- **Storage.** The rules live in `src/components/bootScripts.ts`; the key is
+  `swf-studio.as2.boot:<adapterId>:<main SWF>`.
+- **Per-game value.** `As2Execute` derives the script from that key while rendering, so a
+  player created for a newly loaded game never sees the previous game's script.
+- **Migration (D5).** The old global key is migrated when a game opens:
+  - empty: deleted;
+  - one of this adapter's presets: moved to this game silently;
+  - another adapter's preset: left for that adapter;
+  - anything else: kept *unassigned*. It never runs, and a notice offers "Use for this
+    game" or "Discard".
+- **Visibility.** The toolbar shows "Custom boot script active" for a non-preset script,
+  and the console line says it is the script saved for this game.
+- **Loop fix.** Writing the UI test exposed a render loop: `As2Execute` defaulted
+  `externals` to a fresh `[]`, which the player effect depends on, so a caller that
+  omitted the prop got a new player on every render. The default is now one shared array.
+- **Tests.** `src/components/__tests__/as2BootScript.ui.test.tsx`: game A's script
+  neither runs nor shows in game B; the legacy script stays idle until assigned; plus the
+  migration rules. Both UI tests fail against the old component.
+
 **Phase 1 gate:** §0.1. Commit messages `P-01 …`, `P-03a …`, `P-06 …`, `P-26 …`. Push.
 
 ---
