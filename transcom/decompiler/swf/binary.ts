@@ -456,14 +456,20 @@ async function decodeLossless(data: Uint8Array, is2: boolean): Promise<{ id: num
   const raw = await inflate(compressed);
   const rgba = new Uint8Array(w * h * 4);
   if (format === 3) {
+    // COLORMAPDATA: ctSize + 1 colours — RGB (3 bytes) in DefineBitsLossless, RGBA
+    // (4 bytes) in DefineBitsLossless2 — then one index byte per pixel, each row
+    // padded to 32 bits. An index with no colour shows transparent (v2) / black (v1).
+    const entry = is2 ? 4 : 3;
+    const colours = ctSize + 1;
     const stride = (w + 3) & ~3;
-    const off = (ctSize + 1) * 4;
+    const off = colours * entry;
     for (let y = 0; y < h; y++) {
       const row = off + y * stride;
       for (let x = 0; x < w; x++) {
         const idx = raw[row + x];
-        const p = idx * 4;
         const di = (y * w + x) * 4;
+        if (idx >= colours) { rgba[di + 3] = is2 ? 0 : 255; continue; }
+        const p = idx * entry;
         rgba[di] = raw[p];
         rgba[di + 1] = raw[p + 1];
         rgba[di + 2] = raw[p + 2];
@@ -471,11 +477,13 @@ async function decodeLossless(data: Uint8Array, is2: boolean): Promise<{ id: num
       }
     }
   } else if (format === 4) {
+    // PIX15: UB[1] reserved, UB[5] red, green, blue — a big-endian 16-bit value;
+    // rows padded to 32 bits.
     const stride = (w * 2 + 3) & ~3;
     for (let y = 0; y < h; y++) {
       const row = y * stride;
       for (let x = 0; x < w; x++) {
-        const v = raw[row + x * 2] | (raw[row + x * 2 + 1] << 8);
+        const v = (raw[row + x * 2] << 8) | raw[row + x * 2 + 1];
         const di = (y * w + x) * 4;
         rgba[di] = Math.round(((v >> 10) & 31) * 255 / 31);
         rgba[di + 1] = Math.round(((v >> 5) & 31) * 255 / 31);

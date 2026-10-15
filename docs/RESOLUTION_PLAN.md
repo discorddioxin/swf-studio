@@ -810,7 +810,7 @@ The agent updates this table as each item lands (commit hash, date).
 | P-06 | 1 | done 2026-10-15 | `78abc38` |
 | P-26 | 1 | done 2026-10-15 | `5196584` |
 | P-21 | 2 | done 2026-10-15 | `5da10a1` — corpus resolver `src/testing/corpus.ts`; AVM2/ABC gates promoted to `src/**`; dumpers out of `npm test`; AS3 fixture movie. Without the corpus, failures 58 → 19 (all P-02 `game-files`) |
-| P-02 | 2 | done 2026-10-15 | sample read from the corpus (`fishing-swfs`, SHA-identical to the old bundle); bundled index optional (`BundledIndexState`); FFDec only via `SWF_FFDEC`; spec-based `lossless.test.ts` + `movies.ts`. 0 failures with the corpus (668 passed / 3 skipped) and without (595 / 34) |
+| P-02 | 2 | done 2026-10-15 | `a29cf4f` — sample read from the corpus (`fishing-swfs`, SHA-identical to the old bundle); bundled index optional (`BundledIndexState`); FFDec only via `SWF_FFDEC`; spec-based `lossless.test.ts` + `movies.ts`. 0 failures with the corpus (668 passed / 3 skipped) and without (595 / 34) |
 | P-05 | 3 | open | |
 | P-35 | 3 | open | |
 | P-17 | 3 | open | |
@@ -842,6 +842,8 @@ The agent updates this table as each item lands (commit hash, date).
 | P-33 | 9 | open | |
 | P-34 | 9 | open | |
 | P-36 | 9 | open | |
+| P-37 | 2 | done 2026-10-15 | v1 RGB colormaps, big-endian PIX15, missing palette index → transparent/black; 3 failing-first spec tests in `lossless.test.ts`. Corpus: 1 v1 colormap bitmap (towns2) was wrong; no format-4 bitmaps |
+| P-38 | 2 | open (found during P-02) | |
 
 ## 11. Risks and rollback
 

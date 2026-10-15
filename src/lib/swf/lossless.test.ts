@@ -42,4 +42,29 @@ describe('lossless bitmaps', () => {
     const red = [255, 0, 0, 255], blue = [0, 0, 255, 255];
     expect(pixels).toEqual([red, blue, red, blue, blue, red]);
   });
+
+  it('format 3, v1: an RGB palette — 3 bytes per colour, opaque', async () => {
+    // 2×2, palette of 3 (size − 1 = 2): rows are 2 index bytes + 2 pad bytes
+    const palette = [255, 0, 0, 0, 255, 0, 0, 0, 255];
+    const rows = [0, 1, 9, 9, 2, 0, 9, 9];
+    const { pixels } = await decoded(tag.bitsLossless(1, 4, 3, 2, 2, [...palette, ...rows], 2), 4);
+    expect(pixels).toEqual([[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255], [255, 0, 0, 255]]);
+  });
+
+  it('format 3: an index past the palette is transparent (v2) or black (v1)', async () => {
+    // palette of 1; index 7 has no colour. The row's pad bytes must not be read as one.
+    const v2 = await decoded(tag.bitsLossless(2, 5, 3, 2, 1, [10, 20, 30, 255, 0, 7, 40, 50], 0), 5);
+    expect(v2.pixels).toEqual([[10, 20, 30, 255], [0, 0, 0, 0]]);
+    const v1 = await decoded(tag.bitsLossless(1, 6, 3, 2, 1, [10, 20, 30, 0, 7, 40, 50], 0), 6);
+    expect(v1.pixels).toEqual([[10, 20, 30, 255], [0, 0, 0, 255]]);
+  });
+
+  it('format 4: big-endian PIX15 (reserved bit, then 5 bits each of red, green, blue), rows padded to 32 bits', async () => {
+    // 1×3: each row is one 2-byte pixel + 2 pad bytes. 0x7C00 red, 0x03E0 green, 0x2C1F = r 11, b 31
+    const rows = [0x7c, 0x00, 9, 9, 0x03, 0xe0, 9, 9, 0x2c, 0x1f, 9, 9];
+    const { w, h, pixels } = await decoded(tag.bitsLossless(1, 7, 4, 1, 3, rows), 7);
+    expect([w, h]).toEqual([1, 3]);
+    // a 5-bit channel c scales to round(c · 255 / 31): 31 → 255, 11 → 90
+    expect(pixels).toEqual([[255, 0, 0, 255], [0, 255, 0, 255], [90, 0, 255, 255]]);
+  });
 });

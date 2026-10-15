@@ -51,6 +51,8 @@
 | [P-34](#p-34) | Low | Debugger | Breakpoint-resume path is provisional and swallows errors |
 | [P-35](#p-35) | Low | App state | "New folder" keeps the adapter pick; it silently applies to the next game |
 | [P-36](#p-36) | Low | Servers | Preview health endpoint exposes pid/memory; dev server `allowedHosts: true` |
+| [P-37](#p-37) | Medium | Rendering | Lossless bitmaps: v1 colormaps read as RGBA, 15-bit pixels byte-swapped, bad palette index reads garbage |
+| [P-38](#p-38) | Medium | Execute | The AS2 player is rebuilt when embedded fonts finish registering: the game restarts and the console is wiped |
 
 ---
 
@@ -638,6 +640,37 @@ adapter on the next, unrelated game.
 publicly reports pid, RSS and heap. `vite.config.ts` sets `allowedHosts: true` with
 `host: '0.0.0.0'`. That's required for the sandbox preview, but it disables Vite's
 DNS-rebinding protection elsewhere, so it should be environment-gated.
+
+---
+
+## Found during resolution
+
+Problems found while working through the plan (not in the `aaa927b` analysis).
+
+### P-37
+**Lossless bitmaps decode wrongly in three cases** (Medium, rendering).
+`decodeLossless` in `transcom/decompiler/swf/binary.ts`:
+- *DefineBitsLossless (v1), format 3:* the colormap entries are RGB, 3 bytes each
+  (SWF 19, "COLORMAPDATA"); the reader takes 4, so every colour after the first is
+  shifted and the pixel data starts at the wrong offset.
+- *Format 4 (15-bit):* each PIX15 is a big-endian `UB[1] reserved, UB[5] R, G, B`; the
+  reader assembles the 16 bits little-endian, so channels are scrambled.
+- *Format 3, index past the colormap:* the reader takes bytes from the pixel data as
+  a colour. Flash shows transparent (v2) or opaque black (v1).
+The FFDec PNG oracle never covered these (its movies use format 5 and v2 colormaps).
+Fix: decode per spec; failing-first tests in `src/lib/swf/lossless.test.ts`.
+
+### P-38
+**Embedded fonts restart the game** (Medium, Execute).
+`src/components/As2Execute.tsx`: `registerFonts(...)` resolves after the player has
+started and sets `fontIds` / `extFontIds`. They feed the `fontFamily` callback, a
+dependency of the player effect, so the player is disposed and rebuilt. The game
+restarts from frame 1 (up to twice: own fonts, then the external SWFs' fonts), the boot
+script runs again, and the console is cleared. `as2BootScript.ui.test.tsx` fails
+intermittently under load because of this. In Flash a SWF's embedded fonts are
+there before its first frame runs.
+Fix: start the player once the movie's fonts are registered; never rebuild it for
+fonts.
 
 ---
 
