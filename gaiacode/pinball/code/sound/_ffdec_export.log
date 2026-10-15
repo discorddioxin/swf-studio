@@ -1,0 +1,99 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\pinball\code\sound' 'C:\Users\vemig\Desktop\gaiacode\pinball\swfs\sound.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 1/86 com.gaiaonline.gameFramework.sound.ISoundController, 00:00.038
+Exported script 14/86 PUmarbles, 00:00.039
+Exported script 10/86 PUfishnet, 00:00.039
+Exported script 9/86 PUarmadillo, 00:00.039
+Exported script 4/86 GAIAcomplete, 00:00.039
+Exported script 7/86 LoseBall, 00:00.039
+Exported script 8/86 LoseLastBall, 00:00.040
+Exported script 5/86 GAIAletter, 00:00.040
+Exported script 15/86 PUsticky, 00:00.040
+Exported script 11/86 PUfloaties, 00:00.040
+Exported script 12/86 PUgoldmine, 00:00.040
+Exported script 13/86 PUinsurance, 00:00.040
+Exported script 2/86 BallEntry, 00:00.040
+Exported script 6/86 KickerElastic, 00:00.040
+Exported script 3/86 FISHlevelup, 00:00.040
+Exported script 16/86 arenabumper01, 00:00.010
+Exported script 18/86 arenabumper03, 00:00.011
+Exported script 25/86 arenabumper15, 00:00.011
+Exported script 17/86 arenabumper02, 00:00.012
+Exported script 19/86 arenabumper04, 00:00.012
+Exported script 26/86 arenabumper21, 00:00.012
+Exported script 24/86 arenabumper14, 00:00.012
+Exported script 20/86 arenabumper05, 00:00.013
+Exported script 23/86 arenabumper13, 00:00.012
+Exported script 21/86 arenabumper11, 00:00.013
+Exported script 22/86 arenabumper12, 00:00.012
+Exported script 28/86 arenabumper23, 00:00.012
+Exported script 30/86 arenabumper25, 00:00.014
+Exported script 29/86 arenabumper24, 00:00.014
+Exported script 27/86 arenabumper22, 00:00.017
+Exported script 42/86 enterlock, 00:00.008
+Exported script 34/86 bull, 00:00.011
+Exported script 32/86 bankintro, 00:00.011
+Exported script 31/86 bankclose, 00:00.011
+Exported script 33/86 bankopen, 00:00.011
+Exported script 35/86 cashout, 00:00.011
+Exported script 38/86 coinlight, 00:00.010
+Exported script 41/86 entercasino, 00:00.010
+Exported script 36/86 casinoclose, 00:00.011
+Exported script 37/86 casinoopen, 00:00.012
+Exported script 40/86 enterboutique, 00:00.013
+Exported script 39/86 destroy, 00:00.014
+Exported script 43/86 fish1, 00:00.014
+Exported script 44/86 fish2, 00:00.016
+Exported script 46/86 fish4, 00:00.010
+Exported script 47/86 fishbumper, 00:00.009
+Exported script 51/86 flip_right_up, 00:00.008
+Exported script 45/86 fish3, 00:00.015
+Exported script 48/86 flip_left_down, 00:00.010
+Exported script 53/86 gambino2, 00:00.010
+Exported script 52/86 gambino1, 00:00.011
+Exported script 54/86 grunniescomplete, 00:00.011
+Exported script 49/86 flip_left_up, 00:00.013
+Exported script 50/86 flip_right_down, 00:00.013
+Exported script 59/86 guildmusic, 00:00.010
+Exported script 57/86 grunny3, 00:00.015
+Exported script 58/86 guildeventspinner, 00:00.013
+Exported script 60/86 guildspinner, 00:00.010
+Exported script 56/86 grunny2, 00:00.018
+Exported script 55/86 grunny1, 00:00.019
+Exported script 62/86 loganintro, 00:00.014
+Exported script 61/86 kickback, 00:00.014
+Exported script 67/86 plungershoot, 00:00.012
+Exported script 63/86 marketintro, 00:00.015
+Exported script 64/86 moo, 00:00.017
+Exported script 70/86 rebuild, 00:00.010
+Exported script 66/86 music2, 00:00.016
+Exported script 73/86 slotwin0, 00:00.011
+Exported script 69/86 pullplunger, 00:00.018
+Exported script 65/86 music, 00:00.021
+Exported script 68/86 powerupError, 00:00.020
+Exported script 71/86 resetfish, 00:00.015
+Exported script 72/86 rockpuppyhit, 00:00.015
+Exported script 76/86 slotwin3, 00:00.012
+Exported script 74/86 slotwin1, 00:00.014
+Exported script 75/86 slotwin2, 00:00.017
+Exported script 78/86 slotwin5, 00:00.016
+Exported script 77/86 slotwin4, 00:00.016
+Exported script 79/86 slotwin6, 00:00.015
+Exported script 81/86 targetGroup2, 00:00.013
+Exported script 82/86 targetGroup3, 00:00.014
+Exported script 80/86 targetGroup1, 00:00.016
+Exported script 83/86 tokenspinner, 00:00.013
+Exported script 84/86 vonhelsonintro, 00:00.013
+Exported script 85/86 zurgintro, 00:00.012
+Exported script 86/86 com.gaiaonline.gameFramework.sound.SoundController, 00:00.048
+Export finished. Total export time: 00:00.555
+OK
+
+--- stderr ---
+

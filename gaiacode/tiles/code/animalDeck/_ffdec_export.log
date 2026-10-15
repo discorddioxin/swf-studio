@@ -1,0 +1,34 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\tiles\code\animalDeck' 'C:\Users\vemig\Desktop\gaiacode\tiles\swfs\animalDeck.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 4/21 suit4, 00:00.060
+Exported script 11/21 type10, 00:00.060
+Exported script 5/21 suit5, 00:00.060
+Exported script 9/21 suit9, 00:00.043
+Exported script 14/21 type2, 00:00.044
+Exported script 2/21 suit2, 00:00.044
+Exported script 1/21 suit1, 00:00.060
+Exported script 3/21 suit3, 00:00.061
+Exported script 12/21 type11, 00:00.044
+Exported script 6/21 suit6, 00:00.062
+Exported script 13/21 type12, 00:00.045
+Exported script 15/21 type3, 00:00.045
+Exported script 10/21 type1, 00:00.062
+Exported script 8/21 suit8, 00:00.062
+Exported script 7/21 suit7, 00:00.062
+Exported script 21/21 type9, 00:00.007
+Exported script 18/21 type6, 00:00.008
+Exported script 20/21 type8, 00:00.008
+Exported script 16/21 type4, 00:00.009
+Exported script 19/21 type7, 00:00.008
+Exported script 17/21 type5, 00:00.010
+Export finished. Total export time: 00:00.451
+OK
+
+--- stderr ---
+

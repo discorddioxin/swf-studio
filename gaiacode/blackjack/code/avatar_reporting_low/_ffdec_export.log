@@ -1,0 +1,20 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\blackjack\code\avatar_reporting_low' 'C:\Users\vemig\Desktop\gaiacode\blackjack\swfs\avatar_reporting_low.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 7/7 C:\Users\vemig\Desktop\gaiacode\blackjack\code\avatar_reporting_low\scripts\frame_1\DoAction.as, 00:00.022
+Exported script 2/7 C:\Users\vemig\Desktop\gaiacode\blackjack\code\avatar_reporting_low\scripts\DefineButton2_3\BUTTONCONDACTION on(release).as, 00:00.022
+Exported script 1/7 C:\Users\vemig\Desktop\gaiacode\blackjack\code\avatar_reporting_low\scripts\DefineButton2_2\BUTTONCONDACTION on(release).as, 00:00.022
+Exported script 4/7 C:\Users\vemig\Desktop\gaiacode\blackjack\code\avatar_reporting_low\scripts\DefineButton2_7\BUTTONCONDACTION on(release).as, 00:00.023
+Exported script 3/7 C:\Users\vemig\Desktop\gaiacode\blackjack\code\avatar_reporting_low\scripts\DefineButton2_6\BUTTONCONDACTION on(release).as, 00:00.023
+Exported script 5/7 C:\Users\vemig\Desktop\gaiacode\blackjack\code\avatar_reporting_low\scripts\DefineButton2_13\BUTTONCONDACTION on(release).as, 00:00.023
+Exported script 6/7 C:\Users\vemig\Desktop\gaiacode\blackjack\code\avatar_reporting_low\scripts\DefineSprite_15\frame_1\DoAction.as, 00:00.025
+Export finished. Total export time: 00:00.102
+OK
+
+--- stderr ---
+

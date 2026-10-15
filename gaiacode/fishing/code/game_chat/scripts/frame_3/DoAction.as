@@ -1,0 +1,2 @@
+_root.welcomeMessage();
+stop();

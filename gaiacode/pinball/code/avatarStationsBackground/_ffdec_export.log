@@ -1,0 +1,13 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\pinball\code\avatarStationsBackground' 'C:\Users\vemig\Desktop\gaiacode\pinball\swfs\avatarStationsBackground.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Export finished. Total export time: 00:00.072
+OK
+
+--- stderr ---
+

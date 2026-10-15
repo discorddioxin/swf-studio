@@ -1,0 +1,6 @@
+function robotIsFinished()
+{
+}
+function returnToIdle()
+{
+}

@@ -1,0 +1,27 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\tiles\code\tilesAvatarStation' 'C:\Users\vemig\Desktop\gaiacode\tiles\swfs\tilesAvatarStation.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 2/14 com.gaiaonline.gateway.IGaiaObject, 00:00.042
+Exported script 3/14 com.gaiaonline.gateway.IGaiaChannel, 00:00.054
+Exported script 10/14 tilesAvatarStation_fla.scream_anim_7, 00:00.057
+Exported script 8/14 tilesAvatarStation_fla.peace_anim_5, 00:00.069
+Exported script 7/14 tilesAvatarStation_fla.bubble_3, 00:00.069
+Exported script 9/14 tilesAvatarStation_fla.poed_anim_4, 00:00.069
+Exported script 11/14 tilesAvatarStation_fla.t_6, 00:00.070
+Exported script 4/14 com.gaiaonline.gateway.GaiaIdentity, 00:00.078
+Exported script 6/14 com.gaiaonline.gameFramework.util.TheStage, 00:00.081
+Exported script 13/14 com.gaiaonline.gameFramework.avatar.WordBalloon, 00:00.084
+Exported script 5/14 com.gaiaonline.gateway.GaiaChatMessage, 00:00.097
+Exported script 14/14 com.gaiaonline.games.tiles.TilesAvatarStation, 00:00.101
+Exported script 12/14 com.gaiaonline.gameFramework.avatar.AvatarStation, 00:00.103
+Exported script 1/14 com.gaiaonline.gameFramework.util.UrlUtil, 00:00.104
+Export finished. Total export time: 00:00.546
+OK
+
+--- stderr ---
+

@@ -1,0 +1,14 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\tiles\code\standardDeck' 'C:\Users\vemig\Desktop\gaiacode\tiles\swfs\standardDeck.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 1/1 deck, 00:00.063
+Export finished. Total export time: 00:00.449
+OK
+
+--- stderr ---
+

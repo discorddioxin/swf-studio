@@ -1,0 +1,268 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4' 'C:\Users\vemig\Desktop\gaiacode\word-bump\swfs\wordbump_game1.4.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 4/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\errorPanelOk.as, 00:00.008
+Exported script 13/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\powerballindicator1.as, 00:00.008
+Exported script 9/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\mcPowerupLauncher.as, 00:00.008
+Exported script 12/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\powerballIndicator2.as, 00:00.009
+Exported script 8/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\mcLevelDialogue.as, 00:00.009
+Exported script 5/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\errorPanelQuit.as, 00:00.008
+Exported script 3/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\errorPanel.as, 00:00.009
+Exported script 14/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\retryOrQuitPanel.as, 00:00.009
+Exported script 10/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\mcTimer.as, 00:00.010
+Exported script 11/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\powerballIndicator0.as, 00:00.010
+Exported script 15/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\timer.as, 00:00.010
+Exported script 7/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\mcLetter.as, 00:00.010
+Exported script 6/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\errorPanelSushi.as, 00:00.009
+Exported script 16/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\GSItools\CallbackGroup.as, 00:00.025
+Exported script 19/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\GSItools\serializers\CommonTools.as, 00:00.028
+Exported script 20/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\GSItools\serializers\PHPSerializer.as, 00:00.038
+Exported script 18/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\GSItools\GSIRequest.as, 00:00.043
+Exported script 21/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\GSItools\serializers\SushiSerializer.as, 00:00.050
+Exported script 17/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\GSItools\GSIGateway.as, 00:00.053
+Exported script 31/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\com\rawfishsoftware\sushi\$Event.as, 00:00.018
+Exported script 26/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\code\levelDialogue.as, 00:00.056
+Exported script 27/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\code\localDataWordBump.as, 00:00.058
+Exported script 30/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\code\timer.as, 00:00.037
+Exported script 28/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\code\powerBallIndicator.as, 00:00.065
+Exported script 32/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\com\rawfishsoftware\sushi\Challenge.as, 00:00.025
+Exported script 33/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\com\rawfishsoftware\sushi\Event.as, 00:00.018
+Exported script 29/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\code\splitPod.as, 00:00.047
+Exported script 24/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\code\gamerm_popPanel.as, 00:00.078
+Exported script 2/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\FUIComponentSymbol.as, 00:00.092
+Exported script 22/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\code\ballLauncher.as, 00:00.089
+Exported script 36/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\com\rawfishsoftware\sushi\Member.as, 00:00.034
+Exported script 43/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\com\rawfishsoftware\sushi\SushiSocket.as, 00:00.009
+Exported script 47/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_120\BUTTONCONDACTION on(release).as, 00:00.002
+Exported script 48/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_241\BUTTONCONDACTION on(release).as, 00:00.002
+Exported script 40/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\com\rawfishsoftware\sushi\Session.as, 00:00.042
+Exported script 50/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_248\BUTTONCONDACTION on(release).as, 00:00.006
+Exported script 49/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_244\BUTTONCONDACTION on(release).as, 00:00.021
+Exported script 51/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_257\BUTTONCONDACTION on(release).as, 00:00.002
+Exported script 1/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\FScrollBarSymbol.as, 00:00.130
+Exported script 52/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_280\BUTTONCONDACTION on(release).as, 00:00.006
+Exported script 44/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\com\rawfishsoftware\sushi\Team.as, 00:00.041
+Exported script 45/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\gaiaWordFilter\WordFilter.as, 00:00.039
+Exported script 56/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_488\BUTTONCONDACTION on(release).as, 00:00.003
+Exported script 53/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_389\BUTTONCONDACTION on(rollOver).as, 00:00.011
+Exported script 55/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_389\BUTTONCONDACTION on(release).as, 00:00.005
+Exported script 54/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_389\BUTTONCONDACTION on(rollOut).as, 00:00.008
+Exported script 57/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_538\BUTTONCONDACTION on(release).as, 00:00.003
+Exported script 58/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_541\BUTTONCONDACTION on(release).as, 00:00.004
+Exported script 34/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\com\rawfishsoftware\sushi\Logger.as, 00:00.082
+Exported script 35/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\com\rawfishsoftware\sushi\Me.as, 00:00.079
+Exported script 38/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\com\rawfishsoftware\sushi\Room.as, 00:00.070
+Exported script 59/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_553\BUTTONCONDACTION on(release).as, 00:00.007
+Exported script 61/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_572\BUTTONCONDACTION on(release).as, 00:00.007
+Exported script 37/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\com\rawfishsoftware\sushi\Mob.as, 00:00.078
+Exported script 42/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\com\rawfishsoftware\sushi\SushiHTTP.as, 00:00.067
+Exported script 60/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_557\BUTTONCONDACTION on(release).as, 00:00.010
+Exported script 62/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_576\BUTTONCONDACTION on(release).as, 00:00.010
+Exported script 64/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_588\BUTTONCONDACTION on(release).as, 00:00.007
+Exported script 63/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineButton2_578\BUTTONCONDACTION on(release).as, 00:00.008
+Exported script 46/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\qadca\Qadca.as, 00:00.053
+Exported script 66/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_15_errorPanelQuit\frame_4\DoAction.as, 00:00.011
+Exported script 65/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_13_errorPanelSushi\frame_4\DoAction.as, 00:00.011
+Exported script 68/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_20_errorPanel\frame_4\DoAction.as, 00:00.010
+Exported script 71/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_27_FScrollBarSymbol\frame_1\DoAction.as, 00:00.012
+Exported script 74/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_51\frame_1\DoAction.as, 00:00.012
+Exported script 72/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_28_FUIComponentSymbol\frame_1\DoAction.as, 00:00.015
+Exported script 69/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_23_retryOrQuitPanel\frame_4\DoAction.as, 00:00.020
+Exported script 70/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_26\frame_1\DoAction.as, 00:00.019
+Exported script 73/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_41\frame_1\DoAction.as, 00:00.017
+Exported script 76/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_61_UpArrow\frame_1\DoAction.as, 00:00.012
+Exported script 75/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_60\frame_1\DoAction.as, 00:00.015
+Exported script 67/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_18_errorPanelOk\frame_4\DoAction.as, 00:00.023
+Exported script 80/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_75\frame_1\DoAction.as, 00:00.008
+Exported script 81/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_80\frame_1\DoAction.as, 00:00.006
+Exported script 79/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_68\frame_1\DoAction.as, 00:00.011
+Exported script 77/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_61_UpArrow\frame_2\DoAction.as, 00:00.016
+Exported script 78/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_61_UpArrow\frame_3\DoAction.as, 00:00.017
+Exported script 83/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_89\frame_1\DoAction.as, 00:00.008
+Exported script 84/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_97\frame_1\DoAction.as, 00:00.008
+Exported script 85/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_105\frame_1\DoAction.as, 00:00.010
+Exported script 89/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_110\frame_1\DoAction.as, 00:00.006
+Exported script 82/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_81_ScrollThumb\frame_1\DoAction.as, 00:00.012
+Exported script 86/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_106_DownArrow\frame_1\DoAction.as, 00:00.010
+Exported script 91/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_149\frame_2\DoAction.as, 00:00.007
+Exported script 87/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_106_DownArrow\frame_2\DoAction.as, 00:00.010
+Exported script 90/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_118\frame_1\DoAction.as, 00:00.007
+Exported script 93/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_149\frame_15\DoAction.as, 00:00.006
+Exported script 94/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_149\frame_23\DoAction.as, 00:00.006
+Exported script 92/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_149\frame_12\DoAction.as, 00:00.009
+Exported script 102/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_166\frame_90\DoAction.as, 00:00.003
+Exported script 88/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_106_DownArrow\frame_3\DoAction.as, 00:00.012
+Exported script 104/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_166\frame_121\DoAction.as, 00:00.004
+Exported script 103/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_166\frame_119\DoAction.as, 00:00.004
+Exported script 99/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_166\frame_23\DoAction.as, 00:00.008
+Exported script 95/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_166\frame_2\DoAction.as, 00:00.009
+Exported script 96/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_166\frame_8\DoAction.as, 00:00.008
+Exported script 105/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_170_mcLetter\frame_2\DoAction.as, 00:00.004
+Exported script 100/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_166\frame_42\DoAction.as, 00:00.010
+Exported script 106/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_170_mcLetter\frame_7\DoAction.as, 00:00.005
+Exported script 98/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_166\frame_19\DoAction.as, 00:00.010
+Exported script 97/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_166\frame_13\DoAction.as, 00:00.010
+Exported script 101/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_166\frame_56\DoAction.as, 00:00.010
+Exported script 107/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_170_mcLetter\frame_12\DoAction.as, 00:00.003
+Exported script 108/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_170_mcLetter\frame_20\DoAction.as, 00:00.005
+Exported script 110/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_175_mcLetterConnector\frame_1\DoAction.as, 00:00.004
+Exported script 109/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_170_mcLetter\frame_24\DoAction.as, 00:00.004
+Exported script 116/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_189_mcBall02\frame_65\DoAction.as, 00:00.007
+Exported script 112/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_189_mcBall02\frame_17\DoAction.as, 00:00.008
+Exported script 113/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_189_mcBall02\frame_29\DoAction.as, 00:00.009
+Exported script 111/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_189_mcBall02\frame_4\DoAction.as, 00:00.011
+Exported script 117/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_204_mcBall012\frame_5\DoAction.as, 00:00.010
+Exported script 115/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_189_mcBall02\frame_42\DoAction.as, 00:00.011
+Exported script 122/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_204_mcBall012\frame_95\DoAction.as, 00:00.004
+Exported script 119/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_204_mcBall012\frame_54\DoAction.as, 00:00.009
+Exported script 114/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_189_mcBall02\frame_40\DoAction.as, 00:00.011
+Exported script 127/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_211_mcBall12\frame_46\DoAction.as, 00:00.003
+Exported script 121/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_204_mcBall012\frame_93\DoAction.as, 00:00.013
+Exported script 123/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_204_mcBall012\frame_120\DoAction.as, 00:00.007
+Exported script 124/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_211_mcBall12\frame_7\DoAction.as, 00:00.007
+Exported script 118/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_204_mcBall012\frame_29\DoAction.as, 00:00.015
+Exported script 128/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_211_mcBall12\frame_48\DoAction.as, 00:00.005
+Exported script 120/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_204_mcBall012\frame_79\DoAction.as, 00:00.014
+Exported script 132/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_216_mcBall01\frame_35\DoAction.as, 00:00.004
+Exported script 131/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_216_mcBall01\frame_21\DoAction.as, 00:00.005
+Exported script 129/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_211_mcBall12\frame_72\DoAction.as, 00:00.008
+Exported script 25/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\code\letterTile.as, 00:00.198
+Exported script 134/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_216_mcBall01\frame_46\DoAction.as, 00:00.004
+Exported script 130/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_216_mcBall01\frame_4\DoAction.as, 00:00.009
+Exported script 135/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_216_mcBall01\frame_70\DoAction.as, 00:00.005
+Exported script 133/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_216_mcBall01\frame_44\DoAction.as, 00:00.006
+Exported script 139/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_222_mcBall2\frame_28\DoAction.as, 00:00.004
+Exported script 126/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_211_mcBall12\frame_35\DoAction.as, 00:00.013
+Exported script 125/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_211_mcBall12\frame_21\DoAction.as, 00:00.014
+Exported script 136/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_222_mcBall2\frame_3\DoAction.as, 00:00.008
+Exported script 138/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_222_mcBall2\frame_24\DoAction.as, 00:00.005
+Exported script 142/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_229_mcBall1\frame_28\DoAction.as, 00:00.006
+Exported script 137/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_222_mcBall2\frame_13\DoAction.as, 00:00.010
+Exported script 140/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_222_mcBall2\frame_51\DoAction.as, 00:00.008
+Exported script 146/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_229_mcBall1\frame_61\DoAction.as, 00:00.004
+Exported script 144/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_229_mcBall1\frame_37\DoAction.as, 00:00.007
+Exported script 141/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_229_mcBall1\frame_2\DoAction.as, 00:00.008
+Exported script 147/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_235_mcBall0\frame_12\DoAction.as, 00:00.006
+Exported script 151/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_235_mcBall0\frame_54\DoAction.as, 00:00.003
+Exported script 148/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_235_mcBall0\frame_27\DoAction.as, 00:00.006
+Exported script 143/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_229_mcBall1\frame_33\DoAction.as, 00:00.011
+Exported script 150/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_235_mcBall0\frame_41\DoAction.as, 00:00.007
+Exported script 152/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_235_mcBall0\frame_72\DoAction.as, 00:00.006
+Exported script 149/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_235_mcBall0\frame_36\DoAction.as, 00:00.008
+Exported script 145/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_229_mcBall1\frame_44\DoAction.as, 00:00.013
+Exported script 154/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_253_mcDialogue\frame_3\DoAction.as, 00:00.008
+Exported script 156/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_253_mcDialogue\frame_12\DoAction.as, 00:00.007
+Exported script 155/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_253_mcDialogue\frame_8\DoAction.as, 00:00.010
+Exported script 158/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_322_mcLevelDialogue\frame_10\DoAction.as, 00:00.009
+Exported script 160/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_322_mcLevelDialogue\frame_24\DoAction.as, 00:00.007
+Exported script 164/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_322_mcLevelDialogue\frame_48\DoAction.as, 00:00.004
+Exported script 165/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_322_mcLevelDialogue\frame_51\DoAction.as, 00:00.004
+Exported script 161/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_322_mcLevelDialogue\frame_32\DoAction.as, 00:00.008
+Exported script 153/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_253_mcDialogue\frame_1\DoAction.as, 00:00.013
+Exported script 168/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_322_mcLevelDialogue\frame_61\DoAction.as, 00:00.004
+Exported script 167/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_322_mcLevelDialogue\frame_58\DoAction.as, 00:00.004
+Exported script 162/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_322_mcLevelDialogue\frame_36\DoAction.as, 00:00.011
+Exported script 163/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_322_mcLevelDialogue\frame_43\DoAction.as, 00:00.012
+Exported script 166/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_322_mcLevelDialogue\frame_54\DoAction.as, 00:00.009
+Exported script 169/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_322_mcLevelDialogue\frame_64\DoAction.as, 00:00.006
+Exported script 39/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\com\rawfishsoftware\sushi\Serializer.as, 00:00.156
+Exported script 159/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_322_mcLevelDialogue\frame_17\DoAction.as, 00:00.015
+Exported script 170/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_322_mcLevelDialogue\frame_69\DoAction.as, 00:00.007
+Exported script 172/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_387\frame_3\DoAction.as, 00:00.006
+Exported script 157/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_322_mcLevelDialogue\frame_3\DoAction.as, 00:00.016
+Exported script 175/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_387\frame_12\DoAction.as, 00:00.003
+Exported script 174/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_387\frame_9\DoAction.as, 00:00.003
+Exported script 177/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_387\frame_18\DoAction.as, 00:00.004
+Exported script 171/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_387\frame_1\DoAction.as, 00:00.009
+Exported script 178/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_387\frame_20\DoAction.as, 00:00.004
+Exported script 176/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_387\frame_15\DoAction.as, 00:00.005
+Exported script 173/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_387\frame_6\DoAction.as, 00:00.009
+Exported script 181/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_401_mcPowerupLauncher\frame_1\DoAction.as, 00:00.005
+Exported script 179/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_401_mcPowerupLauncher\frame_1\PlaceObject2_387_16\CLIPACTIONRECORD onClipEvent(load).as, 00:00.006
+Exported script 180/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_401_mcPowerupLauncher\frame_1\PlaceObject3_395_40\CLIPACTIONRECORD onClipEvent(load).as, 00:00.008
+Exported script 186/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_420_powerballIndicator0\frame_2\DoAction.as, 00:00.007
+Exported script 185/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_410\frame_9\DoAction.as, 00:00.007
+Exported script 187/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_420_powerballIndicator0\frame_34\DoAction.as, 00:00.004
+Exported script 183/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_406\frame_49\DoAction.as, 00:00.009
+Exported script 182/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_406\frame_1\DoAction.as, 00:00.009
+Exported script 192/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_431\frame_1\DoAction.as, 00:00.008
+Exported script 189/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_424\frame_9\DoAction.as, 00:00.009
+Exported script 191/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_427_powerballIndicator2\frame_32\DoAction.as, 00:00.010
+Exported script 196/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_442\frame_1\DoAction.as, 00:00.008
+Exported script 184/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_410\frame_1\DoAction.as, 00:00.015
+Exported script 194/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_434_powerballindicator1\frame_2\DoAction.as, 00:00.008
+Exported script 198/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_450_timer\frame_1\DoAction.as, 00:00.006
+Exported script 197/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_449\frame_1\DoAction.as, 00:00.009
+Exported script 188/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_424\frame_1\DoAction.as, 00:00.013
+Exported script 199/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_450_timer\frame_2\DoAction.as, 00:00.008
+Exported script 195/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_434_powerballindicator1\frame_23\DoAction.as, 00:00.010
+Exported script 193/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_431\frame_9\DoAction.as, 00:00.013
+Exported script 190/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_427_powerballIndicator2\frame_1\DoAction.as, 00:00.015
+Exported script 206/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_502\frame_3\DoAction.as, 00:00.007
+Exported script 207/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_502\frame_5\DoAction.as, 00:00.006
+Exported script 200/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_452_mcTimer\frame_2\DoAction.as, 00:00.009
+Exported script 208/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_502\frame_8\DoAction.as, 00:00.008
+Exported script 203/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_452_mcTimer\frame_34\DoAction.as, 00:00.012
+Exported script 205/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_502\frame_1\DoAction.as, 00:00.013
+Exported script 204/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_452_mcTimer\frame_42\DoAction.as, 00:00.015
+Exported script 210/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_513\frame_1\PlaceObject2_504_61\CLIPACTIONRECORD onClipEvent(load).as, 00:00.012
+Exported script 201/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_452_mcTimer\frame_3\DoAction.as, 00:00.017
+Exported script 217/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_568\frame_1\DoAction.as, 00:00.006
+Exported script 214/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_535\frame_1\DoAction.as, 00:00.011
+Exported script 216/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_535\frame_3\DoAction.as, 00:00.010
+Exported script 213/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_526\frame_1\DoAction.as, 00:00.014
+Exported script 221/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_584\frame_1\DoAction.as, 00:00.006
+Exported script 202/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_452_mcTimer\frame_24\DoAction.as, 00:00.023
+Exported script 215/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_535\frame_2\DoAction.as, 00:00.015
+Exported script 225/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_5\DoAction.as, 00:00.003
+Exported script 220/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_580\frame_1\PlaceObject2_515_1\CLIPACTIONRECORD onClipEvent(load).as, 00:00.009
+Exported script 209/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_513\frame_1\PlaceObject2_490_31\CLIPACTIONRECORD onClipEvent(load).as, 00:00.024
+Exported script 218/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_573\frame_1\DoAction.as, 00:00.012
+Exported script 223/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_584\frame_3\DoAction.as, 00:00.007
+Exported script 222/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_584\frame_2\DoAction.as, 00:00.009
+Exported script 211/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_513\frame_1\PlaceObject2_504_63\CLIPACTIONRECORD onClipEvent(load).as, 00:00.024
+Exported script 219/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_573\frame_2\DoAction.as, 00:00.016
+Exported script 228/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_9\PlaceObject2_526_94\CLIPACTIONRECORD onClipEvent(enterFrame).as, 00:00.009
+Exported script 230/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_9\PlaceObject3_395_131\CLIPACTIONRECORD onClipEvent(load).as, 00:00.008
+Exported script 229/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_9\PlaceObject2_387_115\CLIPACTIONRECORD onClipEvent(load).as, 00:00.009
+Exported script 224/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_586\frame_1\PlaceObject2_584_1\CLIPACTIONRECORD onClipEvent(load).as, 00:00.021
+Exported script 212/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\DefineSprite_513\frame_1\DoAction.as, 00:00.036
+Exported script 234/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_18\DoAction.as, 00:00.005
+Exported script 235/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_20\DoAction.as, 00:00.005
+Exported script 231/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_13\DoAction.as, 00:00.008
+Exported script 238/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_22\DoAction.as, 00:00.007
+Exported script 237/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_21\PlaceObject2_573_164\CLIPACTIONRECORD onClipEvent(load).as, 00:00.010
+Exported script 242/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_30\DoAction.as, 00:00.007
+Exported script 243/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_34\DoAction.as, 00:00.007
+Exported script 233/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_17\DoAction.as, 00:00.012
+Exported script 239/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_23\DoAction.as, 00:00.012
+Exported script 240/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_26\DoAction.as, 00:00.013
+Exported script 241/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_27\PlaceObject2_590_164\CLIPACTIONRECORD onClipEvent(load).as, 00:00.013
+Exported script 245/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_36\DoAction.as, 00:00.009
+Exported script 247/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_38\DoAction.as, 00:00.006
+Exported script 248/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_40\DoAction.as, 00:00.006
+Exported script 246/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_37\DoAction.as, 00:00.007
+Exported script 250/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_44\DoAction.as, 00:00.013
+Exported script 227/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_9\PlaceObject2_515_86\CLIPACTIONRECORD onClipEvent(load).as, 00:00.042
+Exported script 249/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_41\DoAction.as, 00:00.016
+Exported script 226/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_7\DoAction.as, 00:00.045
+Exported script 244/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_36\PlaceObject2_322_mcLevelDialogue_164\CLIPACTIONRECORD onClipEvent(load).as, 00:00.022
+Exported script 252/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_46\DoAction.as, 00:00.013
+Exported script 255/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_52\DoAction.as, 00:00.013
+Exported script 236/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_21\PlaceObject2_542_98\CLIPACTIONRECORD onClipEvent(load).as, 00:00.032
+Exported script 254/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_51\DoAction.as, 00:00.014
+Exported script 253/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_50\PlaceObject2_322_mcLevelDialogue_164\CLIPACTIONRECORD onClipEvent(load).as, 00:00.016
+Exported script 251/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_45\PlaceObject2_322_mcLevelDialogue_164\CLIPACTIONRECORD onClipEvent(load).as, 00:00.019
+Exported script 232/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\frame_15\DoAction.as, 00:00.059
+Exported script 23/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\code\gameController.as, 00:00.414
+Exported script 41/255 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump_game1_4\scripts\__Packages\com\rawfishsoftware\sushi\SushiAPI.as, 00:00.371
+Export finished. Total export time: 00:01.212
+OK
+
+--- stderr ---
+

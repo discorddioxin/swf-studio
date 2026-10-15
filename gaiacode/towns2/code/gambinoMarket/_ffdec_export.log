@@ -1,0 +1,126 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\towns2\code\gambinoMarket' 'C:\Users\vemig\Desktop\gaiacode\towns2\swfs\gambinoMarket.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 3/113 com.gaiaworld.towns.collectables.bugs.interfaces.IMarker, 00:00.119
+Exported script 2/113 com.gaiaworld.room.interfaces.ISurfaceObject, 00:00.157
+Exported script 15/113 com.gaiaworld.towns.collectables.constants.MarkerConstants, 00:00.190
+Exported script 1/113 com.gaiaworld.room.interfaces.IAnimatedObject, 00:00.195
+Exported script 10/113 com.gaiaworld.ads.controller.MsController, 00:00.198
+Exported script 6/113 com.gaiaworld.room.interfaces.ITileVo, 00:00.200
+Exported script 4/113 com.gaiaworld.room.interfaces.IWorldItem, 00:00.201
+Exported script 7/113 com.gaiaworld.house.vo.ItemDataVo, 00:00.203
+Exported script 5/113 com.gaiaworld.room.interfaces.IWorldItem2, 00:00.209
+Exported script 16/113 com.gaiaworld.global.constants.GlobalConstants, 00:00.096
+Exported script 12/113 com.gaiaworld.avatar.controller.AvatarController, 00:00.224
+Exported script 20/113 com.gaiaworld.global.constants.SpaceConstants, 00:00.078
+Exported script 11/113 com.gaiaworld.gobjects.controller.ObjectController, 00:00.280
+Exported script 8/113 com.gaiaworld.room.controller.GpsController, 00:00.283
+Exported script 14/113 com.gaiaworld.sushi.controller.ChatController, 00:00.285
+Exported script 13/113 com.gaiaworld.room.controller.RoomController, 00:00.301
+Exported script 23/113 com.gaiaworld.room.vo.RoomMapVo, 00:00.113
+Exported script 21/113 com.gaiaworld.ads.constants.MediaSpikeConstants, 00:00.122
+Exported script 19/113 com.gaiaworld.room.vo.LocationVo, 00:00.125
+Exported script 9/113 com.gaiaworld.global.controller.GlobalController, 00:00.334
+Exported script 28/113 com.gaiaworld.global.interfaces.ICollision, 00:00.072
+Exported script 24/113 com.gaiaworld.user.vo.PalTrackVo, 00:00.142
+Exported script 32/113 com.gaiaworld.avatar.vo.PathVo, 00:00.049
+Exported script 34/113 com.gaiaworld.global.vo.ColorVo, 00:00.042
+Exported script 22/113 com.gaiaworld.room.interfaces.ITile, 00:00.168
+Exported script 18/113 com.gaiaworld.room.constants.MapConstants, 00:00.184
+Exported script 17/113 com.gaiaworld.gobjects.constants.CollisionConstants, 00:00.222
+Exported script 33/113 com.gaiaworld.avatar.interfaces.IActionGroup, 00:00.059
+Exported script 27/113 com.gaiaworld.avatar.interfaces.IAvatar, 00:00.107
+Exported script 31/113 com.gaiaworld.sushi.interfaces.IDataExchange, 00:00.086
+Exported script 26/113 com.gaiaworld.ads.vo.MsVo, 00:00.167
+Exported script 25/113 com.gaiaworld.user.vo.PalVo, 00:00.176
+Exported script 30/113 com.gaiaworld.global.interfaces.ISurface, 00:00.107
+Exported script 29/113 com.gaiaworld.towns.vo.RoomObjectVo, 00:00.134
+Exported script 35/113 com.gaiaworld.user.vo.UserVo, 00:00.107
+Exported script 43/113 com.gaiaworld.room.interfaces.IWorldObject, 00:00.062
+Exported script 46/113 com.gaiaworld.sushi.vo.SRoomVo, 00:00.076
+Exported script 37/113 com.gaiaworld.pets.vo.PetVo, 00:00.118
+Exported script 36/113 com.gaiaworld.pets.interfaces.IPet, 00:00.119
+Exported script 40/113 com.gaiaworld.avatar.constants.AvatarConstants, 00:00.103
+Exported script 45/113 com.gaiaworld.sushi.vo.ServerVo, 00:00.093
+Exported script 42/113 com.gaiaworld.global.util.BSearch, 00:00.102
+Exported script 38/113 com.gaiaworld.pets.vo.PetItemVo, 00:00.117
+Exported script 41/113 com.gaiaworld.pets.constants.PetConstants, 00:00.109
+Exported script 49/113 com.gaiaworld.gobjects.vo.MobVo, 00:00.065
+Exported script 48/113 com.gaiaworld.towns.vo.LocBookmarkVo, 00:00.092
+Exported script 44/113 com.gaiaworld.room.data.GpsGridData, 00:00.102
+Exported script 39/113 com.gaiaworld.global.util.StringFunctions, 00:00.120
+Exported script 47/113 com.gaiaworld.user.controller.UserController, 00:00.096
+Exported script 50/113 com.gaiaworld.sushi.vo.ChatColorVo, 00:00.078
+Exported script 62/113 com.gaiaworld.global.constants.DebugConstants, 00:00.041
+Exported script 53/113 com.gaiaworld.room.util.ObjUtil, 00:00.060
+Exported script 64/113 com.gaiaworld.avatar.controller.events.MoveEvent, 00:00.043
+Exported script 58/113 com.gaiaworld.user.constants.UserConstants, 00:00.059
+Exported script 52/113 com.gaiaworld.sushi.constants.ChatConstants, 00:00.074
+Exported script 60/113 com.gaiaworld.global.vo.EventVo, 00:00.059
+Exported script 54/113 com.gaiaworld.towns.hood.vo.HomeVo, 00:00.077
+Exported script 51/113 com.gaiaworld.room.constants.RoomConstants, 00:00.106
+Exported script 55/113 com.gaiaworld.global.controller.EventController, 00:00.080
+Exported script 67/113 com.gaiaworld.global.events.KeyEvent, 00:00.023
+Exported script 57/113 com.gaiaworld.towns.hood.vo.InviteVo, 00:00.073
+Exported script 56/113 com.gaiaworld.house.controller.DebugController, 00:00.075
+Exported script 65/113 com.gaiaworld.room.controller.events.JumpRoomEvent, 00:00.037
+Exported script 61/113 com.gaiaworld.house.constants.HouseConstants, 00:00.076
+Exported script 63/113 com.gaiaworld.towns.games.rally.constants.RallyConstants, 00:00.076
+Exported script 59/113 com.gaiaworld.towns.hood.constants.HoodConstants, 00:00.108
+Exported script 68/113 com.gaiaworld.avatar.controller.events.AvatarMoveEvent, 00:00.062
+Exported script 69/113 com.gaiaworld.avatar.controller.events.KneelEvent, 00:00.051
+Exported script 66/113 com.gaiaworld.sushi.controller.events.ChatEvent, 00:00.068
+Exported script 73/113 com.gaiaworld.avatar.controller.events.AvatarCollisionEvent, 00:00.044
+Exported script 75/113 com.gaiaworld.sushi.controller.events.UserMessageEvent, 00:00.043
+Exported script 71/113 com.gaiaworld.house.controller.events.ScrollEvent, 00:00.065
+Exported script 70/113 com.gaiaworld.avatar.controller.events.OtherEvent, 00:00.069
+Exported script 76/113 com.gaiaworld.global.controller.events.ServerMessageEvent, 00:00.057
+Exported script 72/113 com.gaiaworld.gobjects.controller.events.ObjectEvent, 00:00.072
+Exported script 74/113 com.gaiaworld.hangouts.controller.events.RoomEvent, 00:00.079
+Exported script 91/113 com.gaiaworld.avatar.util.BitmapUtil, 00:00.016
+Exported script 77/113 com.gaiaworld.hangouts.controller.events.CreateRoomEvent, 00:00.115
+Exported script 84/113 com.gaiaworld.gobjects.model.ObjectModel, 00:00.080
+Exported script 83/113 com.gaiaworld.ads.model.MsModel, 00:00.083
+Exported script 86/113 com.gaiaworld.sushi.model.ChatModel, 00:00.094
+Exported script 79/113 com.gaiaworld.global.sounds.BgSound, 00:00.129
+Exported script 82/113 com.gaiaworld.room.model.GpsModel, 00:00.130
+Exported script 85/113 com.gaiaworld.room.model.RoomModel, 00:00.134
+Exported script 94/113 com.gaiaworld.towns.collectables.trash.view.TrashMarker, 00:00.054
+Exported script 90/113 com.gaiaworld.towns.hood.model.HoodModel, 00:00.109
+Exported script 78/113 com.gaiaworld.global.model.GlobalModel, 00:00.172
+Exported script 92/113 com.gaiaworld.global.model.EventModel, 00:00.083
+Exported script 95/113 com.gaiaworld.global.view.NightLight, 00:00.055
+Exported script 80/113 com.gaiaworld.avatar.model.AvatarModel, 00:00.169
+Exported script 81/113 com.gaiaworld.pets.model.PetModel, 00:00.142
+Exported script 89/113 com.gaiaworld.user.model.UserModel, 00:00.128
+Exported script 88/113 com.gaiaworld.avatar.model.OthersModel, 00:00.133
+Exported script 104/113 Light, 00:00.019
+Exported script 101/113 com.gaiaworld.avatar.view.AnimatedItemGroup, 00:00.024
+Exported script 108/113 hObjects.Mansion, 00:00.019
+Exported script 110/113 com.gaiaworld.towns.view.Gold, 00:00.013
+Exported script 93/113 com.gaiaworld.house.model.DebugModel, 00:00.100
+Exported script 87/113 com.gaiaworld.room.util.GpsFinder, 00:00.177
+Exported script 103/113 com.gaiaworld.avatar.view.parts.Legs, 00:00.052
+Exported script 97/113 com.gaiaworld.avatar.view.WorldItem, 00:00.105
+Exported script 111/113 hObjects.RacePortKey, 00:00.033
+Exported script 102/113 com.gaiaworld.avatar.view.parts.BodyPart, 00:00.068
+Exported script 106/113 gambinoMarket_fla.objectMap_2, 00:00.070
+Exported script 96/113 com.gaiaworld.room.view.BaseMap, 00:00.126
+Exported script 105/113 Market, 00:00.092
+Exported script 98/113 com.gaiaworld.room.view.WorldItem2, 00:00.101
+Exported script 107/113 com.gaiaworld.room.view.AnimatedObject, 00:00.087
+Exported script 100/113 com.gaiaworld.avatar.view.AnimationLoader, 00:00.100
+Exported script 109/113 hObjects.PaintBallPortKey, 00:00.079
+Exported script 113/113 com.gaiaworld.towns.view.ShakingObj, 00:00.059
+Exported script 112/113 com.gaiaworld.room.view.JumpArrow, 00:00.064
+Exported script 99/113 com.gaiaworld.avatar.view.AvatarLoader, 00:00.112
+Export finished. Total export time: 00:01.310
+OK
+
+--- stderr ---
+

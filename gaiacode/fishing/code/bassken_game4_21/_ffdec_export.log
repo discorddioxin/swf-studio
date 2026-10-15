@@ -1,0 +1,181 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21' 'C:\Users\vemig\Desktop\gaiacode\fishing\swfs\bassken_game4.21.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 6/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\errorPanelQuit.as, 00:00.010
+Exported script 7/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\errorPanelSushi.as, 00:00.010
+Exported script 3/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\errorPanelLogan.as, 00:00.010
+Exported script 4/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\errorPanelNewGame.as, 00:00.010
+Exported script 5/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\errorPanelOk.as, 00:00.010
+Exported script 8/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\retryOrQuitPanel.as, 00:00.011
+Exported script 2/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\errorPanelBait.as, 00:00.011
+Exported script 1/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\errorPanel.as, 00:00.012
+Exported script 11/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\GSItools\CallbackGroup.as, 00:00.014
+Exported script 10/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\GSECSWordFilter\BadWordFilter.as, 00:00.035
+Exported script 12/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\GSItools\GSIGateway.as, 00:00.039
+Exported script 16/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\GSItools\serializers\SushiSerializer.as, 00:00.030
+Exported script 17/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\botDetection\SmoothMove.as, 00:00.030
+Exported script 13/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\GSItools\GSIRequest.as, 00:00.040
+Exported script 14/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\GSItools\serializers\CommonTools.as, 00:00.042
+Exported script 15/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\GSItools\serializers\PHPSerializer.as, 00:00.067
+Exported script 19/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\com\rawfishsoftware\sushi\Challenge.as, 00:00.064
+Exported script 23/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\com\rawfishsoftware\sushi\Member.as, 00:00.062
+Exported script 33/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineButton2_65\BUTTONCONDACTION on(release).as, 00:00.004
+Exported script 24/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\com\rawfishsoftware\sushi\Mob.as, 00:00.068
+Exported script 18/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\com\rawfishsoftware\sushi\$Event.as, 00:00.073
+Exported script 27/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\com\rawfishsoftware\sushi\Session.as, 00:00.044
+Exported script 29/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\com\rawfishsoftware\sushi\SushiHTTP.as, 00:00.043
+Exported script 30/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\com\rawfishsoftware\sushi\SushiSocket.as, 00:00.042
+Exported script 20/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\com\rawfishsoftware\sushi\Event.as, 00:00.074
+Exported script 35/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineButton2_271\BUTTONCONDACTION on(release).as, 00:00.005
+Exported script 9/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\gamerm_errorPanel.as, 00:00.092
+Exported script 25/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\com\rawfishsoftware\sushi\Room.as, 00:00.058
+Exported script 26/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\com\rawfishsoftware\sushi\Serializer.as, 00:00.055
+Exported script 34/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineButton2_66\BUTTONCONDACTION on(release).as, 00:00.018
+Exported script 32/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\qadca\Qadca.as, 00:00.025
+Exported script 41/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineButton2_287\BUTTONCONDACTION on(release).as, 00:00.012
+Exported script 31/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\com\rawfishsoftware\sushi\Team.as, 00:00.030
+Exported script 39/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineButton2_281\BUTTONCONDACTION on(release).as, 00:00.014
+Exported script 38/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineButton2_279\BUTTONCONDACTION on(release).as, 00:00.015
+Exported script 37/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineButton2_278\BUTTONCONDACTION on(release).as, 00:00.017
+Exported script 43/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_29_errorPanelSushi\frame_4\DoAction.as, 00:00.010
+Exported script 44/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_33_errorPanelOk\frame_4\DoAction.as, 00:00.009
+Exported script 42/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_26_errorPanelBait\frame_4\DoAction.as, 00:00.011
+Exported script 36/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineButton2_273\BUTTONCONDACTION on(release).as, 00:00.022
+Exported script 45/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_46_errorPanelLogan\frame_4\DoAction.as, 00:00.008
+Exported script 46/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_48_errorPanelQuit\frame_4\DoAction.as, 00:00.007
+Exported script 40/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineButton2_284\BUTTONCONDACTION on(release).as, 00:00.022
+Exported script 21/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\com\rawfishsoftware\sushi\Logger.as, 00:00.096
+Exported script 52/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_75\frame_1\DoAction.as, 00:00.005
+Exported script 47/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_51_errorPanelNewGame\frame_4\DoAction.as, 00:00.011
+Exported script 49/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_55_errorPanel\frame_4\DoAction.as, 00:00.011
+Exported script 48/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_53_retryOrQuitPanel\frame_4\DoAction.as, 00:00.012
+Exported script 51/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_73\frame_25\DoAction.as, 00:00.012
+Exported script 50/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_60\frame_1\DoAction.as, 00:00.013
+Exported script 60/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_78_rod_5\frame_40\DoAction.as, 00:00.006
+Exported script 62/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_80_rod_4\frame_3\DoAction.as, 00:00.004
+Exported script 56/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_78_rod_5\frame_20\DoAction.as, 00:00.009
+Exported script 64/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_80_rod_4\frame_17\DoAction.as, 00:00.002
+Exported script 54/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_78_rod_5\frame_9\DoAction.as, 00:00.012
+Exported script 55/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_78_rod_5\frame_17\DoAction.as, 00:00.010
+Exported script 63/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_80_rod_4\frame_9\DoAction.as, 00:00.006
+Exported script 65/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_80_rod_4\frame_20\DoAction.as, 00:00.005
+Exported script 61/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_78_rod_5\frame_47\DoAction.as, 00:00.007
+Exported script 66/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_80_rod_4\frame_21\DoAction.as, 00:00.007
+Exported script 59/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_78_rod_5\frame_30\PlaceObject2_77_6\CLIPACTIONRECORD onClipEvent(load).as, 00:00.014
+Exported script 69/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_80_rod_4\frame_40\DoAction.as, 00:00.006
+Exported script 67/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_80_rod_4\frame_24\DoAction.as, 00:00.006
+Exported script 70/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_80_rod_4\frame_47\DoAction.as, 00:00.006
+Exported script 71/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_85_rod_3\frame_3\DoAction.as, 00:00.007
+Exported script 22/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\com\rawfishsoftware\sushi\Me.as, 00:00.111
+Exported script 68/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_80_rod_4\frame_30\PlaceObject2_77_8\CLIPACTIONRECORD onClipEvent(load).as, 00:00.008
+Exported script 53/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_78_rod_5\frame_3\DoAction.as, 00:00.020
+Exported script 72/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_85_rod_3\frame_9\DoAction.as, 00:00.006
+Exported script 58/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_78_rod_5\frame_24\DoAction.as, 00:00.017
+Exported script 57/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_78_rod_5\frame_21\DoAction.as, 00:00.018
+Exported script 74/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_85_rod_3\frame_20\DoAction.as, 00:00.007
+Exported script 76/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_85_rod_3\frame_24\DoAction.as, 00:00.006
+Exported script 82/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_89_rod_2\frame_17\DoAction.as, 00:00.004
+Exported script 73/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_85_rod_3\frame_17\DoAction.as, 00:00.010
+Exported script 81/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_89_rod_2\frame_9\DoAction.as, 00:00.006
+Exported script 83/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_89_rod_2\frame_20\DoAction.as, 00:00.005
+Exported script 75/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_85_rod_3\frame_21\DoAction.as, 00:00.007
+Exported script 78/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_85_rod_3\frame_40\DoAction.as, 00:00.008
+Exported script 79/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_85_rod_3\frame_47\DoAction.as, 00:00.007
+Exported script 88/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_89_rod_2\frame_47\DoAction.as, 00:00.004
+Exported script 87/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_89_rod_2\frame_40\DoAction.as, 00:00.005
+Exported script 84/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_89_rod_2\frame_21\DoAction.as, 00:00.009
+Exported script 89/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_93_rod_1\frame_3\DoAction.as, 00:00.006
+Exported script 91/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_93_rod_1\frame_17\DoAction.as, 00:00.005
+Exported script 80/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_89_rod_2\frame_3\DoAction.as, 00:00.012
+Exported script 77/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_85_rod_3\frame_30\PlaceObject2_77_7\CLIPACTIONRECORD onClipEvent(load).as, 00:00.014
+Exported script 86/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_89_rod_2\frame_30\PlaceObject2_77_7\CLIPACTIONRECORD onClipEvent(load).as, 00:00.011
+Exported script 96/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_93_rod_1\frame_40\DoAction.as, 00:00.004
+Exported script 85/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_89_rod_2\frame_24\DoAction.as, 00:00.012
+Exported script 93/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_93_rod_1\frame_21\DoAction.as, 00:00.008
+Exported script 97/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_93_rod_1\frame_47\DoAction.as, 00:00.006
+Exported script 95/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_93_rod_1\frame_30\PlaceObject2_77_7\CLIPACTIONRECORD onClipEvent(load).as, 00:00.008
+Exported script 102/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_122\frame_4\DoAction.as, 00:00.003
+Exported script 98/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_104_fisher\frame_1\DoAction.as, 00:00.005
+Exported script 99/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_122\frame_1\DoAction.as, 00:00.007
+Exported script 103/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_122\frame_5\DoAction.as, 00:00.005
+Exported script 109/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_137\frame_156\DoAction.as, 00:00.003
+Exported script 90/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_93_rod_1\frame_9\DoAction.as, 00:00.013
+Exported script 104/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_137\frame_1\DoAction.as, 00:00.007
+Exported script 92/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_93_rod_1\frame_20\DoAction.as, 00:00.014
+Exported script 94/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_93_rod_1\frame_24\DoAction.as, 00:00.013
+Exported script 108/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_137\frame_97\DoAction.as, 00:00.005
+Exported script 100/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_122\frame_2\DoAction.as, 00:00.010
+Exported script 101/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_122\frame_3\DoAction.as, 00:00.010
+Exported script 107/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_137\frame_55\DoAction.as, 00:00.008
+Exported script 110/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_144\frame_1\DoAction.as, 00:00.006
+Exported script 112/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_144\frame_10\DoAction.as, 00:00.006
+Exported script 106/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_137\frame_47\DoAction.as, 00:00.011
+Exported script 114/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_155\frame_1\DoAction.as, 00:00.007
+Exported script 105/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_137\frame_22\DoAction.as, 00:00.012
+Exported script 118/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_160\frame_1\DoAction.as, 00:00.008
+Exported script 116/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_155\frame_10\DoAction.as, 00:00.009
+Exported script 121/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_160\frame_15\DoAction.as, 00:00.006
+Exported script 111/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_144\frame_5\DoAction.as, 00:00.011
+Exported script 113/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_144\frame_15\DoAction.as, 00:00.011
+Exported script 120/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_160\frame_10\DoAction.as, 00:00.008
+Exported script 115/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_155\frame_5\DoAction.as, 00:00.010
+Exported script 117/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_155\frame_15\DoAction.as, 00:00.010
+Exported script 119/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_160\frame_5\DoAction.as, 00:00.008
+Exported script 122/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_161\frame_1\DoAction.as, 00:00.007
+Exported script 125/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_161\frame_15\DoAction.as, 00:00.005
+Exported script 124/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_161\frame_10\DoAction.as, 00:00.008
+Exported script 123/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_161\frame_5\DoAction.as, 00:00.010
+Exported script 126/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_162\frame_1\DoAction.as, 00:00.008
+Exported script 127/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_165\frame_1\DoAction.as, 00:00.006
+Exported script 128/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_167\frame_1\DoAction.as, 00:00.008
+Exported script 130/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_179\frame_25\DoAction.as, 00:00.008
+Exported script 133/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_189\frame_13\PlaceObject2_188_6\CLIPACTIONRECORD onClipEvent(load).as, 00:00.009
+Exported script 138/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_192\frame_45\DoAction.as, 00:00.006
+Exported script 135/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_189\frame_13\DoAction.as, 00:00.009
+Exported script 134/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_189\frame_13\PlaceObject2_188_6\CLIPACTIONRECORD onClipEvent(enterFrame).as, 00:00.013
+Exported script 142/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_206\frame_1\DoAction.as, 00:00.006
+Exported script 129/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_179\frame_1\DoAction.as, 00:00.014
+Exported script 141/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_199\frame_19\DoAction.as, 00:00.008
+Exported script 145/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_253\frame_1\DoAction.as, 00:00.005
+Exported script 143/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_238\frame_1\DoAction.as, 00:00.007
+Exported script 131/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_189\frame_1\DoAction.as, 00:00.015
+Exported script 136/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_189\frame_43\DoAction.as, 00:00.016
+Exported script 132/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_189\frame_11\DoAction.as, 00:00.017
+Exported script 144/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_243\frame_1\DoAction.as, 00:00.008
+Exported script 146/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_262\frame_1\DoAction.as, 00:00.008
+Exported script 137/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_192\frame_1\DoAction.as, 00:00.016
+Exported script 148/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_262\frame_10\DoAction.as, 00:00.005
+Exported script 149/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_262\frame_15\DoAction.as, 00:00.005
+Exported script 147/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_262\frame_5\DoAction.as, 00:00.006
+Exported script 150/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_269\frame_1\DoAction.as, 00:00.006
+Exported script 139/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_199\frame_1\DoAction.as, 00:00.018
+Exported script 162/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\frame_1\DoAction.as, 00:00.003
+Exported script 154/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_283\frame_1\DoAction.as, 00:00.007
+Exported script 153/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_276\frame_1\DoAction.as, 00:00.008
+Exported script 156/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_289\frame_1\DoAction.as, 00:00.007
+Exported script 157/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_291\frame_1\DoAction.as, 00:00.007
+Exported script 152/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_269\frame_29\DoAction.as, 00:00.010
+Exported script 155/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_286\frame_1\DoAction.as, 00:00.008
+Exported script 140/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_199\frame_7\DoAction.as, 00:00.021
+Exported script 151/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_269\frame_22\DoAction.as, 00:00.010
+Exported script 160/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_303\frame_22\DoAction.as, 00:00.008
+Exported script 164/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\frame_15\PlaceObject2_195_95\CLIPACTIONRECORD onClipEvent(load).as, 00:00.007
+Exported script 159/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_303\frame_1\DoAction.as, 00:00.011
+Exported script 167/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\frame_38\DoAction.as, 00:00.006
+Exported script 161/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_303\frame_29\DoAction.as, 00:00.011
+Exported script 158/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\DefineSprite_291\frame_15\DoAction.as, 00:00.014
+Exported script 163/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\frame_1\DoAction_2.as, 00:00.066
+Exported script 168/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\frame_38\DoAction_2.as, 00:00.069
+Exported script 166/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\frame_38\PlaceObject2_253_3\CLIPACTIONRECORD onClipEvent(load).as, 00:00.169
+Exported script 165/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\frame_15\DoAction.as, 00:00.177
+Exported script 28/168 C:\Users\vemig\Desktop\gaiacode\fishing\code\bassken_game4_21\scripts\__Packages\com\rawfishsoftware\sushi\SushiAPI.as, 00:00.394
+Export finished. Total export time: 00:01.220
+OK
+
+--- stderr ---
+

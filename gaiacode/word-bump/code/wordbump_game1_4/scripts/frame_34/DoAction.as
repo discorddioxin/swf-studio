@@ -1,0 +1,1 @@
+gGameController.initLevel();

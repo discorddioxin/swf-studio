@@ -1,0 +1,14 @@
+$ 'C:\Program Files (x86)\FFDec\ffdec-cli.exe' -onerror ignore -format script:as -timeout 60 -exportFileTimeout 300 -exportTimeout 1800 -export script 'C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump1_4' 'C:\Users\vemig\Desktop\gaiacode\word-bump\swfs\wordbump1.4.swf'
+
+--- exit code: 0 ---
+
+--- stdout ---
+JPEXS Free Flash Decompiler v.26.2.1
+------------------------------------
+Exporting scripts...
+Exported script 1/1 C:\Users\vemig\Desktop\gaiacode\word-bump\code\wordbump1_4\scripts\frame_1\DoAction.as, 00:00.064
+Export finished. Total export time: 00:00.136
+OK
+
+--- stderr ---
+
