@@ -2,6 +2,7 @@
 // "The SWF header" and "Tag format"), enough to wrap a hand-assembled ABC in a
 // movie the app's reader parses like any other. Nothing in src/ imports this at
 // run time.
+import { deflateSync } from 'node:zlib';
 
 export interface SwfTag { code: number; body: Uint8Array }
 
@@ -53,6 +54,16 @@ export const tag = {
     const b = new Bytes().u16(id).u16(tags.filter((t) => t.code === 1).length);
     for (const t of tags) tagBytes(b, t);
     return { code: 39, body: b.bytes() };
+  },
+  /**
+   * DefineBitsLossless (v1, code 20) or DefineBitsLossless2 (v2, code 36): id,
+   * format (3 palette, 4 15-bit, 5 32-bit), size, the palette size − 1 for
+   * format 3, then `data` (palette + pixel rows, padded as the spec says) zlib'd.
+   */
+  bitsLossless: (version: 1 | 2, id: number, format: 3 | 4 | 5, width: number, height: number, data: ArrayLike<number>, colorTableSize = 0): SwfTag => {
+    const b = new Bytes().u16(id).u8(format).u16(width).u16(height);
+    if (format === 3) b.u8(colorTableSize);
+    return { code: version === 1 ? 20 : 36, body: b.raw(deflateSync(Uint8Array.from(data))).bytes() };
   },
   /** PlaceObject2 of `character` at `depth` (PlaceFlagHasCharacter only, identity matrix). */
   placeObject2: (depth: number, character: number): SwfTag => ({ code: 26, body: new Bytes().u8(0x02).u16(depth).u16(character).bytes() }),

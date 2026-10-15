@@ -3,8 +3,9 @@
 //   node docs/debug/tools/btnxml.dev.mjs
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
-import { SAMPLE_SERVICE, sampleExportDir } from '../../../src/adapters/gaiaFishing/sample.ts';
-const xml = readFileSync(`${sampleExportDir(SAMPLE_SERVICE)}/${SAMPLE_SERVICE}.xml`, 'utf8');
+import { SAMPLE_SERVICE } from '../../../src/adapters/gaiaFishing/sample.ts';
+import { ffdecExportDir } from '../../../src/testing/corpusPaths.ts'; // needs an FFDec export (SWF_FFDEC)
+const xml = readFileSync(`${ffdecExportDir(SAMPLE_SERVICE)}/${SAMPLE_SERVICE}.xml`, 'utf8');
 const dom = new JSDOM(xml, { contentType: 'text/xml' });
 const doc = dom.window.document;
 const all = [...doc.querySelectorAll('item[type="DefineButton2Tag"]')];

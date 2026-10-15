@@ -12,7 +12,7 @@ import { GameEngine } from './components/GameEngine';
 import { Button } from './components/ui';
 import type { AssetCache, SwfPackage } from './lib/assets';
 import { buildPackage as buildPackageIn, loadUploadedPackages } from './lib/swfLoading';
-import { fetchBundledSwf, fetchGameIndex, type GameSet } from './lib/bundled';
+import { fetchBundledSwf, fetchGameIndex, loadGameIndex, type GameSet } from './lib/bundled';
 import { useProject } from './lib/project';
 import type { AssetBundle, FlattenedSprite, SwfDocument } from './types';
 import { flattenSpriteToPng } from './lib/render';
@@ -173,14 +173,20 @@ export default function App() {
   /**
    * Fill in the SWFs of the *matching* game set that the current load does not
    * already contain (an upload that carries the game's main movie but not all
-   * of its externals). Fails soft: no index / offline dev server ⇒ the upload
-   * alone is used unchanged. Never adds another game's movies.
+   * of its externals). No bundled games (the usual deployment) ⇒ the upload is
+   * used unchanged, silently; a broken index ⇒ the same, with a warning saying
+   * why. Never adds another game's movies.
    */
   const mergeBundledExternals = useCallback(async (loaded: SwfPackage[]): Promise<{ packages: SwfPackage[]; gameSetId: string | null }> => {
+    const index = await loadGameIndex();
+    if (index.status === 'none') return { packages: loaded, gameSetId: null };
+    if (index.status === 'broken') {
+      console.warn(`bundled externals unavailable: ${index.error}`);
+      return { packages: loaded, gameSetId: null };
+    }
     const merged = [...loaded];
     try {
-      const games = await fetchGameIndex();
-      const game = matchingGameSet(loaded, games);
+      const game = matchingGameSet(loaded, index.games);
       if (!game) return { packages: loaded, gameSetId: null };
       const have = packageLabels(loaded);
       for (const entry of game.swfs) {

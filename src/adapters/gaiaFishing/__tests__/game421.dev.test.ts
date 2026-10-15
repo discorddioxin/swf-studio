@@ -5,13 +5,14 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
+import { itCorpus } from '@/testing/corpus';
 import { parseSwfBinary } from '@/lib/swf/binary';
 import { buildAS2Program, type SourceInput } from '@/engine/as2/program';
 import { AS2Player } from '@/engine/as2/player';
 import { createExternalResolver, type ExternalSwf } from '@/engine/as2/externals';
 import { phpSerialize, phpUnserialize, parseGatewayRequest } from '../gsi';
 import { createFishingSession } from '..';
-import { SAMPLE_SERVICE, SAMPLE_SWF_NAMES, SAMPLE_TRACKING, sampleSwfPath } from '../sample';
+import { hasSample, SAMPLE_SERVICE, SAMPLE_SWF_NAMES, SAMPLE_TRACKING, sampleSwfPath } from '../sample';
 
 const NAMES = SAMPLE_SWF_NAMES;
 
@@ -35,7 +36,7 @@ it('php codec round trips', () => {
   );
 });
 
-it('runs the full 4-step multiplayer flow with MockServer and bundled tracking SWF (${SAMPLE_TRACKING})', async () => {
+itCorpus(`runs the full 4-step multiplayer flow with MockServer and sample tracking SWF (${SAMPLE_TRACKING})`, async () => {
   const main = await load(NAMES[0]);
   const ext = await Promise.all(NAMES.slice(1).map(async (n) => ({ n, ...(await load(n)) })));
   const build = buildAS2Program(main.sources);
@@ -152,4 +153,4 @@ it('runs the full 4-step multiplayer flow with MockServer and bundled tracking S
   expect(root.main?.gameMode).toBe('fishing');
   expect(player.missingExternals.size).toBe(0);
   player.dispose();
-}, 120000);
+}, 120000, hasSample);

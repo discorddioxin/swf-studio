@@ -1,5 +1,5 @@
-// Gaia Online Fishing — the adapter for the game SWF Studio ships as a sample
-// (`game-files/fish-full`, main movie `bassken_game4.21.swf`).
+// Gaia Online Fishing — the adapter for the game most tests use as their sample
+// (the corpus `fishing-swfs` set, main movie `bassken_game4.21.swf`; see sample.ts).
 //
 // Everything in this folder is specific to that game: the PHP-serialized GSI
 // gateway (`gsi.ts`), the Rawfish "Sushi" socket server (`gameServer.ts`), the

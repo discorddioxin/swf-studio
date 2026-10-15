@@ -1,3 +1,4 @@
+import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import tailwindcss from "@tailwindcss/vite";
@@ -11,8 +12,10 @@ const __dirname = path.dirname(__filename);
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), viteSingleFile()],
-  // bundled game data (manifest.json + games/*.json + the sets' .swf files) ships as-is
-  publicDir: 'game-files',
+  // A deployment may ship bundled game sets in game-files/ (manifest.json → games/*.json
+  // → SWFs; see src/lib/bundled.ts). The repo ships none: without the folder there is
+  // no public dir, and the Loader simply offers no bundled games.
+  publicDir: existsSync(path.resolve(__dirname, "game-files")) ? "game-files" : false,
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),

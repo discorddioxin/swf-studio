@@ -2,10 +2,11 @@
 import { it } from 'vitest';
 import { buildAS2Program } from '@/engine/as2/program';
 import { readFileSync } from 'node:fs';
-import { SAMPLE_SERVICE, sampleExportDir } from '@/adapters/gaiaFishing/sample';
+import { SAMPLE_SERVICE } from '@/adapters/gaiaFishing/sample';
+import { ffdecExportDir } from '@/testing/corpusPaths'; // needs an FFDec export (SWF_FFDEC)
 
 it('peek generated UIObject ts', () => {
-  const xmlDir = `${sampleExportDir(SAMPLE_SERVICE)}/scripts`;
+  const xmlDir = `${ffdecExportDir(SAMPLE_SERVICE)}/scripts`;
   const src = readFileSync(`${xmlDir}/__Packages/mx/core/UIObject.as`, 'utf8');
   const build = buildAS2Program([{ path: '__Packages/mx/core/UIObject.as', text: src }]);
   console.log('keys:', [...build.files.keys()].join(', '));

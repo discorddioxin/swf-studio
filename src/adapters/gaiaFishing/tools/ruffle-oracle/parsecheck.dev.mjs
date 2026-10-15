@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import { parseSwf } from 'swf-parser';
-import { SAMPLE_MAIN, SAMPLE_SERVICE, SAMPLE_CHAT, SAMPLE_SWF_DIR } from '../../sample.ts';
+import { SAMPLE_MAIN, SAMPLE_SERVICE, SAMPLE_CHAT, sampleSwfPath } from '../../sample.ts';
 for (const name of [SAMPLE_MAIN, SAMPLE_SERVICE, SAMPLE_CHAT]) {
-  const buf = fs.readFileSync(new URL(`../../../../${SAMPLE_SWF_DIR}/${name}.swf`, import.meta.url));
+  const buf = fs.readFileSync(sampleSwfPath(name));
   try {
     const swf = parseSwf(new Uint8Array(buf));
     const counts = {};

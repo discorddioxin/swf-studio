@@ -2,15 +2,15 @@
 // Uploading SWFs: the raw .swf binaries (parsed by the binary parser) and the
 // JPEXS XML exports go through the same loader, and the SWF the user picked as
 // the main movie comes out first — the rest are dependencies.
+//
+// The movies are the small AS2 test movie of src/testing/movies.ts, in both of
+// its forms: loading does not depend on which game the SWFs belong to.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import JSZip from 'jszip';
 import { loadUploadedPackages } from './swfLoading';
 import { isSwfXmlExport } from './swfSources';
 import { isAs2Bundle } from '../components/As2Execute';
-import { bundledExportDir, bundledExportedNames, bundledMainName, bundledSwfFile, bundledSwfNames } from './__tests__/bundledSet';
-
+import { FFDEC_SAMPLE_XML, ffdecSampleSwf } from '@/testing/movies';
 
 // jsdom's Blob has no text()/arrayBuffer(); browsers do.
 beforeAll(() => {
@@ -31,19 +31,16 @@ beforeAll(() => {
   }
 });
 
+const SWF_BYTES = ffdecSampleSwf();
+
 function binarySwf(name: string, path = name): File {
-  const bytes = readFileSync(bundledSwfFile(name));
-  const file = new File(
-    [bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer],
-    `${name}.swf`,
-  );
+  const file = new File([SWF_BYTES.slice().buffer as ArrayBuffer], `${name}.swf`);
   Object.defineProperty(file, 'webkitRelativePath', { value: path, configurable: true });
   return file;
 }
 
 function xmlExport(name: string, path = `${name}/${name}.xml`): File {
-  const text = readFileSync(resolve(bundledExportDir(name), `${name}.xml`), 'utf8');
-  const file = new File([text], `${name}.xml`);
+  const file = new File([FFDEC_SAMPLE_XML], `${name}.xml`);
   Object.defineProperty(file, 'webkitRelativePath', { value: path, configurable: true });
   return file;
 }
@@ -52,7 +49,7 @@ const names = (packages: { doc: { header: { fileName: string } } }[]) => package
 
 describe('uploading SWFs', () => {
   it('parses a raw .swf into a package the workbench can open', async () => {
-    const movie = bundledSwfNames()[1];
+    const movie = 'overview';
     const [pkg] = await loadUploadedPackages([binarySwf(movie, `${movie}.swf`)]);
     expect(pkg.doc.header.fileName).toBe(`${movie}.swf`);
     expect(Number(pkg.doc.header.version)).toBeGreaterThan(0);
@@ -65,7 +62,7 @@ describe('uploading SWFs', () => {
   }, 30000);
 
   it('uses the picked SWF as the main movie and the others as dependencies', async () => {
-    const [first, second] = bundledSwfNames().slice(1);
+    const [first, second] = ['overview', 'scene'];
     const files = [
       binarySwf(second, `external/${second}/${second}.swf`),
       binarySwf(first, `${first}.swf`),
@@ -80,7 +77,7 @@ describe('uploading SWFs', () => {
   }, 30000);
 
   it('reads the same movie from the XML export when both forms are uploaded', async () => {
-    const scene = bundledExportedNames()[0];
+    const scene = 'scene';
     const both = [xmlExport(scene, `scene/${scene}.xml`), binarySwf(scene, `scene/${scene}.swf`)];
     const preferred = await loadUploadedPackages(both);
     expect(preferred).toHaveLength(1);
@@ -95,8 +92,8 @@ describe('uploading SWFs', () => {
 
   it('loads SWFs out of a ZIP and finds them before unpacking', async () => {
     const zip = new JSZip();
-    zip.file('game/main.swf', readFileSync(bundledSwfFile(bundledMainName())));
-    zip.file('game/external/scene/scene.swf', readFileSync(bundledSwfFile(bundledSwfNames()[1])));
+    zip.file('game/main.swf', SWF_BYTES);
+    zip.file('game/external/scene/scene.swf', SWF_BYTES);
     zip.file('game/readme.txt', 'not a swf');
     const archive = new File([await zip.generateAsync({ type: 'blob' })], 'game.zip');
 
@@ -106,7 +103,7 @@ describe('uploading SWFs', () => {
   }, 30000);
 
   it('keeps every non-SWF file of the upload for the movie to load, data XML included', async () => {
-    const main = bundledMainName();
+    const main = 'game';
     const data = (name: string, text: string, path: string) => {
       const file = new File([text], name);
       Object.defineProperty(file, 'webkitRelativePath', { value: path, configurable: true });
@@ -126,7 +123,7 @@ describe('uploading SWFs', () => {
   }, 30000);
 
   it('tells an FFDec SWF export from a data XML by its <swf> root', async () => {
-    const movie = bundledExportedNames()[0];
+    const movie = 'scene';
     expect(await isSwfXmlExport(xmlExport(movie))).toBe(true);
     expect(await isSwfXmlExport(new File(['<?xml version="1.0"?><!DOCTYPE c><c><swf/></c>'], 'c.xml'))).toBe(false);
     expect(await isSwfXmlExport(new File(['<!-- x --><swf version="8">'], 'c.xml'))).toBe(true);

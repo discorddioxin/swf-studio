@@ -1,8 +1,8 @@
 # Debug tooling
 
 Everything in here is **developer-only**: it never ships with the app (Vite only
-builds `src/` + `game-files/`, and only `npm run test:debug` runs the
-Vitest dumpers here). Tooling that is specific to one bundled game lives with that game's
+builds `src/` + an optional `game-files/`, and only `npm run test:debug` runs the
+Vitest dumpers here). Tooling that is specific to one game lives with that game's
 adapter (`src/adapters/<game>/tools/`); what stays in `debug/` is game-agnostic
 or takes the SWF to inspect as an argument. It exists to answer "why does the Execute tab not look like the real
 game?" — comparing our AS2 player against the SWF bytecode, against the FFDec
@@ -19,10 +19,13 @@ browser" below), plus `npm i` inside that folder for `puppeteer-core`,
 
 The harness ships with the **sample game's adapter** (currently
 `src/adapters/gaiaFishing/tools/ruffle-oracle/`) because its probes select that
-game's bundled movies in the UI and read their display list by name. Game facts
-(the main movie, the set's SWF names, the export folders) come from the adapter's
-`sample.ts`; the generic dumpers in `tools/vitest/` below take `SWF=` and work
-for any bundled set.
+game's movies in the Loader's *bundled* list and read their display list by name,
+so make the sample a bundled game of your checkout first:
+`node src/adapters/gaiaFishing/tools/generate-bundled.mjs` (copies the SWFs from
+the test corpus into `game-files/`). Game facts (the main movie, the set's SWF
+names) come from the adapter's `sample.ts`; FFDec exports, where a probe compares
+against them, come from `SWF_FFDEC` (`src/testing/corpusPaths.ts`). The generic
+dumpers in `tools/vitest/` below take `SWF=` and work for any corpus set.
 
 | script | what it does |
 | --- | --- |
@@ -66,8 +69,8 @@ Notes:
 Prints tags/action streams straight from the binary, without FFDec:
 
 ```sh
-node docs/debug/tools/swf-dump/dump.mjs game-files/<set>/swfs/<name>.swf all
-node docs/debug/tools/swf-dump/dump.mjs game-files/<set>/swfs/<name>.swf all --grep addProperty
+node docs/debug/tools/swf-dump/dump.mjs path/to/<name>.swf all
+node docs/debug/tools/swf-dump/dump.mjs path/to/<name>.swf all --grep addProperty
 ```
 
 ## `*.dev.mjs` — one-off binary/XML inspectors
@@ -75,11 +78,12 @@ node docs/debug/tools/swf-dump/dump.mjs game-files/<set>/swfs/<name>.swf all --g
 | script | what it does |
 | --- | --- |
 | `x2s.dev.mjs` | FFDec XML export → binary SWF (the reference implementation `tools/xml2swf` is grown from). |
-| `btnxml.dev.mjs` | dumps `DefineButton2` records from the FFDec XML. |
-| `tagcmp.dev.mjs` | diffs the tags of two SWFs (XML vs. our own writer). |
+| `btnxml.dev.mjs` | dumps `DefineButton2` records from the FFDec XML (`SWF_FFDEC`). |
+| `tagcmp.dev.mjs <name>` | diffs a movie's tags against its FFDec XML export (`SWF_FFDEC`). |
 | `txtdump.dev.mjs`, `etdump.dev.mjs` | dump `DefineText`/`DefineEditText` records by character id. |
 
-Usage for the id-based ones: `node docs/debug/tools/txtdump.dev.mjs <swf name> <character id>`.
+Usage for the id-based ones: `node docs/debug/tools/txtdump.dev.mjs <swf> <character id>`, where
+`<swf>` is a `.swf` path or the name of a sample movie (read from the test corpus).
 
 ## `tools/vitest/*.dev.test.ts` — in-process dumpers
 
@@ -87,7 +91,8 @@ Vitest equivalents of the above, for cases where parsing in Node is easier than
 in the browser. They print rather than assert, so `npm test` leaves them out: run
 them with `npm run test:debug` (`vitest.debug.config.ts`), or one of them with
 `npm run test:debug -- <name>`. Most need the uploaded game corpus, found by
-`src/testing/corpus.ts` (`SWF_CORPUS=` overrides). Checks that assert live in
+`src/testing/corpusPaths.ts` (`SWF_CORPUS=` overrides); `__peek` and
+`__shapeAudit` also need FFDec exports (`SWF_FFDEC=`). Checks that assert live in
 `src/**` (`src/lib/swf/corpus.test.ts`, `src/engine/flash/__tests__/avm2Games.corpus.test.ts`).
 
 | test | what it dumps |
@@ -96,13 +101,13 @@ them with `npm run test:debug` (`vitest.debug.config.ts`), or one of them with
 | `__modules.dev.test.ts` | the generated AS2 modules for a SWF. |
 | `__listcode.dev.test.ts` | the AS2 source behind a specific clip/frame. |
 | `__place.dev.test.ts` | placement ops of a frame (depth/charId/matrix). |
-| `__findStr.dev.test.ts` | searches all bundled SWFs for a string (e.g. a URL or a linkage id). |
+| `__findStr.dev.test.ts` | searches all corpus SWFs for a string (e.g. a URL or a linkage id). |
 | `__peek.dev.test.ts` | prints the transpiled TypeScript of one FFDec `.as` file. |
-| `__dumpShapes.dev.test.ts`, `__shapeAudit.dev.test.ts` | shape/fill inventory across the bundled SWFs. |
-| `avm1-action-audit.dev.test.ts` | extracts and hashes every bundled sample SWF's `avm1Actions` payload, retains per-SWF tag paths, and writes a static bytecode report under `docs/debug/tools/e2e-output/avm1-action-audit/`. |
+| `__dumpShapes.dev.test.ts`, `__shapeAudit.dev.test.ts` | shape/fill inventory across the sample SWFs. |
+| `avm1-action-audit.dev.test.ts` | extracts and hashes every sample SWF's `avm1Actions` payload, retains per-SWF tag paths, and writes a static bytecode report under `docs/debug/tools/e2e-output/avm1-action-audit/`. |
 | `__placeframe.dev.mjs` | standalone helper for the frame-placement dump. |
 
-Scenario tests that boot the bundled game through its own adapter are **not** here —
+Scenario tests that boot the sample game through its own adapter are **not** here —
 they live with the adapter (`src/adapters/<game>/__tests__/`), e.g. the full
 login → server → room flow and the room-chooser UI regression harness. Fixtures
 for the generic tests come from `src/lib/__tests__/bundledSet.ts`.

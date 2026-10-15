@@ -8,8 +8,17 @@ runs whatever ActionScript the SWF carries.
 
 ## How one is selected
 
-The Loader reads `game-files/manifest.json` (index) → `game-files/games/<id>.json`
-(game set) → the set's `.swf` files. If the set names an `adapter`, that id is
+A game set reaches the studio in one of two ways:
+
+- **Uploaded** — the user drops the SWFs (or a folder/zip) on the Loader. This is
+  the normal path; the repo ships no game files.
+- **Bundled** (optional, per deployment) — if the deployment has a `game-files/`
+  folder, the Loader reads `game-files/manifest.json` (index) →
+  `game-files/games/<id>.json` (game set) → the set's `.swf` files. Without that
+  folder the bundled section is simply absent; a broken index is reported in the
+  Loader rather than hidden.
+
+If the set names an `adapter`, that id is
 resolved through the registry in `index.ts` (`adapterById`); otherwise each
 adapter is asked to `detect()` the loaded set and the highest score wins. If
 nothing claims the set — a different game, a user upload — the **generic**
@@ -38,19 +47,35 @@ optional:
 ```
 src/adapters/<game>/
   index.ts        the GameAdapter object (id, label, detect, hooks)
-  sample.ts       facts about the bundled sample: file names, ids, paths
+  sample.ts       facts about the sample game: file names, ids, where its SWFs are
   ...             game-specific code (protocol codecs, mock services, …)
-  __tests__/      scenario tests that drive the bundled sample through this adapter
+  __tests__/      scenario tests that drive the sample through this adapter
   tools/          dev-only tooling that only makes sense for this sample
 ```
 
 `sample.ts` is the single place where the sample's names are spelled out.
 Shipped code never imports it; tests and dev tooling that must open the real
-bundled files do. Its data contract with `game-files/games/<id>.json` is asserted
-by `__tests__/sample.test.ts`, and the generic side reads the same data through
-`src/lib/__tests__/bundledSet.ts`.
+SWFs do. The SWFs themselves come from the **test corpus** — the uploaded game
+sets, located by `src/testing/corpusPaths.ts` (`SWF_CORPUS=…`, or a clone beside
+the repo; see `CORPUS_CLONE` there). Tests that need it are declared with
+`describeCorpus`/`itCorpus` (`src/testing/corpus.ts`) and skip with the clone
+command when it is absent, so the suite passes on a bare checkout.
+`__tests__/sample.test.ts` checks that the corpus still holds the files
+`sample.ts` names; the generic side builds the same set through
+`src/lib/__tests__/bundledSet.ts` (`describeSample`).
+
+FFDec exports are never needed. A few comparison tests and dev tools use them if
+you have them (`SWF_FFDEC=<dir with one folder per movie>`, see
+`tools/ffdec-export/`); otherwise they skip. Tests that need a small real movie
+build one from `src/testing/movies.ts` or `src/testing/swfWriter.ts`.
+
+To try the sample as a bundled game of your own checkout, run
+`node src/adapters/<game>/tools/generate-bundled.mjs`: it copies the SWFs from
+the corpus into `game-files/` and writes the index.
 
 ## Adding a different game
+
+Uploading the SWFs needs nothing else. To bundle a game with a deployment:
 
 1. Put the files under `game-files/<your-set>/…`.
 2. Write `game-files/games/<id>.json`:

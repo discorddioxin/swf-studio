@@ -1,25 +1,22 @@
-// Facts about the bundled Gaia Online Fishing sample.
+// Facts about the Gaia Online Fishing sample, the game set most tests use.
 //
-// The app never needs these: at run time the Loader reads
-// `game-files/manifest.json` → the game set (`games/gaia-fishing.json`) → the
-// .swf paths from the data. Tests and dev tooling that must open the *actual*
-// bundled files import them from here, so the sample's names are spelled out in
-// exactly one place — inside its own adapter — instead of being scattered
-// across the repo.
+// The app never needs these: it plays whatever SWFs are uploaded (or a bundled
+// game set, if a deployment ships one in `game-files/`). Tests and dev tooling
+// that must open the *actual* sample files import them from here, so the
+// sample's names are spelled out in exactly one place — inside its own adapter.
 //
-// Keep this in sync with `game-files/games/gaia-fishing.json`;
-// `src/lib/bundled.test.ts` asserts the two agree.
+// The files are the `fishing-swfs` set of the uploaded game corpus (see
+// src/testing/corpusPaths.ts); `__tests__/sample.test.ts` pins their SHA-256, so
+// a test that names a sprite id is reading the bytes it was written against.
+// Test/dev-only: nothing the app bundles imports this module.
+import { corpusPath, corpusSet } from '../../testing/corpusPaths.ts';
 
 export const SAMPLE_GAME_SET_ID = 'gaia-fishing';
-
-/** Folder under `game-files/` (the served root) holding the sample's SWFs. */
-export const SAMPLE_ROOT = 'game-files/fish-full';
-export const SAMPLE_SWF_DIR = `${SAMPLE_ROOT}/swfs`;
-/**
- * FFDec exports of some sample SWFs: test oracles for the parser only (never
- * served, never read by the app, which works from the SWFs alone).
- */
-export const SAMPLE_EXTERNAL_DIR = `fixtures/ffdec/${SAMPLE_GAME_SET_ID}`;
+export const SAMPLE_LABEL = 'Gaia Online Fishing';
+/** The adapter that runs the sample (`gaiaFishingAdapter.id`). */
+export const SAMPLE_ADAPTER = 'gaia-fishing';
+/** The corpus folder holding the sample's SWFs. */
+export const SAMPLE_CORPUS_SET = 'fishing-swfs';
 
 /** The SWF that plays the game (the game set's `main`). */
 export const SAMPLE_MAIN = 'bassken_game4.21';
@@ -63,19 +60,25 @@ export const SAMPLE_PIER = 'bassken_pier';
  */
 export const SAMPLE_TRACKING = 'OmnitureActionSource';
 
-/** Sample SWFs whose FFDec exports are committed as test oracles. */
-export const SAMPLE_EXPORTED_NAMES = [
-  'bassken_overview',
-  'bassken_pier',
-  'bassken_fish4.20',
-  'bassken_scene',
-  SAMPLE_CHAT,
-  SAMPLE_SERVICE,
-] as const;
+/** Absolute path of a sample SWF (whether or not the corpus is checked out). */
+export const sampleSwfPath = (name: string): string => corpusPath(`${SAMPLE_CORPUS_SET}/${name}.swf`);
 
-/** Path of a bundled sample SWF, relative to the public root. */
-export const sampleSwfPath = (name: string): string => `${SAMPLE_SWF_DIR}/${name}.swf`;
+/** The folder holding the sample's SWFs, or null without the corpus. */
+export function sampleSwfDir(): string | null {
+  const [first] = corpusSet(SAMPLE_CORPUS_SET);
+  return first ? first.slice(0, first.lastIndexOf('/')) : null;
+}
 
-/** FFDec export folder (test oracle) of one sample SWF. */
-export const sampleExportDir = (name: string): string => `${SAMPLE_EXTERNAL_DIR}/${name}`;
+/** Whether every SWF of the sample is available (tests skip without it). */
+export function hasSample(): boolean {
+  const present = new Set(corpusSet(SAMPLE_CORPUS_SET).map((path) => path.slice(path.lastIndexOf('/') + 1)));
+  return SAMPLE_SWF_NAMES.every((name) => present.has(`${name}.swf`));
+}
 
+/** The sample as a game set (the shape `src/lib/bundled.ts` reads), paths absolute. */
+export function sampleGameSet() {
+  return {
+    id: SAMPLE_GAME_SET_ID, label: SAMPLE_LABEL, adapter: SAMPLE_ADAPTER, main: SAMPLE_MAIN,
+    swfs: SAMPLE_SWF_NAMES.map((name) => ({ name, path: sampleSwfPath(name) })),
+  };
+}

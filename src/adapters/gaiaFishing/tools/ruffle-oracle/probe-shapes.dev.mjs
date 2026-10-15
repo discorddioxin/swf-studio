@@ -6,10 +6,10 @@ import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 import { launch } from './browser.dev.mjs';
 import { xmlToSwf } from '../../../../../tools/xml2swf/xml2swf.mjs';
-import { SAMPLE_SWF_DIR, sampleExportDir } from '../../sample.ts';
+import { ffdecExportDir } from '../../../../testing/corpusPaths.ts';
 
 const name = process.argv[2];
-const xmlPath = `${sampleExportDir(name)}/${name}.xml`;
+const xmlPath = `${ffdecExportDir(name)}/${name}.xml`;
 globalThis.DOMParser = new JSDOM('').window.DOMParser;
 const dom = new JSDOM(readFileSync(xmlPath, 'utf8'), { contentType: 'text/xml' });
 const doc = dom.window.document;
@@ -23,7 +23,7 @@ console.log(`${shapes.length} tags of ${[...TYPES].join('/')} in ${name}`);
 for (const [i, el] of shapes.entries()) {
   const id = el.getAttribute('shapeId') ?? el.getAttribute('characterID') ?? el.getAttribute('fontID');
   const probe = `<?xml version="1.0" encoding="UTF-8"?><swf ${swfAttrs}>${displayRect}<tags>${el.outerHTML}<item type="ShowFrameTag"/></tags></swf>`;
-  const file = `${SAMPLE_SWF_DIR}/probe_${i}.swf`;
+  const file = `/tmp/probe_${i}.swf`;
   try {
     writeFileSync(file, xmlToSwf(probe));
   } catch (e) {

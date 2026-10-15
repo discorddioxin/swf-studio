@@ -27,12 +27,12 @@ All **6 Medium** (Phase 1) + **High/Critical** (23 CODE_INSPECTOR + 23 EXECUTE) 
 ## 2. Architecture you can rely on (one-way, testable seams)
 
 ```
-File[] → loadUploadedPackages / fetchBundledManifest → mergeBundledExternals
+File[] → loadUploadedPackages / loadGameIndex (optional) → mergeBundledExternals
        → installPackages → packages:SwfPackage[] {doc, cache:AssetCache, assets}
        → GameEngine / As2Execute / ExecuteTab
        → tick(dt) → enterFrame → advance → runQueue → guard → renderTo(ctx,scale*dpr) → canvas
        + debug/store (Map+activeId, never writes into SwfDocument)
-       + game-files/ only via the adapter's generate-bundled.mjs (explicit)
+       + game-files/ optional per deployment (none in the repo; generate-bundled.mjs makes one locally)
 ```
 
 | Seam | Env | Test without React? | Key file |
@@ -91,21 +91,21 @@ npm ci
 ./node_modules/.bin/vitest run src/components/__tests__/timelineResize.pointer.test.tsx  # FINAL-08 5 tests
 ./node_modules/.bin/vite build                               # 228 1,738.19kB
 npx madge --circular src/main.tsx --extensions ts,tsx        # 92 files 5 circulars 1 orphan
-node src/adapters/<game>/tools/generate-bundled.mjs && git diff --stat HEAD -- game-files  # 0 (manifest stable)
 ```
 
-- **AS3 corpus gate:** `npx vitest run avm2Games.corpus` — needs the uploaded corpus (`src/testing/corpus.ts`: `SWF_CORPUS=`, else `/tmp/swf-forge2/games-swfs`, `../swf-forge/games-swfs`, `~/swf-forge/games-swfs`); it skips without it, naming the clone command. The emitter gate freezes each movie's refusal count (it may fall, never rise).
+- **Test corpus:** game SWFs are not in the repo. Tests that need real games read the uploaded corpus (`src/testing/corpusPaths.ts`: `SWF_CORPUS=`, else `/tmp/swf-forge2/games-swfs`, `../swf-forge/games-swfs`, `~/swf-forge/games-swfs`) and skip without it, naming the clone command — `vitest run` must pass both with and without it. FFDec exports are optional comparison data (`SWF_FFDEC=`); small real movies for unit tests come from `src/testing/movies.ts` / `swfWriter.ts`.
+- **AS3 corpus gate:** `npx vitest run avm2Games.corpus` — needs the corpus. The emitter gate freezes each movie's refusal count (it may fall, never rise).
 
 - **New test goes next to code:** `src/lib/foo.test.ts` (node) or `src/components/__tests__/foo.ui.test.tsx` (jsdom). The audit pinned every seam to a file that will fail first — add the test that would have caught FINAL-08 (`timelineResize.pointer.test.tsx` is the template for DOM gaps).
 - **No new `any`:** `grep -R "any" src/` is 373 + header `runtime/as2/index.ts:1` — narrow to `unknown`/`AS2Value` at value seam only.
 - **No new circular:** `engine/as2/constants.ts` is the one-way value export for `DEPTH_OFFSET/NODE/TWIPS`; `builtins.ts` imports only `type DisplayNode`.
-- **Game files:** `game-files/` is `publicDir` — only written by the sample adapter's `generate-bundled.mjs` explicitly; `vite build` never touches it.
+- **Game files:** bundled games are optional. When a `game-files/` folder exists it is Vite's `publicDir` (index `manifest.json` → `games/<id>.json`); without it the Loader shows no bundled section. The repo ships none; the sample adapter's `generate-bundled.mjs` writes one from the corpus on request.
 
 ---
 
 ## 5. Checklist before opening a PR (next phase)
 
-- [ ] `tsc --noEmit` 0, `vitest` 51/3·227/3, `vite` 228 modules, `madge` 5 circulars, `game-files` 0 diff after the adapter's `generate-bundled.mjs` (or `git add game-files/` if writer drift, like ASSET-10)
+- [ ] `tsc --noEmit` 0, `vitest` 51/3·227/3, `vite` 228 modules, `madge` 5 circulars, `vitest run` green both with and without the test corpus
 - [ ] Updated `docs/audits/archive/phases/PHASE-*-*.json` disposition if you fix a `Keep — shovel-ready` (and matching `*.md` table row)
 - [ ] No `madge --orphans` new file without citation; `import.meta.glob ?raw` is a known blind spot (ARCH-06): files reached only through it (`CodeWorkspace`'s engine view) are not orphans
 - [ ] One table per seam + one Mermaid diagram if you add a new seam (Phase docs §3+§4)

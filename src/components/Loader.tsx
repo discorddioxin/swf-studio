@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui';
 import { cn } from '../utils/cn';
-import { fetchGameIndex, type GameSet } from '../lib/bundled';
+import { loadGameIndex, type BundledIndexState, type GameSet } from '../lib/bundled';
 import { collectSwfSources, type SwfSource } from '../lib/swfSources';
 
 interface FSEntry {
@@ -28,6 +28,9 @@ async function readEntry(entry: FSEntry, prefix: string, out: File[]) {
 const selectCls =
   'max-w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-violet-500';
 
+/** Stable empty list (a fresh [] each render would re-run the effects that depend on it). */
+const NO_GAMES: GameSet[] = [];
+
 export function Loader({ onFiles, onBundled, busy, error }: {
   /** `mainKey` is the SwfSource.key the user picked as the main movie (null = the default) */
   onFiles: (files: File[], mainKey: string | null) => void;
@@ -42,7 +45,8 @@ export function Loader({ onFiles, onBundled, busy, error }: {
   const [sources, setSources] = useState<SwfSource[]>([]);
   const [scanning, setScanning] = useState(false);
   const [mainKey, setMainKey] = useState<string | null>(null);
-  const [games, setGames] = useState<GameSet[]>([]);
+  const [index, setIndex] = useState<BundledIndexState | null>(null);
+  const games: GameSet[] = index?.status === 'ready' ? index.games : NO_GAMES;
   const [gameId, setGameId] = useState<string | null>(null);
   const [bundledMain, setBundledMain] = useState<string | null>(null);
 
@@ -80,17 +84,16 @@ export function Loader({ onFiles, onBundled, busy, error }: {
   }, [queuedFiles]);
 
   // The bundled game sets are fixed, so the drop-downs are filled as soon as
-  // the Loader shows. An index that cannot be fetched is reported by the button.
+  // the Loader shows. Most deployments ship none: then there is no bundled
+  // section at all. An index that exists but cannot be used is shown as an error.
   useEffect(() => {
     if (!onBundled) return;
     let cancelled = false;
-    fetchGameIndex()
-      .then((loaded) => {
-        if (cancelled) return;
-        setGames(loaded);
-        setGameId((current) => current ?? loaded[0]?.id ?? null);
-      })
-      .catch(() => { /* the button reports the failure */ });
+    void loadGameIndex().then((state) => {
+      if (cancelled) return;
+      setIndex(state);
+      if (state.status === 'ready') setGameId((current) => current ?? state.games[0]?.id ?? null);
+    });
     return () => { cancelled = true; };
   }, [onBundled]);
 
@@ -153,7 +156,12 @@ export function Loader({ onFiles, onBundled, busy, error }: {
                 <Button onClick={() => filesRef.current?.click()}>＋ Add files / ZIPs</Button>
                 <Button variant={queuedFiles.length ? 'primary' : 'ghost'} disabled={!queuedFiles.length} onClick={() => onFiles(queuedFiles, mainKey)}>Load {queuedFiles.length ? `${queuedFiles.length} files` : 'selection'}</Button>
               </div>
-              {onBundled && (
+              {onBundled && index?.status === 'broken' && (
+                <p role="alert" className="mt-5 border-t border-zinc-800 pt-4 text-xs text-red-400">
+                  Bundled games are unavailable: {index.error}
+                </p>
+              )}
+              {onBundled && index?.status === 'ready' && (
                 <div className="mt-5 border-t border-zinc-800 pt-4">
                   <p className="text-xs text-zinc-500">…or play the game files bundled with this repo</p>
                   <div className="mt-2 flex flex-wrap items-center justify-center gap-2">

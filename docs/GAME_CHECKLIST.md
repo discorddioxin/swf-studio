@@ -100,7 +100,9 @@ avatar images come from Gaia's CDN and are marked *optional live asset*.
   - no Missing Dependencies at any point
   - the test drives the player with `advanceTime()` (→ `step()`), so the movie's
     `setInterval`/`setTimeout` timers run as in the app
-- ✅ **From the SWFs alone.** The bundled set is the 8 original SWFs, nothing else.
+- ✅ **From the SWFs alone.** The set is the 8 original SWFs, nothing else. They are
+  read from the uploaded corpus (`games-swfs/fishing-swfs`, SHA-identical to the
+  SWFs that used to be committed); the repo bundles no game files.
   - The committed AS2 override of `gsecs2.9` frame 61 is gone. Six bundled SWFs had
     been rebuilt from FFDec exports; they are replaced by the uploaded originals.
     In the SWF's own chooser Join is an ordinary button, enabled before a row is
@@ -108,8 +110,9 @@ avatar images come from Gaia's CDN and are marked *optional live asset*.
     override, not from the game. The test asserts the SWF's behaviour.
   - Fonts are built from the SWF's DefineFont glyphs (59 distinct, all pass the OTS
     sanitizer); sounds are decoded from its DefineSound tags (MP3/ADPCM/PCM).
-  - The FFDec exports are kept under `fixtures/ffdec/gaia-fishing/` as test oracles
-    only; nothing in the app reads them.
+  - FFDec exports are not kept in the repo. Comparison tests use them only when
+    `SWF_FFDEC` points at a local export, and skip otherwise; nothing in the app
+    reads them.
 - ⬜ **Not tested:** hooking and reeling a fish, catch results, top-fishers list, chat
   with other players beyond the mock.
 - ⚠️ **Warnings.**

@@ -2,11 +2,12 @@
 import { readFileSync } from 'node:fs';
 import { it } from 'vitest';
 import { parseSwfBinary } from '@/lib/swf/binary';
-import { SAMPLE_MAIN, SAMPLE_PIER, SAMPLE_SCENE, sampleExportDir, sampleSwfPath } from '@/adapters/gaiaFishing/sample';
+import { SAMPLE_MAIN, SAMPLE_PIER, SAMPLE_SCENE, sampleSwfPath } from '@/adapters/gaiaFishing/sample';
+import { ffdecExportDir } from '@/testing/corpusPaths'; // needs FFDec exports (SWF_FFDEC)
 
 const CASES = [
-  [SAMPLE_SCENE, `${sampleExportDir(SAMPLE_SCENE)}/${SAMPLE_SCENE}.xml`],
-  [SAMPLE_PIER, `${sampleExportDir(SAMPLE_PIER)}/${SAMPLE_PIER}.xml`],
+  [SAMPLE_SCENE, `${ffdecExportDir(SAMPLE_SCENE)}/${SAMPLE_SCENE}.xml`],
+  [SAMPLE_PIER, `${ffdecExportDir(SAMPLE_PIER)}/${SAMPLE_PIER}.xml`],
 ];
 
 it('compares shape parsing with the FFDec XML', async () => {
