@@ -26,8 +26,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    // `docs/debug/tools/vitest/*.dev.test.ts` are developer dumpers (see docs/debug/README.md);
-    // they are kept out of src/ so they never ship, but still run with the suite.
-    include: ["src/**/*.test.{ts,tsx}", "transcom/transpiler/**/*.test.{ts,tsx}", "server/**/*.test.{ts,mjs}", "docs/debug/tools/vitest/*.dev.test.ts"],
+    // `docs/debug/tools/vitest/*.dev.test.ts` are developer dumpers (see docs/debug/README.md):
+    // they print, they do not assert, so they are not part of the suite. Run them with
+    // `npm run test:debug` (vitest.debug.config.ts).
+    include: ["src/**/*.test.{ts,tsx}", "transcom/transpiler/**/*.test.{ts,tsx}", "server/**/*.test.{ts,mjs}"],
   },
 });

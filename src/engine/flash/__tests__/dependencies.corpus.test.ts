@@ -2,9 +2,9 @@
 // is not checked out — see docs/GAME_CHECKLIST.md). The movies ask for files the
 // upload does not have: they are listed by path, type, API and requester. Upload a
 // file of that path and `URLLoader` is answered with it instead.
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 import { AssetCache, ingestFiles } from '@/lib/assets';
 import { swfFilesToFiles } from '@/lib/bundled';
 import { parseSwfBinary } from '@/lib/swf/binary';
@@ -12,11 +12,11 @@ import { abcSources } from '../abc';
 import { compileSources, linkProgram } from '../loader';
 import { FlashPlayer, type LogEntry } from '../player';
 import { DependencyFiles } from '../dependencies';
+import { corpusRoot, describeCorpus } from '@/testing/corpus';
 
-const CORPUS = process.env.SWF_CORPUS ?? '/tmp/swf-forge2/games-swfs';
 
 async function boot(set: string, entry: string, parameters: Record<string, string>, uploads: { path: string; text: string }[] = []) {
-  const dir = join(CORPUS, set);
+  const dir = join(corpusRoot()!, set);
   const raw = readFileSync(join(dir, entry));
   const { doc, files } = await parseSwfBinary(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer, entry);
   const program = linkProgram(compileSources(abcSources(doc.abc ?? []).sources));
@@ -34,7 +34,7 @@ async function boot(set: string, entry: string, parameters: Record<string, strin
   return { player, logs };
 }
 
-describe.skipIf(!existsSync(CORPUS))('Missing Dependencies (AVM2 corpus)', () => {
+describeCorpus('Missing Dependencies (AVM2 corpus)', () => {
   it('Pinball lists its gameConfig.xml and gateway; an uploaded gameConfig.xml is served', async () => {
     const { player } = await boot('pinball-swfs', 'gameShell.swf', { game: 'pinball' });
     const config = player.dependencies.files().find((d) => d.path === 'games/pinball/gameConfig.xml');

@@ -123,10 +123,10 @@ byte. Nothing is silently dropped: a body either lifts or is refused.
   `opcode.rs`) and verifier (`core/src/avm2/verify.rs`) — including the details
   that bite: branches are end-relative, `lookupswitch` targets start-relative,
   metadata is `key,value` pairs, a `trait`'s kind is `flags & 0xF`.
-* **Behaviour**: `avm2game.dev.test.ts` boots the real bundled SWFs through
-  `FlashPlayer` and prints what each one hits (document class, size, frame rate,
-  frame scripts, symbol classes, runtime errors) — that is the gate that says
-  whether a lift is *right*, not just complete.
+* **Behaviour**: `src/engine/flash/__tests__/avm2Games.corpus.test.ts` boots the uploaded corpus SWFs through
+  `FlashPlayer` and asserts the document class comes up (refusal counts may fall,
+  never rise); `avm2Fixture.test.ts` does the same on a committed fixture movie
+  without the corpus — the gates that say whether a lift is *right*, not just complete.
 * **Types**: every emitted module is compiled by the engine's own loader, and
   `zz_files`/`zz_proof` check for syntax/type errors across the whole movie.
 

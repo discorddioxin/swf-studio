@@ -3,6 +3,7 @@ import { inflateSync } from 'node:zlib';
 import { it } from 'vitest';
 import { abcClassNames, parseAbc, type AbcFile } from '@/../transcom/decompiler/swf/abc';
 import { transpileAbc } from '@/../transcom/transpiler/avm2';
+import { corpusPath } from '@/testing/corpus';
 
 function payloads(file: string): Uint8Array[] {
   const raw = readFileSync(file);
@@ -34,7 +35,7 @@ function abcOf(p: Uint8Array): AbcFile {
 }
 
 it('small class by class comparison', () => {
-  const abc = abcOf(payloads('/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf')[0]);
+  const abc = abcOf(payloads(corpusPath('pinball-swfs/game.swf'))[0]);
   const result = transpileAbc({ abc, projectClasses: new Set(abcClassNames(abc)) });
   for (const path of ['com/custom/KeyCheck.ts', 'com/gaiaonline/games/gPinball/BetterArray.ts', 'com/gaiaonline/games/gPinball/NumberTools.ts']) {
     const f = result.files.find((x) => x.path === path);

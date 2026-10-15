@@ -1,9 +1,11 @@
+import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { it } from 'vitest';
 import { abcClassNames, parseAbc, type AbcFile } from '@/../transcom/decompiler/swf/abc';
 import { transpileAbc } from '@/../transcom/transpiler/avm2';
 import { compileSources, linkProgram } from '@/../src/engine/flash/loader';
+import { corpusPath, corpusScripts } from '@/testing/corpus';
 
 function payloads(file: string): Uint8Array[] {
   const raw = readFileSync(file);
@@ -34,10 +36,10 @@ function abcOf(p: Uint8Array): AbcFile {
   throw last;
 }
 
-const ORACLE = '/tmp/swf-forge2/games-swfs-scripts/gaia-pinball-game-swf-as/scripts';
+const ORACLE = join(corpusScripts() ?? '', 'gaia-pinball-game-swf-as/scripts');
 
 it('whole-project link + oracle comparison', () => {
-  const abc = abcOf(payloads('/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf')[0]);
+  const abc = abcOf(payloads(corpusPath('pinball-swfs/game.swf'))[0]);
   const result = transpileAbc({
     abc,
     projectClasses: new Set(abcClassNames(abc)),

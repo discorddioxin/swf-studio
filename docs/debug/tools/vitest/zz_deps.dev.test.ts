@@ -9,8 +9,9 @@ import { abcSources } from '@/../src/engine/flash/abc';
 import { compileSources, linkProgram } from '@/../src/engine/flash/loader';
 import { FlashPlayer } from '@/../src/engine/flash/player';
 import { describeDependency } from '@/../src/engine/flash/dependencies';
+import { corpusPath } from '@/testing/corpus';
 
-const FILES = (process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/gameShell.swf').split(',');
+const FILES = (process.env.SWF_FILE ?? corpusPath('pinball-swfs/gameShell.swf')).split(',');
 it.skipIf(!FILES.every((f) => existsSync(f)))('prints requested dependencies', async () => {
   for (const FILE of FILES) {
     const raw = readFileSync(FILE);

@@ -2,12 +2,12 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { it } from 'vitest';
 import { abcClassNames } from '@/../transcom/decompiler/swf/abc';
-import { abcOf, payloads } from './swfAbc';
+import { abcOf, payloads, swfFile } from './swfAbc';
 import { transpileAbc } from '@/../transcom/transpiler/avm2';
 import { compileSources, linkProgram } from '@/../src/engine/flash/loader';
 
 it('per-file compile: attribute every error to its file', () => {
-  const abc = abcOf(payloads(process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf')[0]);
+  const abc = abcOf(payloads(swfFile())[0]);
   const result = transpileAbc({ abc, projectClasses: new Set(abcClassNames(abc)) });
   const text = new Map(result.files.map((f) => [f.path, f.text]));
   // SWF_DUMP=<dir> writes every emitted module there, for grepping whole outputs.

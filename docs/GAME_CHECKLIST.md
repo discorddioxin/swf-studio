@@ -19,7 +19,7 @@ Each set's entry movie is booted the way the game starts:
 
 The raw numbers are one JSON line per SWF, written to `/tmp/census.jsonl`:
 
-    SWF_CORPUS=/tmp/swf-forge2/games-swfs npx vitest run docs/debug/tools/vitest/zz_census.dev.test.ts
+    SWF_CORPUS=/tmp/swf-forge2/games-swfs npm run test:debug -- zz_census
 
 ✅ works · ⚠️ works with a caveat · ❌ fails · ⬜ not reachable yet, so not tested
 

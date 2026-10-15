@@ -19,8 +19,9 @@ import { swfFilesToFiles } from '@/../src/lib/bundled';
 import { buildAS2Program, type SourceInput } from '@/../src/engine/as2/program';
 import { AS2Player } from '@/../src/engine/as2/player';
 import { createExternalResolver, type ExternalSwf } from '@/../src/engine/as2/externals';
+import { corpusRoot } from '@/testing/corpus';
 
-const CORPUS = process.env.SWF_CORPUS ?? '/tmp/swf-forge2/games-swfs';
+const CORPUS = process.env.SWF_CORPUS ?? (corpusRoot() ?? '');
 const OUT = process.env.CENSUS_OUT ?? '/tmp/census.jsonl';
 const FRAMES = Number(process.env.SWF_FRAMES ?? 120);
 

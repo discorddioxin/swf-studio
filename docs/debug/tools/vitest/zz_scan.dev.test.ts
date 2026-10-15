@@ -4,6 +4,7 @@ import { inflateSync } from 'node:zlib';
 import { existsSync } from 'node:fs';
 import { describe, it } from 'vitest';
 import { disassemble, parseAbc, type AbcFile } from '@/../transcom/decompiler/swf/abc';
+import { corpusPath } from '@/testing/corpus';
 
 function payloads(file: string): Uint8Array[] {
   const raw = readFileSync(file);
@@ -34,11 +35,11 @@ function abcOf(p: Uint8Array): AbcFile {
   throw last;
 }
 
-const CORPUS_OK = existsSync(process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf');
+const CORPUS_OK = existsSync(process.env.SWF_FILE ?? corpusPath('pinball-swfs/game.swf'));
 
 describe.skipIf(!CORPUS_OK)('corpus harness', () => {
   it('scans bodies for opcodes', () => {
-  const file = process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf';
+  const file = process.env.SWF_FILE ?? corpusPath('pinball-swfs/game.swf');
   const abc = abcOf(payloads(file)[0]);
   const kind = process.env.SWF_KIND ?? 'get_scope_object';
   const bodies = abc.bodies.map((b) => ({ b, dis: disassemble(b.code) }));

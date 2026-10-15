@@ -7,8 +7,9 @@ import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'n
 import { basename, join } from 'node:path';
 import { parseSwfBinary } from '../../../../transcom/decompiler/swf/binary';
 import { swfFontFiles } from '../../../../src/lib/swfFont';
+import { corpusRoot } from '@/testing/corpus';
 
-const corpus = process.env.SWF_CORPUS ?? '/tmp/swf-forge2/games-swfs';
+const corpus = process.env.SWF_CORPUS ?? (corpusRoot() ?? '');
 const outDir = process.env.FONT_OUT ?? '/tmp/swffonts';
 
 function walk(dir: string): string[] {

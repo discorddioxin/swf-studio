@@ -1,8 +1,8 @@
 # Debug tooling
 
 Everything in here is **developer-only**: it never ships with the app (Vite only
-builds `src/` + `game-files/`, and the Vitest include reaches into `debug/` on
-purpose). Tooling that is specific to one bundled game lives with that game's
+builds `src/` + `game-files/`, and only `npm run test:debug` runs the
+Vitest dumpers here). Tooling that is specific to one bundled game lives with that game's
 adapter (`src/adapters/<game>/tools/`); what stays in `debug/` is game-agnostic
 or takes the SWF to inspect as an argument. It exists to answer "why does the Execute tab not look like the real
 game?" — comparing our AS2 player against the SWF bytecode, against the FFDec
@@ -84,8 +84,11 @@ Usage for the id-based ones: `node docs/debug/tools/txtdump.dev.mjs <swf name> <
 ## `tools/vitest/*.dev.test.ts` — in-process dumpers
 
 Vitest equivalents of the above, for cases where parsing in Node is easier than
-in the browser. Run them on their own with `npm run test:debug` (they also run
-as part of `npm test`).
+in the browser. They print rather than assert, so `npm test` leaves them out: run
+them with `npm run test:debug` (`vitest.debug.config.ts`), or one of them with
+`npm run test:debug -- <name>`. Most need the uploaded game corpus, found by
+`src/testing/corpus.ts` (`SWF_CORPUS=` overrides). Checks that assert live in
+`src/**` (`src/lib/swf/corpus.test.ts`, `src/engine/flash/__tests__/avm2Games.corpus.test.ts`).
 
 | test | what it dumps |
 | --- | --- |

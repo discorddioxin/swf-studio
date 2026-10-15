@@ -5,6 +5,7 @@ import { abcClassNames, parseAbc, type AbcFile } from '@/../transcom/decompiler/
 import { transpileAbc } from '@/../transcom/transpiler/avm2';
 import { disassemble, simpleName as _sn } from '@/../transcom/decompiler/swf/abc';
 import { liftMethod } from '@/../transcom/transpiler/avm2';
+import { corpusPath } from '@/testing/corpus';
 
 function payloads(file: string): Uint8Array[] {
   const raw = readFileSync(file);
@@ -36,7 +37,7 @@ function abcOf(p: Uint8Array): AbcFile {
 }
 
 it('dumps the two broken files', () => {
-  const abc = abcOf(payloads('/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf')[0]);
+  const abc = abcOf(payloads(corpusPath('pinball-swfs/game.swf'))[0]);
   const result = transpileAbc({ abc, projectClasses: new Set(abcClassNames(abc)) });
   for (const f of result.files) {
     if (/Equations\.ts$/.test(f.path)) {

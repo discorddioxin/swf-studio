@@ -4,6 +4,7 @@ import { it } from 'vitest';
 import { abcClassNames, parseAbc, type AbcFile } from '@/../transcom/decompiler/swf/abc';
 import { transpileAbc } from '@/../transcom/transpiler/avm2';
 import { transform } from 'sucrase';
+import { corpusPath } from '@/testing/corpus';
 
 function payloads(file: string): Uint8Array[] {
   const raw = readFileSync(file);
@@ -37,7 +38,7 @@ function abcOf(p: Uint8Array): AbcFile {
 /** `SWF_SHOW=UIScrollBar` prints one emitted module (the first whose path matches). */
 it('prints one emitted module', () => {
   const page = process.env.SWF_SHOW ?? 'UIScrollBar';
-  const abc = abcOf(payloads('/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf')[0]);
+  const abc = abcOf(payloads(corpusPath('pinball-swfs/game.swf'))[0]);
   const result = transpileAbc({ abc, projectClasses: new Set(abcClassNames(abc)) });
   if (process.env.SWF_SHOW_HEADERS) {
     for (const f of result.files) {
