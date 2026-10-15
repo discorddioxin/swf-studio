@@ -9,6 +9,7 @@
 >
 > Every entry gives evidence (file:line, a command, or a reproduction) and a fix
 > direction. Nothing here has been fixed yet; this document only records.
+> The step-by-step fix plan is in [`RESOLUTION_PLAN.md`](./RESOLUTION_PLAN.md).
 
 ## Index
 
