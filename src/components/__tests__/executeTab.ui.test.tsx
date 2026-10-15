@@ -9,6 +9,7 @@ import { parseSwfXml } from '../../lib/parser';
 import { ExecuteTab } from '../ExecuteTab';
 import { GAME_XML, SOURCES } from '../../engine/flash/__tests__/gameFixture';
 import { deckAbcPayload } from '../../engine/flash/__tests__/abcFixture';
+import { TOP_LEVEL } from '../../engine/flash/packages';
 
 const rafQueue: FrameRequestCallback[] = [];
 let now = 0;
@@ -43,8 +44,8 @@ function file(path: string, text: string) {
   return f;
 }
 
-async function mount(withCode = true) {
-  const files = [file('game.xml', GAME_XML), ...(withCode ? SOURCES.map((s) => file(s.path, s.text)) : [])];
+async function mount(withCode = true, extra: { path: string; text: string }[] = []) {
+  const files = [file('game.xml', GAME_XML), ...(withCode ? [...SOURCES, ...extra].map((s) => file(s.path, s.text)) : [])];
   const bundle = ingestFiles(files);
   const doc = parseSwfXml(await bundle.xmlFile!.text(), { fileName: 'game.xml' });
   const cache = new AssetCache(bundle, () => {});
@@ -110,6 +111,26 @@ describe('ExecuteTab', () => {
     fireEvent.click(screen.getByText(/^Program/));
     expect(screen.getByText('4 file(s) compiled, 4 class(es) exported.')).toBeTruthy();
     expect(screen.getAllByText('✓ linked')).toHaveLength(3);
+  });
+
+  it('evaluates the program once per run: inspecting the code runs none of it (P-06)', async () => {
+    const original = TOP_LEVEL.trace;
+    let runs = 0;
+    TOP_LEVEL.trace = (...args: unknown[]) => { if (args[0] === 'module body') runs++; else (original as (...a: unknown[]) => void)(...args); };
+    try {
+      await mount(true, [{ path: 'util/Boot.ts', text: 'trace("module body"); export class Boot {}' }]);
+      await waitFor(() => expect(screen.getByText(/AS3 engine · com\.game\.Main/)).toBeTruthy());
+      await runFrames(100);
+      expect(runs).toBe(1);
+      fireEvent.click(screen.getByText(/^Program/));
+      expect(screen.getByText('5 file(s) compiled, 5 class(es) exported.')).toBeTruthy();
+      expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['From SWF: com.game.Main', 'com.game.Main', 'com.game.Hero', 'com.game.Enemy']);
+      fireEvent.click(screen.getByText('Restart'));     // a new run links afresh, once
+      await runFrames(100);
+      expect(runs).toBe(2);
+    } finally {
+      TOP_LEVEL.trace = original;
+    }
   });
 
   it('Restart starts the game again from frame 1 with fresh state', async () => {

@@ -256,6 +256,35 @@ the fishing real-game tests stay green.
   as before;
 - pinball boots.
 
+**As implemented (2026-10-15).**
+- **`src/engine/flash/analyze.ts`.** `analyzeAs3Program` / `analyzeCompiled` read the
+  compiled (sucrase) module text and never evaluate it:
+  - exported `class` / `function` declarations; interfaces are objects, so they are
+    not counted;
+  - `var _x = require(…)` import bindings;
+  - `extends` expressions, used to walk superclass chains to the engine's
+    `flash.display` classes.
+- **Shared rules.** Names are indexed by the linker's own `indexClasses`, which was
+  extracted from `linkProgram`, and imports are resolved with its `moduleFinder` /
+  `resolveFlash`. So analysis and linking cannot disagree on a name or a path.
+- **Corpus check.** `docs/debug/tools/vitest/as3analysis.dev.test.ts` compares the static
+  result with a real link for all 43 corpus SWFs. Classes, display classes, unresolved
+  symbol classes and import errors are equal on every one.
+- **Order change.** The document-class dropdown now lists classes in file order instead
+  of the linker's load order.
+- **Supers map not needed.** The plan's `AbcSources.supers` map turned out unnecessary:
+  walking the compiled `extends` chains covers lifted and hand-written code with one
+  mechanism.
+- **Execute tab.** It folds dependency code on the static errors and unresolved names
+  (same criteria as before). The player is the only caller of `linkProgram`, and its link
+  errors feed the Problems list.
+- **Unreadable payloads.** `abcSources` returns them as `unreadable`, shown in the
+  Program summary and as Problems entries.
+- **Tests.**
+  - `analyze.test.ts`: a lifted `cinit` that traces runs 0 times during analysis and once
+    in the player.
+  - `executeTab.ui.test.tsx`: a module body runs once per run; the old tab ran it twice.
+
 ### P-26 — global AS2 boot script
 
 1. **Write the failing test** (UI test with jsdom). Save a boot script while game A is

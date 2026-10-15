@@ -60,13 +60,26 @@ export function compileSources(files: SourceFile[]): CompiledSources {
   return { modules };
 }
 
-export function linkProgram(compiled: CompiledSources): LinkedProgram {
+/**
+ * How a module's `require(spec)` finds another module of the program: by path,
+ * then by package-style suffix (see `findModule`). Shared by the linker and the
+ * static analysis, so both resolve an import the same way.
+ */
+export function moduleFinder(compiled: CompiledSources): (spec: string, dir: string) => CompiledModule | undefined {
   const byPath = new Map(compiled.modules.map((m) => [m.path, m]));
   const noExt = new Map<string, CompiledModule[]>();
   for (const m of compiled.modules) {
     const key = stripExt(m.path).toLowerCase();
     noExt.set(key, [...(noExt.get(key) ?? []), m]);
   }
+  return (spec, dir) => findModule(spec, dir, byPath, noExt);
+}
+
+/** The directory a module's relative imports resolve from. */
+export const moduleDir = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
+
+export function linkProgram(compiled: CompiledSources): LinkedProgram {
+  const find = moduleFinder(compiled);
   const cache = new Map<string, { exports: Record<string, unknown>; loaded: boolean; error?: string; detail?: string }>();
   const errors: { path: string; message: string; detail?: string }[] = [];
   for (const m of compiled.modules) if (m.error) errors.push({ path: m.path, message: `Compile error: ${m.error}` });
@@ -93,7 +106,7 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
     const module = { exports: {} as Record<string, unknown>, loaded: false, error: undefined as string | undefined, detail: undefined as string | undefined };
     cache.set(m.path, module);
     if (m.code == null) throw new LoadFailure(`${m.path} failed to compile: ${m.error}`);
-    const dir = m.path.includes('/') ? m.path.slice(0, m.path.lastIndexOf('/')) : '';
+    const dir = moduleDir(m.path);
     const require = (spec: string) => resolve(spec, m.path, dir);
     const fn = guardedModule(host, moduleParams, m.code, `swf-code:///${m.path}`);
     try {
@@ -116,7 +129,7 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
   const resolve = (spec: string, from: string, dir: string): unknown => {
     const flash = resolveFlash(spec);
     if (flash) return flash;
-    const target = findModule(spec, dir, byPath, noExt);
+    const target = find(spec, dir);
     if (target) return load(target);
     throw new Error(`Cannot resolve import "${spec}" from ${from}. Make sure every transpiled file is in the loaded folder.`);
   };
@@ -149,40 +162,68 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
     errors.push({ path, message, detail });
   }
 
-  // Index classes: `com/game/Enemy.ts` exporting Enemy → Enemy, game.Enemy, com.game.Enemy, …
-  const classes: ClassInfo[] = [];
-  const index = new Map<string, unknown>();
-  const ambiguous = new Set<string>();
-  const byQualified = new Map<string, unknown>();
-  const add = (key: string, value: unknown) => {
-    const prev = index.get(key);
-    if (prev === undefined) index.set(key, value);
-    else if (prev !== value) ambiguous.add(key);
-  };
-  for (const [path, mod] of cache) {
-    const segments = stripExt(path).split('/');
-    const fileBase = segments[segments.length - 1];
-    const pkgSegments = segments.slice(0, -1);
-    for (const [exportName, value] of Object.entries(mod.exports)) {
-      const name = exportName === 'default' ? fileBase : exportName;
-      // A class is an exported function named like its file, or capitalised. Timeline
-      // symbol classes are lower-case (`mcRampBank_Gate_113`), so the file name counts.
-      // `__`-prefixed exports are a module's own helpers (`__scriptInit`), never a game class.
-      if (typeof value !== 'function' || name.startsWith('__') || (!/^[A-Z_$]/.test(name) && name !== fileBase)) continue;
-      const qualifiedName = qualify(pkgSegments, name);
-      if (!byQualified.has(qualifiedName)) { classes.push({ name, qualifiedName, path }); byQualified.set(qualifiedName, value); }
-      setQualifiedName(value, qualifiedName);
-      add(name, value);
-      for (let i = pkgSegments.length - 1; i >= 0; i--) add(`${pkgSegments.slice(i).join('.')}.${name}`, value);
-    }
-  }
+  const index = indexClasses([...cache].map(([path, mod]) => [path, Object.entries(mod.exports)]),
+    (value) => typeof value === 'function', setQualifiedName);
 
   runScriptInits(cache, errors);
 
   return {
-    classes,
+    classes: index.classes,
     errors,
-    getDefinition(name: string) {
+    getDefinition: (name: string) => index.lookup(name, (n) => FLASH_DEFINITIONS.get(n)),
+  };
+}
+
+/** A program's classes, by every name AS3 code may use for one. */
+export interface ClassIndex<V> {
+  classes: ClassInfo[];
+  byQualified: Map<string, V>;
+  /** `flash` answers `flash.*` / `fl.*` / top-level names, consulted before a bare-name rescue. */
+  lookup(name: string, flash?: (name: string) => unknown): V | unknown;
+}
+
+/**
+ * Index a program's classes: `com/game/Enemy.ts` exporting Enemy → Enemy,
+ * game.Enemy, com.game.Enemy, … The linker indexes the evaluated exports, the
+ * static analysis (`analyze.ts`) what the compiled code declares; one function
+ * means both answer every name the same way.
+ */
+export function indexClasses<V>(
+  modules: Iterable<[string, Iterable<[string, V]>]>,
+  isClass: (value: V) => boolean,
+  /** called for every exported class, under the qualified name it was found as */
+  onClass?: (value: V, qualifiedName: string) => void,
+): ClassIndex<V> {
+  const classes: ClassInfo[] = [];
+  const index = new Map<string, V>();
+  const ambiguous = new Set<string>();
+  const byQualified = new Map<string, V>();
+  const add = (key: string, value: V) => {
+    const prev = index.get(key);
+    if (prev === undefined) index.set(key, value);
+    else if (prev !== value) ambiguous.add(key);
+  };
+  for (const [path, exports] of modules) {
+    const segments = stripExt(path).split('/');
+    const fileBase = segments[segments.length - 1];
+    const pkgSegments = segments.slice(0, -1);
+    for (const [exportName, value] of exports) {
+      const name = exportName === 'default' ? fileBase : exportName;
+      // A class is an exported function named like its file, or capitalised. Timeline
+      // symbol classes are lower-case (`mcRampBank_Gate_113`), so the file name counts.
+      // `__`-prefixed exports are a module's own helpers (`__scriptInit`), never a game class.
+      if (!isClass(value) || name.startsWith('__') || (!/^[A-Z_$]/.test(name) && name !== fileBase)) continue;
+      const qualifiedName = qualify(pkgSegments, name);
+      if (!byQualified.has(qualifiedName)) { classes.push({ name, qualifiedName, path }); byQualified.set(qualifiedName, value); }
+      onClass?.(value, qualifiedName);
+      add(name, value);
+      for (let i = pkgSegments.length - 1; i >= 0; i--) add(`${pkgSegments.slice(i).join('.')}.${name}`, value);
+    }
+  }
+  return {
+    classes,
+    byQualified,
+    lookup(name, flash) {
       const n = String(name).trim().replace('::', '.');
       if (!n) return undefined;
       // 1. unambiguous name / package-qualified suffix of a loaded class
@@ -195,8 +236,8 @@ export function linkProgram(compiled: CompiledSources): LinkedProgram {
       const suffix = classes.filter((c) => c.qualifiedName.endsWith(`.${n}`));
       if (suffix.length === 1) return byQualified.get(suffix[0].qualifiedName);
       // 3. flash.* / fl.* / AS3 top level
-      const flash = FLASH_DEFINITIONS.get(n);
-      if (flash !== undefined) return flash;
+      const answer = flash?.(n);
+      if (answer !== undefined) return answer;
       // 4. "com.game.Main" when the code declared Main without that folder structure
       const simple = n.slice(n.lastIndexOf('.') + 1);
       if (n.includes('.') && index.has(simple) && !ambiguous.has(simple)) return index.get(simple);
@@ -302,7 +343,7 @@ export function linkWithPlayer(compiled: CompiledSources, player: unknown): Link
 
 // --------------------------------------------------------------------------
 
-function resolveFlash(spec: string): Record<string, unknown> | null {
+export function resolveFlash(spec: string): Record<string, unknown> | null {
   const cleaned = spec.replace(/\\/g, '/').replace(/\.(d\.)?(ts|js)$/, '');
   const m = /(?:^|[/@])((?:flash|fl)(?:[./][A-Za-z_$][\w$]*)*)$/.exec(cleaned);
   if (!m) return null;
