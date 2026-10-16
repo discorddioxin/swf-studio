@@ -38,6 +38,8 @@ function tagBytes(out: Bytes, { code, body }: SwfTag) {
 export const tag = {
   end: (): SwfTag => ({ code: 0, body: new Uint8Array() }),
   showFrame: (): SwfTag => ({ code: 1, body: new Uint8Array() }),
+  /** DoAction: AVM1 action records, ending with ActionEndFlag (0). Default: `stop();`. */
+  doAction: (actions: ArrayLike<number> = [0x07]): SwfTag => ({ code: 12, body: Uint8Array.from([...Array.from(actions), 0x00]) }),
   backgroundColor: (rgb: number): SwfTag => ({ code: 9, body: new Bytes().u8(rgb >> 16).u8(rgb >> 8).u8(rgb).bytes() }),
   /** FileAttributes: ActionScript 3 (0x08), plus UseNetwork (0x01) when asked. */
   fileAttributes: ({ as3 = true, network = false } = {}): SwfTag => ({ code: 69, body: new Bytes().u32((as3 ? 0x08 : 0) | (network ? 0x01 : 0)).bytes() }),

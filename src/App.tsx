@@ -127,9 +127,36 @@ export default function App() {
     [],
   );
 
-  const installPackages = useCallback((loaded: SwfPackage[]) => {
+  /**
+   * Forget everything that belonged to the previous game: its adapter pick and
+   * game set, filters, timeline position and playback, selections, flattened
+   * sprites and error. "New folder" and every load start from here, so nothing
+   * chosen for one game applies to the next.
+   */
+  const resetSession = useCallback(() => {
+    setAdapterId('auto');
+    setGameSetId(null);
+    setFilters(defaultFilters);
+    setTimelineId('root');
+    setFrame(0);
+    setPlaying(false);
+    setLoopRange(null);
+    setSelectedId(null);
+    setSelectedPath(undefined);
+    setSelectedActorId(null);
+    flattenRequestRef.current?.abort();
+    disposeFlattenedSprites(flattenedResourcesRef.current);
+    setFlattenedSprites([]);
+    setFlatteningId(null);
+    setError(null);
+  }, []);
+
+  /** Open `loaded` ([0] = the main movie) as a new session; `setId` is the bundled game set it came from. */
+  const installPackages = useCallback((loaded: SwfPackage[], setId: string | null) => {
     const parsed = loaded[0]?.doc;
     if (!parsed) throw new Error('No readable SWF packages to open.');
+    resetSession();
+    setGameSetId(setId);
     cacheGenerationRef.current++;
     setPackages(loaded);
     cacheRef.current = loaded[0].cache;
@@ -137,17 +164,9 @@ export default function App() {
     setLoadedDocs(loaded.map((p) => p.doc));
     setActiveSwfIndex(0);
     setDoc(parsed);
-    flattenRequestRef.current?.abort();
-    disposeFlattenedSprites(flattenedResourcesRef.current);
-    setFlattenedSprites([]);
-    setFlatteningId(null);
     setFps(parsed.header.frameRate);
-    setTimelineId('root');
-    setFrame(0);
-    setSelectedId(null);
-    setSelectedPath(undefined);
     setBusy(null);
-  }, []);
+  }, [resetSession]);
 
   /** Names already loaded (basename of the document, without .xml/.swf). */
   const packageLabels = useCallback((loaded: SwfPackage[]) => new Set(
@@ -219,8 +238,7 @@ export default function App() {
       });
       setBusy('Merging bundled externals…');
       const { packages: complete, gameSetId: setId } = await mergeBundledExternals(loaded);
-      setGameSetId(setId);
-      installPackages(complete);
+      installPackages(complete, setId);
     } catch (e) {
       setBusy(null);
       setError(e instanceof Error ? e.message : String(e));
@@ -249,8 +267,7 @@ export default function App() {
         const { doc, files } = await fetchBundledSwf(entry);
         loaded.push(await buildPackage(files, doc));
       }
-      setGameSetId(game.id);
-      installPackages(loaded);
+      installPackages(loaded, game.id);
     } catch (e) {
       loaded.forEach((p) => p.cache.dispose());
       setBusy(null);
@@ -504,8 +521,8 @@ export default function App() {
           )}
           <Button variant="ghost" className="px-2 py-1 text-[10px]" onClick={() => {
             packages.forEach((p) => p.cache.dispose()); setPackages([]); cacheRef.current = null;
-            flattenRequestRef.current?.abort(); disposeFlattenedSprites(flattenedResourcesRef.current);
-            setFlatteningId(null); setFlattenedSprites([]); setLoadedDocs([]); setActiveSwfIndex(0); setDoc(null); setAssets(null);
+            resetSession();
+            setLoadedDocs([]); setActiveSwfIndex(0); setDoc(null); setAssets(null);
           }}>
             New folder
           </Button>
