@@ -18,7 +18,8 @@ import { abcSources, type AbcSources } from '../engine/flash/abc';
 import { FlashPlayer, HtmlAudioBackend, type LogEntry } from '../engine/flash/player';
 import type { AudioBackend } from '../engine/flash/media';
 import { MovieClip } from '../engine/flash/display';
-import { As2Execute, isAs2Bundle } from './As2Execute';
+import { As2Execute } from './As2Execute';
+import { chooseRuntime, runtimeLogMessage, type RuntimeChoice } from './runtimeChoice';
 import { MissingDependenciesBanner, MissingDependenciesPanel, dependencyProblems, useMissingDependencies } from './MissingDependencies';
 import type { DependencyFiles } from '../engine/flash/dependencies';
 import { useDebugger, useDebuggerState } from '../debug/store';
@@ -51,14 +52,17 @@ export function ExecuteTab({ externals, project, gameSetId, adapterId, onAdapter
   adapterId?: string | null;
   onAdapterChange?: (id: string) => void;
 }) {
-  return isAs2Bundle(props.doc, props.assets)
-    ? <As2Execute {...props} project={project} externals={externals} gameSetId={gameSetId} adapterId={adapterId} onAdapterChange={onAdapterChange} dependencyFiles={dependencyFiles} />
-    : <As3Execute {...props} project={project} externals={externals} uploadedFiles={dependencyFiles ?? null} />;
+  const choice = useMemo(() => chooseRuntime(props.doc, props.assets), [props.doc, props.assets]);
+  return choice.runtime === 'as2'
+    ? <As2Execute {...props} project={project} externals={externals} gameSetId={gameSetId} adapterId={adapterId} onAdapterChange={onAdapterChange} dependencyFiles={dependencyFiles} runtimeChoice={choice} />
+    : <As3Execute {...props} project={project} externals={externals} uploadedFiles={dependencyFiles ?? null} runtimeChoice={choice} />;
 }
 
-function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles = null }: {
+function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles = null, runtimeChoice }: {
   doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
   uploadedFiles?: DependencyFiles | null;
+  /** why this movie runs on AVM2 (logged when the player starts) */
+  runtimeChoice: RuntimeChoice;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -66,6 +70,7 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
   const playingRef = useRef(true);
   const mutedRef = useRef(false);
   const [code, setCode] = useState<CodeState>({ status: 'loading' });
+  const runtimeMessage = runtimeLogMessage(runtimeChoice);
   /** Module evaluation and import-resolution failures, from the player's link of the program. */
   const [linkErrors, setLinkErrors] = useState<LinkedProgram['errors']>([]);
   const [session, setSession] = useState(0);
@@ -222,6 +227,7 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
         if (entry.level === 'error') console.error('[game]', entry.message, entry.detail ?? '');
       },
     });
+    pendingLogs.current.push({ level: 'info', message: runtimeMessage, time: 0 });
     if (code.dependencies.length) {
       pendingLogs.current.push({
         level: 'info',
@@ -235,7 +241,7 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
     player.start();
     canvasRef.current?.focus({ preventScroll: true });
     return () => { player.dispose(); if (playerRef.current === player) playerRef.current = null; };
-  }, [doc, cache, code, docClass, session, uploadedFiles, externalSwfNames]);
+  }, [doc, cache, code, docClass, session, uploadedFiles, externalSwfNames, runtimeMessage]);
 
   // ---- fit the canvas to the panel
   useEffect(() => {

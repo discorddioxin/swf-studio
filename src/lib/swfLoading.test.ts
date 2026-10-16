@@ -9,7 +9,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import JSZip from 'jszip';
 import { loadUploadedPackages } from './swfLoading';
 import { isSwfXmlExport } from './swfSources';
-import { isAs2Bundle } from '../components/As2Execute';
+import { chooseRuntime } from '../components/runtimeChoice';
 import { FFDEC_SAMPLE_XML, ffdecSampleSwf } from '@/testing/movies';
 
 // jsdom's Blob has no text()/arrayBuffer(); browsers do.
@@ -58,7 +58,7 @@ describe('uploading SWFs', () => {
     expect(pkg.bundle.files.some((f) => /\.as$/i.test(f.path))).toBe(true);
     expect(pkg.bundle.files.some((f) => f.category === 'other')).toBe(false);
     // …so an uploaded AS2 SWF plays on the AS2 player, dependencies and all
-    expect(isAs2Bundle(pkg.doc, pkg.bundle)).toBe(true);
+    expect(chooseRuntime(pkg.doc, pkg.bundle).runtime).toBe('as2');
   }, 30000);
 
   it('uses the picked SWF as the main movie and the others as dependencies', async () => {

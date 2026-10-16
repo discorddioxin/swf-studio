@@ -85,9 +85,11 @@ function expectSame(received: string, expected: string, ctx: string) {
 }
 
 function compareDocs(xmlDoc: any, binDoc: any, name: string) {
-  // header (compression differs by design: the writer always emits FWS)
-  const hdr = (h: any) => stable({ ...h, fileName: '', compression: '' });
+  // header (compression differs by design: the writer always emits FWS; source
+  // names the form that was read, so it differs by definition)
+  const hdr = (h: any) => stable({ ...h, fileName: '', compression: '', source: '' });
   expect(hdr(binDoc.header), `${name} header`).toBe(hdr(xmlDoc.header));
+  expect([binDoc.header.source, xmlDoc.header.source], `${name} source`).toEqual(['swf', 'xml']);
   expect(binDoc.header.fileName, `${name} fileName`).toBe(xmlDoc.header.fileName);
 
   // timelines (keyed — Map insertion order may differ)

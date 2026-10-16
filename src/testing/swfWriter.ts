@@ -101,7 +101,8 @@ export const tag = {
   doAction: (actions: ArrayLike<number> = [0x07]): SwfTag => ({ code: 12, body: Uint8Array.from([...Array.from(actions), 0x00]) }),
   backgroundColor: (rgb: number): SwfTag => ({ code: 9, body: new Bytes().u8(rgb >> 16).u8(rgb >> 8).u8(rgb).bytes() }),
   /** FileAttributes: ActionScript 3 (0x08), plus UseNetwork (0x01) when asked. */
-  fileAttributes: ({ as3 = true, network = false } = {}): SwfTag => ({ code: 69, body: new Bytes().u32((as3 ? 0x08 : 0) | (network ? 0x01 : 0)).bytes() }),
+  /** FileAttributes (tag 69): flags byte (reserved, UseDirectBlit, UseGPU, HasMetadata, ActionScript3, NoCrossDomainCache, reserved, UseNetwork), 24 reserved bits. */
+  fileAttributes: ({ as3 = true, network = false, metadata = false } = {}): SwfTag => ({ code: 69, body: new Bytes().u32((metadata ? 0x10 : 0) | (as3 ? 0x08 : 0) | (network ? 0x01 : 0)).bytes() }),
   /** DoABC: `UI32 flags` (1 = lazy initialize), `STRING name`, the ABC file. */
   doAbc: (name: string, abc: Uint8Array, flags = 1): SwfTag => ({ code: 82, body: new Bytes().u32(flags).str(name).raw(abc).bytes() }),
   /** SymbolClass: `UI16 count` then (`UI16 id`, `STRING class`) pairs; id 0 is the document class. */

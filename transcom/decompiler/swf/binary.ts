@@ -1056,6 +1056,21 @@ interface ButtonCondAction {
 }
 
 /**
+ * FileAttributes as the XML parser summarizes FFDec's export of it: the fields
+ * in FFDec's (alphabetical) attribute order, false ones left out, at most four.
+ */
+function fileAttributesDetail(data: Uint8Array): string {
+  const f = data[0] ?? 0;
+  const reservedB = ((data[1] ?? 0) << 16) | ((data[2] ?? 0) << 8) | (data[3] ?? 0);
+  const fields: [string, boolean | number][] = [
+    ['actionScript3', !!(f & 0x08)], ['hasMetadata', !!(f & 0x10)], ['noCrossDomainCache', !!(f & 0x04)],
+    ['reservedA', !!(f & 0x80)], ['reservedB', reservedB], ['swfRelativeUrls', !!(f & 0x02)],
+    ['useDirectBlit', !!(f & 0x40)], ['useGPU', !!(f & 0x20)], ['useNetwork', !!(f & 0x01)],
+  ];
+  return fields.filter(([, v]) => v !== false).slice(0, 4).map(([k, v]) => `${k}=${v}`).join(' ');
+}
+
+/**
  * SOUNDINFO (SWF 19): a flags byte — reserved(2) SyncStop SyncNoMultiple HasEnvelope
  * HasLoops HasOutPoint HasInPoint — then InPoint u32, OutPoint u32, LoopCount u16 and
  * EnvPoints u8 followed by that many SOUNDENVELOPE records (Pos44 u32, Left u16, Right u16),
@@ -1236,6 +1251,8 @@ export async function parseSwfBinary(
   const symbolClasses = new Map<number, string>();
   let backgroundColor: number | undefined;
   let jpegTables: Uint8Array | undefined;
+  /** FileAttributes flags: reserved, UseDirectBlit, UseGPU, HasMetadata, ActionScript3, NoCrossDomainCache, SWFRelativeUrls, UseNetwork. */
+  let fileAttributes: number | undefined;
 
   const addChar = (id: number, tagType: string, kind: NonNullable<ReturnType<typeof kindOfTag>>, init: Partial<SwfCharacter>) => {
     const existing = characters.get(id);
@@ -1265,6 +1282,9 @@ export async function parseSwfBinary(
       const kind = kindOfTag(type);
       try {
         switch (tag.type) {
+          case 69: // FileAttributes: the flags byte (SWF 19)
+            fileAttributes ??= tag.data[0] ?? 0;
+            break;
           case 9: { // SetBackgroundColor
             const br2 = new BitReader(tag.data);
             backgroundColor = (br2.u8() << 16) | (br2.u8() << 8) | br2.u8();
@@ -1487,7 +1507,7 @@ export async function parseSwfBinary(
       case 9: return '';                 // SetBackgroundColor: only forceWriteAsLong=false
       case 56: return 'forceWriteAsLong=true';
       case 24: return 'reserved=0';      // Protect
-      case 69: return 'reservedB=0 useNetwork=true';
+      case 69: return fileAttributesDetail(tag.data);
       case 74: {
         // CSMTextSettings: textID, flags (useFlashType bit 6, gridFit bits 3-4,
         // rest reserved), thickness FLOAT, sharpness FLOAT, reserved byte.
@@ -1746,6 +1766,12 @@ export async function parseSwfBinary(
     compression: compression === 'CWS' ? 'ZLIB' : 'UNCOMPRESSED',
     fileName,
     backgroundColor,
+    source: 'swf',
+    ...(fileAttributes != null ? {
+      as3: (fileAttributes & 0x08) !== 0,
+      useNetwork: (fileAttributes & 0x01) !== 0,
+      hasMetadata: (fileAttributes & 0x10) !== 0,
+    } : {}),
   };
 
   // Synthesize scripts/*.as sources (FFDec export layout) from the decoded

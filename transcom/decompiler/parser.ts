@@ -641,6 +641,7 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
 
   const spriteQueue: { id: number; el: Element }[] = [];
   const buttonSoundTags: Element[] = [];
+  let fileAttributes: { as3: boolean; useNetwork: boolean; hasMetadata: boolean } | undefined;
 
   const registerCharacter = (el: Element, type: string) => {
     const kind = kindOfTag(type);
@@ -686,6 +687,13 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
       P.tagCount++;
       registerCharacter(t, type);
       if (type === 'DefineButtonSoundTag') buttonSoundTags.push(t);
+      if (type === 'FileAttributesTag' && depthGuard === 0 && !fileAttributes) {
+        fileAttributes = {
+          as3: bool(t.getAttribute('actionScript3')),
+          useNetwork: bool(t.getAttribute('useNetwork')),
+          hasMetadata: bool(t.getAttribute('hasMetadata')),
+        };
+      }
       if (type === 'SymbolClassTag' || type === 'ExportAssetsTag') {
         readSymbolClass(P, t, type === 'SymbolClassTag');
       }
@@ -747,6 +755,8 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
       stage,
       fileName: opts.fileName,
       backgroundColor: P.backgroundColor,
+      source: 'xml',
+      ...fileAttributes,
     },
     // Full SymbolClass table, including id 0 (the document class), which
     // has no character to hang a className on.

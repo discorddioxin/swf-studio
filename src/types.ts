@@ -179,6 +179,15 @@ export interface SwfHeader {
   fileName: string;
   /** SetBackgroundColor, 0xRRGGBB */
   backgroundColor?: number;
+  /** What was read: SWF bytes, or an FFDec XML export of them. */
+  source?: 'swf' | 'xml';
+  /**
+   * FileAttributes (tag 69) flags; unset when the movie has no such tag (in a
+   * binary SWF that means an AVM1 movie — the tag is how a SWF asks for AVM2).
+   */
+  as3?: boolean;
+  useNetwork?: boolean;
+  hasMetadata?: boolean;
 }
 
 export interface SwfDocument {

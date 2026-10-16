@@ -199,9 +199,12 @@ project together with the AS2 runtime.
 
 ### 6.4 Execute
 
-`ExecuteTab` chooses the runtime with `isAs2Bundle`: the bundle has `.as` files **and**
-(SWF version ≤ 8 **or** no SymbolClass). Note that `FileAttributes.ActionScript3` is
-never read (PROBLEMS P-13).
+`ExecuteTab` chooses the runtime with `chooseRuntime` (`components/runtimeChoice.ts`):
+`FileAttributes.ActionScript3` (tag 69, kept as `header.as3` with `useNetwork` and
+`hasMetadata`) decides when the tag is present; a binary SWF without the tag is AVM1.
+Only an FFDec XML export without a `FileAttributesTag` is guessed from the export (`.as`
+files **and** (SWF version ≤ 8 **or** no SymbolClass)). The rule that decided is logged
+in the Execute console (`runtime: AVM1 … — <rule>`).
 
 **AS1/AS2 path** (`As2Execute.tsx` → `engine/as2`):
 

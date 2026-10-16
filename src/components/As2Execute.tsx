@@ -25,6 +25,7 @@ import { useDebugger, useDebuggerState } from '../debug/store';
 import { DebugPanel } from '../debug/DebugPanel';
 import { usePopout } from '../debug/Popout';
 import { assignLegacyBoot, bootKey, discardLegacyBoot, migrateLegacyBoot, readBoot, writeBoot } from './bootScripts';
+import { runtimeLogMessage, type RuntimeChoice } from './runtimeChoice';
 
 const MAX_LOG = 500;
 
@@ -57,8 +58,6 @@ function sameRunningTimelines(a: readonly RunningTimelineSnapshot[], b: readonly
  */
 const NO_BOOT = { id: 'none', label: 'None', code: '', hint: 'Start exactly like the SWF does.' } as const;
 
-export const isAs2Bundle = (doc: SwfDocument, assets: AssetBundle | null) =>
-  !!assets?.files.some((f) => /\.as$/i.test(f.path)) && (Number(doc.header.version ?? 0) <= 8 || !doc.symbolClasses?.size);
 
 /** The default for `externals`: one shared array, because the player effect depends
  *  on it — a fresh `[]` per render would recreate the player on every render. */
@@ -68,7 +67,7 @@ const NO_FONTS = new Set<number>(); // shared and never written to
 /** An external SWF export with its key (used for its fonts). */
 interface ExternalEntry { pkg: SwfPackage; name: string; key: string }
 
-export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNALS, adapterId = null, gameSetId = null, onAdapterChange, dependencyFiles = null }: {
+export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNALS, adapterId = null, gameSetId = null, onAdapterChange, dependencyFiles = null, runtimeChoice }: {
   doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
   /** non-SWF files uploaded with the movies, which they may request at run time */
   dependencyFiles?: DependencyFiles | null;
@@ -77,7 +76,10 @@ export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNA
   /** bundled game set this load came from, if any (supplies the adapter hint) */
   gameSetId?: string | null;
   onAdapterChange?: (id: string) => void;
+  /** why this movie runs on AVM1 (logged when the player starts) */
+  runtimeChoice?: RuntimeChoice;
 }) {
+  const runtimeMessage = runtimeChoice ? runtimeLogMessage(runtimeChoice) : '';
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<AS2Player | null>(null);
@@ -355,6 +357,7 @@ export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNA
       },
     });
     playerForLog = player;
+    if (runtimeMessage) player.log('info', runtimeMessage);
     if (swfs.length) player.log('info', `external SWFs available: ${swfs.map((s) => s.name).join(', ')}`);
     playerRef.current = player;
     (globalThis as any).__as2player = player;
@@ -366,7 +369,7 @@ export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNA
       if (playerRef.current === player) playerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, cache, build, session, fontFamily, extEntries, dependencyFiles]);
+  }, [doc, cache, build, session, fontFamily, extEntries, dependencyFiles, runtimeMessage]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.muted = muted;
