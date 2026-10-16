@@ -21,7 +21,8 @@
 
 import * as RT from '../../runtime/as2';
 import type { AS2Handler, AS2Program } from '../../runtime/as2';
-import type { ColorTransform, DisplayItem, Frame, Matrix, PlaceOp, Rect, SwfCharacter, SoundInfo, SwfDocument, Timeline } from '../../types';
+import type { BlendMode, ColorTransform, DisplayItem, Frame, Matrix, PlaceOp, Rect, SwfCharacter, SoundInfo, SwfDocument, SwfFilter, Timeline } from '../../types';
+import { composite, needsComposite } from '../../lib/compositor';
 
 /**
  * Which DefineButtonSound record a button event plays. The records are
@@ -172,6 +173,11 @@ export class DisplayNode {
   startFrame = -1;
   /** a script changed the transform: timeline moves no longer apply */
   scriptMoved = false;
+  /** surface filters (PlaceObject3 / `filters`), drawn through the compositor */
+  filters: SwfFilter[] | undefined;
+  blendMode: BlendMode = 'normal';
+  /** a script set `filters` / `blendMode`: the timeline's no longer apply */
+  scriptEffects = false;
   removed = false;
   bornTick = 0;
   handlers: AS2Handler[] = [];
@@ -826,6 +832,7 @@ export class AS2Player {
       this.placeFromTimeline(parent, {
         depth: op.depth, characterId: op.characterId, matrix: op.matrix ?? identity(), colorTransform: op.colorTransform,
         ratio: op.ratio ?? 0, name: op.name, clipDepth: op.clipDepth, startFrame: frameIndex,
+        filters: op.filters?.length ? op.filters : undefined, blendMode: op.blendMode,
       });
       return;
     }
@@ -839,6 +846,10 @@ export class AS2Player {
     }
     if (op.ratio != null) existing.ratio = op.ratio;
     if (op.clipDepth != null) existing.clipDepth = op.clipDepth - DEPTH_OFFSET;
+    if (!existing.scriptEffects) {
+      if (op.filters) existing.filters = op.filters.length ? op.filters : undefined;
+      if (op.blendMode) existing.blendMode = op.blendMode;
+    }
   }
 
   private placeFromTimeline(parent: DisplayNode, item: DisplayItem) {
@@ -847,6 +858,8 @@ export class AS2Player {
       matrix: item.matrix, ct: item.colorTransform, ratio: item.ratio, clipDepth: item.clipDepth,
       fromTimeline: true, startFrame: item.startFrame, handlers,
     });
+    node.filters = item.filters;
+    node.blendMode = item.blendMode ?? 'normal';
     return node;
   }
 
@@ -878,6 +891,7 @@ export class AS2Player {
       const sameChar = c != null && (c.characterId === d.characterId || c.url !== null);
       if (c && c.fromTimeline && sameChar && c.startFrame === d.startFrame) {
         if (!c.scriptMoved) { c.matrix = { ...d.matrix }; c.comps = null; if (d.colorTransform) c.ct = d.colorTransform; }
+        if (!c.scriptEffects) { c.filters = d.filters; c.blendMode = d.blendMode ?? 'normal'; }
         c.ratio = d.ratio;
         continue;
       }
@@ -1660,6 +1674,7 @@ export class AS2Player {
 
   /** Draw the stage at `scale` (device px per stage px) with its top-left corner at (ox, oy). */
   renderTo(ctx: CanvasRenderingContext2D, scale: number, ox: number, oy: number) {
+    this.renderScale = scale;
     ctx.save();
     ctx.setTransform(scale, 0, 0, scale, ox, oy);
     ctx.globalAlpha = 1;
@@ -1718,8 +1733,26 @@ export class AS2Player {
   /** Game time in ms (what getTimer() returns). */
   get gameTime() { return this.clock; }
 
+  /** device pixels per stage pixel of the current renderTo (filter sizes are stage pixels) */
+  private renderScale = 1;
+
   private drawNode(ctx: CanvasRenderingContext2D, node: DisplayNode, alpha: number, ct: ColorTransform | undefined) {
     if (!node.visible || node.removed) return;
+    if (needsComposite(node.filters, node.blendMode)) {
+      // through a layer: the node at its own alpha; the parent's (ctx.globalAlpha) applies
+      // when the layer is drawn back, after the filters
+      const b = this.localBounds(node);
+      composite(ctx, {
+        filters: node.filters, blendMode: node.blendMode, filterScale: this.renderScale,
+        bounds: b ? transformRect(node.matrix, b) : null,
+        paint: (layer) => this.drawNodeContent(layer, node, 1, ct),
+      });
+      return;
+    }
+    this.drawNodeContent(ctx, node, alpha, ct);
+  }
+
+  private drawNodeContent(ctx: CanvasRenderingContext2D, node: DisplayNode, alpha: number, ct: ColorTransform | undefined) {
     const m = node.matrix;
     ctx.save();
     ctx.transform(m.a, m.b, m.c, m.d, m.tx, m.ty);

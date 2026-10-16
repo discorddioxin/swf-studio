@@ -392,7 +392,8 @@ export function composite(ctx: Ctx2D, opts: CompositeOptions): boolean {
   if (needsLayerParent && !layerContexts.has(ctx)) return false;
   const target = ctx.canvas as unknown as { width: number; height: number };
   const m = ctx.getTransform();
-  const pad = filterPadding(filters, opts.filterScale);
+  // + 2 px: given bounds may leave out stroke widths and antialiased edges
+  const pad = filterPadding(filters, opts.filterScale) + 2;
   let x0 = 0, y0 = 0, x1 = target.width, y1 = target.height;
   if (opts.bounds && !needsLayerParent) {
     const { xMin, yMin, xMax, yMax } = opts.bounds;

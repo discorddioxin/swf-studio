@@ -23,7 +23,8 @@ import {
   Sprite, Stage, transformRect, type DisplayHost, type SymbolRef,
 } from './display';
 import { Event, EventDispatcher, IOErrorEvent, KeyboardEvent, MouseEvent } from './events';
-import { Point, Rectangle } from './geom';
+import { Matrix, Point, Rectangle } from './geom';
+import { composite, needsComposite } from '../../lib/compositor';
 import { globalDebugger, type DebuggerStore } from '../../debug/store';
 import { findMatchingBreakpoint, flashLabelMatchesBreakpoint } from '../../debug/breakpointMatch';
 import type { AudioBackend, AudioHandle, SoundChannel } from './media';
@@ -750,7 +751,11 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
   // ----------------------------------------------------------- render --
 
   /** Paint the stage. `scale`/`offsetX`/`offsetY` map stage pixels to canvas pixels. */
+  /** device pixels per stage pixel of the current render (filter sizes are stage pixels) */
+  private renderScale = 1;
+
   render(ctx: CanvasRenderingContext2D, scale: number, offsetX: number, offsetY: number) {
+    this.renderScale = scale;
     const base = new DOMMatrixLike(scale, 0, 0, scale, offsetX, offsetY);
     ctx.save();
     ctx.setTransform(base.a, base.b, base.c, base.d, base.e, base.f);
@@ -765,6 +770,7 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
 
   /** BitmapData.draw(displayObject): render into another canvas at identity. */
   drawTo(ctx: CanvasRenderingContext2D, obj: DisplayObject) {
+    this.renderScale = 1;
     this.activate(() => this.drawObject(ctx, obj, 1, new DOMMatrixLike(1, 0, 0, 1, 0, 0), true));
   }
 
@@ -790,6 +796,30 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     const ct = obj._colorRef();
     const alpha = parentAlpha * Math.max(0, Math.min(1, ct.alphaMultiplier + ct.alphaOffset / 255));
     if (alpha <= 0) return;
+    if (needsComposite(obj._filterData, obj._blend)) {
+      // through a layer: the object at its own alpha; the parent's (ctx.globalAlpha) applies
+      // when the layer is drawn back, after the filters
+      const own = Math.max(0, Math.min(1, ct.alphaMultiplier + ct.alphaOffset / 255));
+      const local = obj._localBounds();
+      const m = ignoreOwnTransform ? new Matrix() : obj._matrix();
+      const r = local.isEmpty() && obj instanceof DisplayObjectContainer ? null : transformRect(m, local);
+      const outer = ctx.getTransform();
+      composite(ctx, {
+        filters: obj._filterData, blendMode: obj._blend, filterScale: this.renderScale,
+        bounds: r ? { xMin: r.x, yMin: r.y, xMax: r.x + r.width, yMax: r.y + r.height } : null,
+        paint: (layer) => {
+          // the layer is the target shifted: stage-space masks shift with it
+          const l = layer.getTransform();
+          const shifted = new DOMMatrixLike(base.a, base.b, base.c, base.d, base.e + l.e - outer.e, base.f + l.f - outer.f);
+          this.drawObjectContent(layer, obj, own, shifted, ignoreOwnTransform);
+        },
+      });
+      return;
+    }
+    this.drawObjectContent(ctx, obj, alpha, base, ignoreOwnTransform);
+  }
+
+  private drawObjectContent(ctx: CanvasRenderingContext2D, obj: DisplayObject, alpha: number, base: DOMMatrixLike, ignoreOwnTransform: boolean) {
     ctx.save();
     if (obj.mask && obj.mask.stage) {
       // Rectangular mask: clip to the mask's stage bounds.
