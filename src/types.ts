@@ -52,7 +52,24 @@ export interface SwfCharacter {
   codeTable?: number[];
   /** DefineFont2/3: the glyph outlines and layout, enough to build the font itself. */
   font?: SwfFontOutline;
+  /**
+   * DefineButtonSound: the sound for each state transition, in the tag's order —
+   * [OverUpToIdle, IdleToOverUp, OverUpToOverDown, OverDownToOverUp]; null = none.
+   */
+  buttonSounds?: (ButtonSound | null)[];
 }
+
+/** SOUNDINFO (StartSound, DefineButtonSound). In/out points and envelope positions are 44.1 kHz samples. */
+export interface SoundInfo {
+  syncStop: boolean;
+  syncNoMultiple: boolean;
+  inPoint?: number;
+  outPoint?: number;
+  loopCount?: number;
+  envelope?: { pos44: number; left: number; right: number }[];
+}
+
+export interface ButtonSound { soundId: number; info: SoundInfo }
 
 /** A point of a glyph contour: on the outline, or a quadratic control point. */
 export interface GlyphPoint { x: number; y: number; on: boolean }

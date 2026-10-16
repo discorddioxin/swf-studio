@@ -58,6 +58,24 @@ function matrix({ scaleX = 1, scaleY = 1, tx = 0, ty = 0 }: MatrixFields): Uint8
   return b.bytes();
 }
 
+export interface SoundInfoFields {
+  syncStop?: boolean; syncNoMultiple?: boolean;
+  inPoint?: number; outPoint?: number; loopCount?: number;
+  envelope?: { pos44: number; left: number; right: number }[];
+}
+/** SOUNDINFO: flags (reserved 2, SyncStop, SyncNoMultiple, HasEnvelope, HasLoops, HasOutPoint, HasInPoint), then the fields present. */
+function soundInfo(i: SoundInfoFields, b: Bytes) {
+  const flags = (i.syncStop ? 0x20 : 0) | (i.syncNoMultiple ? 0x10 : 0) | (i.envelope ? 0x08 : 0)
+    | (i.loopCount != null ? 0x04 : 0) | (i.outPoint != null ? 0x02 : 0) | (i.inPoint != null ? 0x01 : 0);
+  b.u8(flags);
+  if (i.inPoint != null) b.u32(i.inPoint);
+  if (i.outPoint != null) b.u32(i.outPoint);
+  if (i.loopCount != null) b.u16(i.loopCount);
+  if (i.envelope) { b.u8(i.envelope.length); for (const e of i.envelope) b.u32(e.pos44).u16(e.left).u16(e.right); }
+}
+
+export interface ButtonRecordFields { up?: boolean; over?: boolean; down?: boolean; hit?: boolean; character: number; depth: number }
+
 export interface CxformFields { mult?: [number, number, number]; add?: [number, number, number] }
 /** CXFORM (no alpha): multipliers in 8.8 fixed point, additive terms as given. */
 function cxform({ mult, add }: CxformFields): Uint8Array {
@@ -113,6 +131,28 @@ export const tag = {
     const b = new Bytes().u16(character).u16(depth).raw(matrix(m));
     if (ct) b.raw(cxform(ct));
     return { code: 4, body: b.bytes() };
+  },
+  /** DefineButton2 (tag 34): records with an identity matrix and colour transform, no actions. */
+  defineButton2: (id: number, records: ButtonRecordFields[]): SwfTag => {
+    const b = new Bytes().u16(id).u8(0).u16(0);
+    for (const r of records) {
+      b.u8((r.hit ? 8 : 0) | (r.down ? 4 : 0) | (r.over ? 2 : 0) | (r.up ? 1 : 0)).u16(r.character).u16(r.depth);
+      b.raw(matrix({})).raw(new Bits().ub(0, 1).ub(0, 1).ub(1, 4).bytes()); // MATRIX, CXFORMWITHALPHA (no terms)
+    }
+    return { code: 34, body: b.u8(0).bytes() };
+  },
+  /**
+   * DefineButtonSound (tag 17): ButtonId, then for OverUpToIdle, IdleToOverUp,
+   * OverUpToOverDown, OverDownToOverUp a sound id (0 = none) and, if set, its SOUNDINFO.
+   */
+  defineButtonSound: (button: number, sounds: ([number, SoundInfoFields] | null)[]): SwfTag => {
+    const b = new Bytes().u16(button);
+    for (let i = 0; i < 4; i++) {
+      const s = sounds[i];
+      b.u16(s ? s[0] : 0);
+      if (s) soundInfo(s[1], b);
+    }
+    return { code: 17, body: b.bytes() };
   },
   /** RemoveObject (tag 5): `UI16 characterId, UI16 depth`. */
   removeObject: (character: number, depth: number): SwfTag => ({ code: 5, body: new Bytes().u16(character).u16(depth).bytes() }),

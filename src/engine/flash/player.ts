@@ -35,6 +35,9 @@ import { URLVariables } from './misc';
 const TWIPS = 20;
 
 /** What the player needs from the asset cache (AssetCache satisfies it). */
+/** DefineButtonSound record order: the button state transition each sound belongs to. */
+const OVER_UP_TO_IDLE = 0, IDLE_TO_OVER_UP = 1, OVER_UP_TO_OVER_DOWN = 2, OVER_DOWN_TO_OVER_UP = 3;
+
 export interface AssetSource {
   get(id: number, kind: string, bounds?: Rect): LoadedAsset;
   preview(id: number, kind: string): { url: string } | undefined;
@@ -332,6 +335,28 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     void clip;
   }
 
+  /**
+   * Play a timeline button's DefineButtonSound record (enabled buttons only),
+   * honouring SOUNDINFO: SyncStop stops the sound, SyncNoMultiple skips one that
+   * is playing, LoopCount is the number of plays and InPoint (44.1 kHz samples)
+   * the start. OutPoint and the envelope have no backend support.
+   */
+  private buttonSound(button: SimpleButton, record: number) {
+    if (!button.enabled || !this.audio || typeof button._symbol !== 'number') return;
+    const sound = this.doc.characters.get(button._symbol)?.buttonSounds?.[record];
+    if (!sound) return;
+    const { soundId, info } = sound;
+    const playing = this.frameSounds.get(soundId);
+    if (info.syncStop) { playing?.stop(); this.frameSounds.delete(soundId); return; }
+    if (info.syncNoMultiple && playing) return;
+    const url = this.assets?.preview(soundId, 'sound')?.url ?? null;
+    const handle = this.audio.play(soundId, url, (info.inPoint ?? 0) / 44.1, Math.max(0, (info.loopCount ?? 1) - 1), 1);
+    if (!handle) return;
+    this.frameSounds.set(soundId, handle);
+    const prev = handle.onended;
+    handle.onended = () => { if (this.frameSounds.get(soundId) === handle) this.frameSounds.delete(soundId); prev?.(); };
+  }
+
   soundLength(id: number) {
     const ch = this.doc.characters.get(id);
     const samples = Number(ch?.attrs.soundSampleCount ?? 0);
@@ -606,7 +631,7 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
       const target = this.hitTarget(x, y);
       this.updateHover(target);
       this.pressed = target;
-      if (target instanceof SimpleButton && target.enabled) target._state = 'down';
+      if (target instanceof SimpleButton && target.enabled) { target._state = 'down'; this.buttonSound(target, OVER_UP_TO_OVER_DOWN); }
       if (target instanceof TextField && target.type === 'input') this.stage.focus = target;
       this.mouseEvent(target ?? this.stage, MouseEvent.MOUSE_DOWN);
       this.flushScripts();
@@ -618,7 +643,11 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     this.mouse.x = x; this.mouse.y = y; this.mouse.down = false;
     this.activate(() => {
       const target = this.hitTarget(x, y);
-      if (this.pressed instanceof SimpleButton) this.pressed._state = this.pressed === target ? 'over' : 'up';
+      if (this.pressed instanceof SimpleButton) {
+        const over = this.pressed === target;
+        this.pressed._state = over ? 'over' : 'up';
+        this.buttonSound(this.pressed, over ? OVER_DOWN_TO_OVER_UP : OVER_UP_TO_IDLE); // release / release outside
+      }
       this.mouseEvent(target ?? this.stage, MouseEvent.MOUSE_UP);
       if (target && target === this.pressed) this.mouseEvent(target, MouseEvent.CLICK);
       else if (this.pressed && this.pressed !== target) this.mouseEvent(this.pressed, MouseEvent.RELEASE_OUTSIDE, false);
@@ -643,8 +672,16 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     const prev = this.hover;
     if (prev === target) return;
     this.hover = target;
-    if (prev instanceof SimpleButton) prev._state = 'up';
-    if (target instanceof SimpleButton && target.enabled) target._state = this.mouse.down && this.pressed === target ? 'down' : 'over';
+    // Drag out / drag over (the pressed button, mouse still down) play no sound.
+    if (prev instanceof SimpleButton) {
+      prev._state = 'up';
+      if (!(this.mouse.down && this.pressed === prev)) this.buttonSound(prev, OVER_UP_TO_IDLE);
+    }
+    if (target instanceof SimpleButton && target.enabled) {
+      const dragOver = this.mouse.down && this.pressed === target;
+      target._state = dragOver ? 'down' : 'over';
+      if (!dragOver) this.buttonSound(target, IDLE_TO_OVER_UP);
+    }
     const chain = (o: DisplayObject | null) => { const a: DisplayObject[] = []; for (let n = o; n && !(n instanceof Stage); n = n._parent) a.push(n); return a; };
     const oldChain = chain(prev), newChain = chain(target);
     if (prev && prev.stage) this.mouseEvent(prev, MouseEvent.MOUSE_OUT, true, target);

@@ -2,7 +2,7 @@ import { avm1ActionSource, hexToBytes } from './swf/bitio';
 import {
   type ColorTransform, type DisplayItem, type EventKind, type Frame, type FrameEvent,
   type Matrix, type PlaceOp, type Rect, type SwfCharacter, type TextRecord, type SwfDocument,
-  type Timeline, type CharacterKind, IDENTITY,
+  type Timeline, type CharacterKind, type ButtonSound, type SoundInfo, IDENTITY,
 } from '../../src/types';
 
 // ---------------------------------------------------------------------------
@@ -83,6 +83,32 @@ function num(v: string | null | undefined, dflt = 0): number {
 
 function bool(v: string | null | undefined): boolean {
   return v === 'true' || v === '1';
+}
+
+/** An FFDec SOUNDINFO element; each optional field counts only when its has* flag is set. */
+function soundInfoOf(el: Element): SoundInfo {
+  const info: SoundInfo = { syncStop: bool(el.getAttribute('syncStop')), syncNoMultiple: bool(el.getAttribute('syncNoMultiple')) };
+  if (bool(el.getAttribute('hasInPoint'))) info.inPoint = num(el.getAttribute('inPoint'));
+  if (bool(el.getAttribute('hasOutPoint'))) info.outPoint = num(el.getAttribute('outPoint'));
+  if (bool(el.getAttribute('hasLoops'))) info.loopCount = num(el.getAttribute('loopCount'));
+  if (bool(el.getAttribute('hasEnvelope'))) {
+    const records = Array.from(el.children).find((c) => c.tagName === 'envelopeRecords');
+    info.envelope = Array.from(records?.children ?? []).map((r) => ({
+      pos44: num(r.getAttribute('pos44')), left: num(r.getAttribute('leftLevel')), right: num(r.getAttribute('rightLevel')),
+    }));
+  }
+  return info;
+}
+
+/** DefineButtonSoundTag: buttonSoundChar0..3 with a buttonSoundInfo0..3 child for each nonzero one. */
+function buttonSoundsOf(el: Element): (ButtonSound | null)[] {
+  const out: (ButtonSound | null)[] = [];
+  for (let i = 0; i < 4; i++) {
+    const soundId = num(el.getAttribute(`buttonSoundChar${i}`));
+    const infoEl = Array.from(el.children).find((c) => c.tagName === `buttonSoundInfo${i}`);
+    out.push(soundId ? { soundId, info: infoEl ? soundInfoOf(infoEl) : { syncStop: false, syncNoMultiple: false } } : null);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -213,7 +239,8 @@ export function kindOfTag(type: string): CharacterKind | null {
   if (/^DefineSprite/.test(type)) return 'sprite';
   if (/^DefineMorphShape/.test(type)) return 'morphshape';
   if (/^DefineShape/.test(type)) return 'shape';
-  if (/^DefineButton/.test(type)) return 'button';
+  // DefineButtonSound / DefineButtonCxform add to a button; they define no character.
+  if (/^DefineButton(?!Sound|Cxform)/.test(type)) return 'button';
   if (/^(DefineBits|DefineBitsJPEG|DefineBitsLossless)/.test(type)) return 'bitmap';
   if (/^DefineEditText/.test(type)) return 'edittext';
   if (/^DefineText/.test(type)) return 'text';
@@ -228,7 +255,7 @@ const PLACE_RE = /^PlaceObject(2|3|4)?Tag$/;
 const REMOVE_RE = /^RemoveObject(2)?Tag$/;
 
 export function classify(type: string): EventKind {
-  if (/^(DoAction|DoInitAction|DoABC|RawABC|DefineButtonCxform)/.test(type)) return 'action';
+  if (/^(DoAction|DoInitAction|DoABC|RawABC)/.test(type)) return 'action';
   if (/^(StartSound|SoundStreamHead|SoundStreamBlock|DefineSound)/.test(type)) return 'sound';
   if (/^FrameLabel/.test(type)) return 'label';
   if (/^(Define|JPEGTables|SymbolClass|ExportAssets|ImportAssets)/.test(type)) return 'define';
@@ -613,6 +640,7 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
   markTagOrder(rootTags);
 
   const spriteQueue: { id: number; el: Element }[] = [];
+  const buttonSoundTags: Element[] = [];
 
   const registerCharacter = (el: Element, type: string) => {
     const kind = kindOfTag(type);
@@ -657,6 +685,7 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
       const type = tagTypeOf(t)!;
       P.tagCount++;
       registerCharacter(t, type);
+      if (type === 'DefineButtonSoundTag') buttonSoundTags.push(t);
       if (type === 'SymbolClassTag' || type === 'ExportAssetsTag') {
         readSymbolClass(P, t, type === 'SymbolClassTag');
       }
@@ -670,6 +699,12 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
     }
   };
   walk(rootEl);
+  for (const el of buttonSoundTags) {
+    const id = num(el.getAttribute('buttonId'), -1);
+    const button = P.characters.get(id);
+    if (button?.kind === 'button') button.buttonSounds = buttonSoundsOf(el);
+    else P.warnings.push(`DefineButtonSound: button ${id} is not defined`);
+  }
 
   // --------------------------------------------------------- timelines ----
   const root = buildTimeline(P, 'root', 'root', undefined, 'Main Timeline', rootTags);

@@ -5,7 +5,7 @@
 
 import type {
   ColorTransform, DisplayItem, EventKind, Frame, FrameEvent, Matrix, PlaceOp,
-  GlyphPoint, Rect, SwfCharacter, SwfDocument, SwfFontOutline, SwfHeader, TextRecord, Timeline,
+  ButtonSound, GlyphPoint, Rect, SoundInfo, SwfCharacter, SwfDocument, SwfFontOutline, SwfHeader, TextRecord, Timeline,
 } from '../../../src/types';
 import { classify, kindOfTag, isSpecialTag, actionFileCandidates } from '../parser';
 import { BitReader, avm1ActionSource, isLikelyActionStream, latin1 } from './bitio';
@@ -19,7 +19,7 @@ export const TAG_NAMES: Record<number, string> = {
   0: 'EndTag', 1: 'ShowFrameTag', 2: 'DefineShapeTag', 4: 'PlaceObjectTag', 5: 'RemoveObjectTag',
   6: 'DefineBitsTag', 7: 'DefineButtonTag', 8: 'JPEGTablesTag', 9: 'SetBackgroundColorTag',
   10: 'DefineFontTag', 11: 'DefineTextTag', 12: 'DoActionTag', 13: 'DefineFontInfoTag', 14: 'DefineSoundTag',
-  15: 'StartSoundTag', 17: 'DefineButtonCxformTag', 18: 'SoundStreamHeadTag',
+  15: 'StartSoundTag', 17: 'DefineButtonSoundTag', 18: 'SoundStreamHeadTag',
   19: 'SoundStreamBlockTag', 20: 'DefineBitsLosslessTag', 21: 'DefineBitsJPEG2Tag',
   22: 'DefineShape2Tag', 23: 'DefineButtonCxformTag', 24: 'ProtectTag',
   26: 'PlaceObject2Tag', 28: 'RemoveObject2Tag', 32: 'DefineShape3Tag',
@@ -1055,6 +1055,26 @@ interface ButtonCondAction {
   actionBytes: Uint8Array;
 }
 
+/**
+ * SOUNDINFO (SWF 19): a flags byte — reserved(2) SyncStop SyncNoMultiple HasEnvelope
+ * HasLoops HasOutPoint HasInPoint — then InPoint u32, OutPoint u32, LoopCount u16 and
+ * EnvPoints u8 followed by that many SOUNDENVELOPE records (Pos44 u32, Left u16, Right u16),
+ * each only when its flag is set.
+ */
+export function readSoundInfo(br: BitReader): SoundInfo {
+  const flags = br.u8();
+  const info: SoundInfo = { syncStop: !!(flags & 0x20), syncNoMultiple: !!(flags & 0x10) };
+  if (flags & 0x01) info.inPoint = br.u32();
+  if (flags & 0x02) info.outPoint = br.u32();
+  if (flags & 0x04) info.loopCount = br.u16();
+  if (flags & 0x08) {
+    const n = br.u8();
+    info.envelope = [];
+    for (let i = 0; i < n; i++) info.envelope.push({ pos44: br.u32(), left: br.u16(), right: br.u16() });
+  }
+  return info;
+}
+
 function parseButton2(
   data: Uint8Array,
   warn: (message: string) => void = () => {},
@@ -1289,6 +1309,19 @@ export async function parseSwfBinary(
               attrs: { spriteId: String(id), frameCount: String(fc), hasEndTag: 'true' },
             });
             await registerTags(tag.children ?? []);
+            break;
+          }
+          case 17: { // DefineButtonSound: sounds for the button's state transitions
+            const br2 = new BitReader(tag.data);
+            const buttonId = br2.u16();
+            const sounds: (ButtonSound | null)[] = [];
+            for (let i = 0; i < 4; i++) {
+              const soundId = br2.u16();
+              sounds.push(soundId ? { soundId, info: readSoundInfo(br2) } : null);
+            }
+            const button = characters.get(buttonId);
+            if (button?.kind === 'button') button.buttonSounds = sounds;
+            else warnStructural(`DefineButtonSound: button ${buttonId} is not defined before it`);
             break;
           }
           case 34: { // DefineButton2
@@ -1602,22 +1635,7 @@ export async function parseSwfBinary(
       if (/^StartSound/.test(type)) {
         const br2 = new BitReader(tag.data);
         const sid = br2.u16();
-        const flags = br2.u8();
-        // SOUNDINFO: reserved(2) syncStop syncNoMultiple hasEnvelope hasLoops hasOutPoint hasInPoint
-        const syncStop = !!(flags & 0x20);
-        const syncNoMultiple = !!(flags & 0x10);
-        const hasEnvelope = !!(flags & 0x08);
-        const hasLoops = !!(flags & 0x04);
-        const hasOut = !!(flags & 0x02);
-        const hasIn = !!(flags & 0x01);
-        if (hasIn) br2.u32();
-        if (hasOut) br2.u32();
-        let loopCount = 0;
-        if (hasLoops) loopCount = br2.u16();
-        if (hasEnvelope) {
-          const n = br2.u16();
-          br2.skip(n * 7 * 4);
-        }
+        const { syncStop, syncNoMultiple, loopCount = 0 } = readSoundInfo(br2);
         const bits: string[] = [];
         if (syncStop) bits.push('stop');
         if (syncNoMultiple) bits.push('noMultiple');

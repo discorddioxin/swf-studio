@@ -21,7 +21,16 @@
 
 import * as RT from '../../runtime/as2';
 import type { AS2Handler, AS2Program } from '../../runtime/as2';
-import type { ColorTransform, DisplayItem, Frame, Matrix, PlaceOp, Rect, SwfCharacter, SwfDocument, Timeline } from '../../types';
+import type { ColorTransform, DisplayItem, Frame, Matrix, PlaceOp, Rect, SwfCharacter, SoundInfo, SwfDocument, Timeline } from '../../types';
+
+/**
+ * Which DefineButtonSound record a button event plays. The records are
+ * [OverUpToIdle, IdleToOverUp, OverUpToOverDown, OverDownToOverUp]; release
+ * outside ends in the idle state, and drag out / drag over play nothing.
+ */
+const BUTTON_SOUND_RECORD: Partial<Record<string, number>> = {
+  rollOut: 0, releaseOutside: 0, rollOver: 1, press: 2, release: 3,
+};
 import type { AssetSource, LogEntry, LogLevel, LogMetadata, NetworkEvent, NetworkObserver } from '../flash/player';
 import type { AudioBackend, AudioHandle } from '../flash/media';
 import { DependencyTracker, describeDependency, type DependencyFiles } from '../flash/dependencies';
@@ -758,11 +767,25 @@ export class AS2Player {
   private frameSounds(frame: Frame, movie: Movie) {
     for (const e of frame.events) {
       if (e.kind !== 'sound' || e.characterId == null || !/^StartSound/.test(e.tagType)) continue;
-      const stop = /\bstop\b/.test(e.detail);
-      const loops = Number(/loop ×(\d+)/.exec(e.detail)?.[1] ?? 1);
-      if (stop) this.stopSound(e.characterId, movie);
-      else if (!(/noMultiple/.test(e.detail) && [...this.channels].some((c) => c.id === e.characterId && c.movie === movie))) this.playSound(e.characterId, null, 0, loops, 1, movie);
+      this.startSound(e.characterId, {
+        syncStop: /\bstop\b/.test(e.detail),
+        syncNoMultiple: /noMultiple/.test(e.detail),
+        loopCount: Number(/loop ×(\d+)/.exec(e.detail)?.[1] ?? 1),
+      }, movie);
     }
+  }
+
+  /**
+   * Start (or, with SyncStop, stop) an event sound as SOUNDINFO describes it:
+   * SyncNoMultiple skips a sound that is already playing, LoopCount is the
+   * number of plays, InPoint (44.1 kHz samples) is where playback starts.
+   * OutPoint and the envelope are not applied — the audio backend has no
+   * way to express them.
+   */
+  startSound(id: number, info: SoundInfo, movie: Movie) {
+    if (info.syncStop) { this.stopSound(id, movie); return; }
+    if (info.syncNoMultiple && [...this.channels].some((c) => c.id === id && c.movie === movie)) return;
+    this.playSound(id, null, (info.inPoint ?? 0) / 44.1, Math.max(1, info.loopCount ?? 1), 1, movie);
   }
 
   /** First frame of a newly created clip: children + its frame-1 script. */
@@ -1096,16 +1119,14 @@ export class AS2Player {
     }
   }
 
-  /** Clips with on(...) mouse handlers or onPress/onRelease… behave like buttons. */
+  /**
+   * Every enabled button takes the mouse — its states and DefineButtonSound
+   * records need no script. Clips do when they have on(...) mouse handlers or
+   * onPress/onRelease… methods.
+   */
   isMouseTarget(node: DisplayNode): boolean {
     if (node.removed || !node.obj) return false;
-    if (node.kind === 'button') {
-      if (node.obj.enabled === false) return false;
-      const handlers = [...node.handlers, ...(node.movie.program?.buttons[node.characterId] ?? [])];
-      return handlers.some((h) => h.kind === 'on' && h.events.some((e) => !e.startsWith('keyPress')))
-        || ['onPress', 'onRelease', 'onReleaseOutside', 'onRollOver', 'onRollOut', 'onDragOver', 'onDragOut']
-          .some((k) => typeof node.obj[k] === 'function');
-    }
+    if (node.kind === 'button') return node.obj.enabled !== false;
     if (node.kind === 'text') return !!node.text && (node.text.input || node.text.selectable) && false;
     if (node.kind !== 'clip' || node.obj.enabled === false) return false;
     if (node.handlers.some((h) => h.kind === 'on' && h.events.some((e) => !e.startsWith('keyPress')))) return true;
@@ -1117,6 +1138,10 @@ export class AS2Player {
   /** Fire a button-style event (press, release, rollOver …) on a clip or button. */
   buttonEvent(node: DisplayNode, event: 'press' | 'release' | 'releaseOutside' | 'rollOver' | 'rollOut' | 'dragOver' | 'dragOut') {
     const self = node.kind === 'button' ? node.parent?.obj ?? node.obj : node.obj;
+    if (node.kind === 'button') {
+      const sound = node.movie.doc.characters.get(node.characterId)?.buttonSounds?.[BUTTON_SOUND_RECORD[event] ?? -1];
+      if (sound) this.startSound(sound.soundId, sound.info, node.movie);
+    }
     const hs = [...node.handlers, ...(node.kind === 'button' ? node.movie.program?.buttons[node.characterId] ?? [] : [])];
     for (const h of hs) {
       if (h.kind === 'on' && h.events.includes(event)) this.enqueue(node, `${this.describe(node)} on(${event})`, () => h.run.call(self));

@@ -82,9 +82,9 @@ const TAG_CODES = {
   EndTag: 0, ShowFrameTag: 1, DefineShapeTag: 2, RemoveObjectTag: 5,
   DefineBitsTag: 6, DefineButtonTag: 7, JPEGTablesTag: 8, SetBackgroundColorTag: 9,
   DefineFontTag: 10, DefineTextTag: 11, DoActionTag: 12, DefineSoundTag: 14,
-  StartSoundTag: 15, DefineButtonCxformTag: 17, SoundStreamHeadTag: 18,
+  StartSoundTag: 15, DefineButtonSoundTag: 17, SoundStreamHeadTag: 18,
   SoundStreamBlockTag: 19, DefineBitsLosslessTag: 20, DefineBitsJPEG2Tag: 21,
-  DefineShape2Tag: 22, ProtectTag: 24, PlaceObject2Tag: 26, RemoveObject2Tag: 28,
+  DefineShape2Tag: 22, DefineButtonCxformTag: 23, ProtectTag: 24, PlaceObject2Tag: 26, RemoveObject2Tag: 28,
   DefineShape3Tag: 32, DefineText2Tag: 33, DefineButton2Tag: 34,
   DefineBitsJPEG3Tag: 35, DefineBitsLossless2Tag: 36, DefineEditTextTag: 37,
   DefineSpriteTag: 39, FrameLabelTag: 43, SoundStreamHead2Tag: 45,
@@ -622,6 +622,36 @@ function writeFontAlignZones(w, itemEl) {
   w.align();
 }
 
+/**
+ * SOUNDINFO (SWF 19): flags reserved(2) SyncStop SyncNoMultiple HasEnvelope HasLoops
+ * HasOutPoint HasInPoint, then the fields that are present. EnvPoints is a u8 count of
+ * SOUNDENVELOPE records (Pos44 u32, LeftLevel u16, RightLevel u16).
+ */
+function writeSoundInfo(w, si) {
+  const has = (k) => !!si && BOOL(si.getAttribute(k));
+  let f = 0;
+  if (has('syncStop')) f |= 0x20;
+  if (has('syncNoMultiple')) f |= 0x10;
+  if (has('hasEnvelope')) f |= 0x08;
+  if (has('hasLoops')) f |= 0x04;
+  if (has('hasOutPoint')) f |= 0x02;
+  if (has('hasInPoint')) f |= 0x01;
+  w.u8(f);
+  if (has('hasInPoint')) w.u32(num(si, 'inPoint'));
+  if (has('hasOutPoint')) w.u32(num(si, 'outPoint'));
+  if (has('hasLoops')) w.u16(num(si, 'loopCount'));
+  if (has('hasEnvelope')) {
+    const records = childByTag(si, 'envelopeRecords');
+    const items = records ? [...records.children] : [];
+    w.u8(items.length);
+    for (const e of items) {
+      w.u32(num(e, 'pos44'));
+      w.u16(num(e, 'leftLevel'));
+      w.u16(num(e, 'rightLevel'));
+    }
+  }
+}
+
 // ----------------------------------------------------------------- tags ----
 
 function writeTag(w, itemEl) {
@@ -853,29 +883,17 @@ function tagPayload(itemEl, type) {
     }
     case 'StartSoundTag': {
       w.u16(num(itemEl, 'soundId'));
-      const si = firstData(itemEl, (c) => (c.getAttribute('type') ?? '') === 'SOUNDINFO' || c.tagName === 'soundInfo');
-      let f = 0;
-      if (si) {
-        if (BOOL(si.getAttribute('syncStop'))) f |= 0x20;
-        if (BOOL(si.getAttribute('syncNoMultiple'))) f |= 0x10;
-        if (BOOL(si.getAttribute('hasEnvelope'))) f |= 0x08;
-        if (BOOL(si.getAttribute('hasLoops'))) f |= 0x04;
-        if (BOOL(si.getAttribute('hasOutPoint'))) f |= 0x02;
-        if (BOOL(si.getAttribute('hasInPoint'))) f |= 0x01;
-      }
-      w.u8(f);
-      if (si && BOOL(si.getAttribute('hasInPoint'))) w.u32(num(si, 'inPoint'));
-      if (si && BOOL(si.getAttribute('hasOutPoint'))) w.u32(num(si, 'outPoint'));
-      if (si && BOOL(si.getAttribute('hasLoops'))) w.u16(num(si, 'loopCount'));
-      if (si && BOOL(si.getAttribute('hasEnvelope'))) {
-        const envs = childrenByTag(si, 'envelopes');
-        const items = envs.length ? [...envs[0].children] : [];
-        w.u16(items.length);
-        for (const e of items) {
-          w.u32(num(e, 'position44k'));
-          w.u16(num(e, 'left44k'));
-          w.u16(num(e, 'right44k'));
-        }
+      writeSoundInfo(w, firstData(itemEl, (c) => (c.getAttribute('type') ?? '') === 'SOUNDINFO' || c.tagName === 'soundInfo'));
+      break;
+    }
+    case 'DefineButtonSoundTag': {
+      // ButtonId, then OverUpToIdle, IdleToOverUp, OverUpToOverDown, OverDownToOverUp:
+      // a sound id each and, when it is nonzero, its SOUNDINFO.
+      w.u16(num(itemEl, 'buttonId'));
+      for (let i = 0; i < 4; i++) {
+        const id = num(itemEl, `buttonSoundChar${i}`);
+        w.u16(id);
+        if (id) writeSoundInfo(w, childByTag(itemEl, `buttonSoundInfo${i}`));
       }
       break;
     }
