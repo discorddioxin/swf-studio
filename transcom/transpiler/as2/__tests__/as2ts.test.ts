@@ -85,6 +85,21 @@ describe('emitter scoping', () => {
     expect(fn).toContain('(p ?? $rt.sink).k = 2;');
   });
 
+  it('new on a member chain stays valid JavaScript (an optional chain is no constructor)', () => {
+    const code = script('var d = new flash.filters.DropShadowFilter(4, 45); var p = new a.b.C();');
+    expect(code).toContain('$t.d = new (flash.filters?.DropShadowFilter)(4, 45);');
+    expect(code).toContain('$t.p = new ($t.a?.b?.C)();');
+    expect(() => transform(code, { transforms: ['typescript'] })).not.toThrow();
+    expect(() => new Function(transform(code, { transforms: ['typescript', 'imports'] }).code)).not.toThrow();
+  });
+
+  it('names imported from the flash packages are the runtime classes, not timeline variables', () => {
+    const code = script('import flash.filters.GlowFilter;\nvar g = new GlowFilter(0xff0000); var t = GlowFilter;');
+    expect(code).toContain('$t.g = new flash.filters.GlowFilter(0xff0000);');
+    expect(code).toContain('$t.t = flash.filters.GlowFilter;');
+    expect(code).toMatch(/import \{ flash, type AS2Clip \} from "@\/runtime\/as2";/);
+  });
+
   it('keeps dynamic this in nested functions and maps runtime globals', () => {
     const code = script('mc.onEnterFrame = function() { this._x += Key.isDown(Key.LEFT) ? -1 : 1; trace(getTimer()); };');
     expect(code).toContain('($t.mc ?? $rt.sink).onEnterFrame = function(this: any) {');
@@ -321,7 +336,7 @@ describe('project mapping', () => {
         expect(() => transform(c, { transforms: ['typescript', 'imports'] })).not.toThrow();
       }
       mkdirSync(join(dir, 'runtime', 'as2'), { recursive: true });
-      for (const file of ['as2/index.ts', 'as2/avm1.ts', 'as2/actor.ts', 'shared/hostGuard.ts']) {
+      for (const file of ['as2/index.ts', 'as2/avm1.ts', 'as2/actor.ts', 'shared/hostGuard.ts', 'shared/filters.ts', 'shared/filterModel.ts']) {
         mkdirSync(dirname(join(dir, 'runtime', file)), { recursive: true });
         writeFileSync(join(dir, 'runtime', file), readFileSync(join(repo, 'src/runtime', file), 'utf8'));
       }

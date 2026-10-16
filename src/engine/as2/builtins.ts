@@ -4,6 +4,8 @@
 
 import * as RT from '../../runtime/as2';
 import type { ColorTransform, Rect } from '../../types';
+import { BLEND_MODES } from '../../types';
+import { readFilters, writeFilters } from '../../runtime/shared/filters';
 import { dependencyKind, isServiceEndpoint } from '../flash/dependencies';
 import { identity, invert, apply as applyM, transformRect } from './geom';
 import { avm1Root } from './player';
@@ -372,6 +374,26 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     _alpha: {
       get(this: any) { const n = N(this); return n?.ct ? n.ct.am * 100 : 100; },
       set(this: any, v: any) { const n = N(this); if (!n || !Number.isFinite(+v)) return; n.ct = { ...(n.ct ?? { rm: 1, gm: 1, bm: 1, am: 1, ra: 0, ga: 0, ba: 0, aa: 0 }), am: +v / 100 }; n.scriptMoved = true; },
+    },
+    // Flash 8: copies on read; assigning copies the array (MovieClip / Button / TextField.filters)
+    filters: {
+      get(this: any) { const n = N(this); return n ? readFilters({ data: n.filters, objects: n.filterObjects }) : []; },
+      set(this: any, v: any) {
+        const n = N(this); if (!n) return;
+        const state = writeFilters(v);
+        n.filters = state.data; n.filterObjects = state.objects; n.scriptEffects = true;
+      },
+    },
+    // a BlendMode name ("multiply") or its number (1 normal … 14 hardlight); anything else is ignored
+    blendMode: {
+      get(this: any) { return N(this)?.blendMode ?? 'normal'; },
+      set(this: any, v: any) {
+        const n = N(this); if (!n) return;
+        const mode = typeof v === 'number' ? (v >= 1 ? BLEND_MODES[v] : undefined)
+          : BLEND_MODES.includes(String(v) as never) ? String(v) as typeof BLEND_MODES[number] : undefined;
+        if (!mode) return;
+        n.blendMode = mode; n.scriptEffects = true;
+      },
     },
     _visible: {
       get(this: any) { return N(this)?.visible ?? true; },

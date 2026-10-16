@@ -10,6 +10,7 @@
 
 import { avm1Semantics, runActionsBase64, setAvm1Env, takeAvm1Warnings, type Avm1Warning } from './avm1';
 import { Avm1Function, safeConstructor, safeKey } from '../shared/hostGuard';
+import * as Filters from '../shared/filters';
 
 export { Actor, TimelineActor, flashActorPorts } from './actor';
 export type { ActorPorts, SpritePort, AnimationPort, GraphicsPort } from './actor';
@@ -623,7 +624,17 @@ export const AsBroadcaster: Record<string, any> = {};
 export const Camera: Record<string, any> = {};
 export const Microphone: Record<string, any> = {};
 export const Accessibility: Record<string, any> = { isActive: () => false, updateProperties: () => {} };
-export const flash: Record<string, any> = { geom: {}, filters: {}, display: {}, external: {}, net: {}, text: {} };
+export const flash: Record<string, any> = {
+  geom: {},
+  // Flash 8 filters (shared with the AS3 runtime); a clip's `filters` turns them into what the player draws
+  filters: {
+    BitmapFilter: Filters.BitmapFilter, DropShadowFilter: Filters.DropShadowFilter, GlowFilter: Filters.GlowFilter,
+    BlurFilter: Filters.BlurFilter, BevelFilter: Filters.BevelFilter, GradientGlowFilter: Filters.GradientGlowFilter,
+    GradientBevelFilter: Filters.GradientBevelFilter, ConvolutionFilter: Filters.ConvolutionFilter,
+    ColorMatrixFilter: Filters.ColorMatrixFilter, DisplacementMapFilter: Filters.DisplacementMapFilter,
+  },
+  display: {}, external: {}, net: {}, text: {},
+};
 
 // ------------------------------------------------------ scope-chain fallback
 // Timeline code reads unresolved names as `$t.name`. In the AS2 player the
@@ -712,6 +723,8 @@ function installGlobals() {
     ASSetPropFlags, toggleHighQuality, MovieClip, Button, TextField, TextFormat, Sound, Color, XMLNode, XML, LoadVars, LocalConnection,
     MovieClipLoader, ContextMenu, ContextMenuItem, NetConnection, NetStream, Video, TextSnapshot, PrintJob, XMLSocket,
     Key, Mouse, Stage, Selection, System, SharedObject, AsBroadcaster, Camera, Microphone,
+    // Flash 8 packages (_global.flash.filters.GlowFilter …)
+    flash,
   };
   for (const [k, v] of Object.entries(builtins)) {
     if (v !== undefined) Object.defineProperty(_global, k, { value: v, writable: true, configurable: true, enumerable: false });

@@ -23,6 +23,7 @@ import * as RT from '../../runtime/as2';
 import type { AS2Handler, AS2Program } from '../../runtime/as2';
 import type { BlendMode, ColorTransform, DisplayItem, Frame, Matrix, PlaceOp, Rect, SwfCharacter, SoundInfo, SwfDocument, SwfFilter, Timeline } from '../../types';
 import { composite, needsComposite } from '../../lib/compositor';
+import type { BitmapFilter } from '../../runtime/shared/filters';
 
 /**
  * Which DefineButtonSound record a button event plays. The records are
@@ -176,6 +177,8 @@ export class DisplayNode {
   /** surface filters (PlaceObject3 / `filters`), drawn through the compositor */
   filters: SwfFilter[] | undefined;
   blendMode: BlendMode = 'normal';
+  /** the filter objects a script assigned (undefined: the timeline's) */
+  filterObjects: BitmapFilter[] | undefined;
   /** a script set `filters` / `blendMode`: the timeline's no longer apply */
   scriptEffects = false;
   removed = false;

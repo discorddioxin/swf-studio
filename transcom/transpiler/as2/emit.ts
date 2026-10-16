@@ -296,6 +296,12 @@ export class ModuleEmitter {
     }
   }
 
+  /** `flash.x.Name` when `name` was imported from the runtime's flash packages (not a project class). */
+  private runtimeImport(name: string): string | null {
+    const imp = this.imported.get(name);
+    return imp && imp.startsWith('flash.') && !this.opts.classes?.has(imp) && /^[\w.]+$/.test(imp) ? imp : null;
+  }
+
   /** Resolve a class name as written (short or qualified) to a project class. */
   private resolveClassName(name: string, pkg: string): string | null {
     const classes = this.opts.classes;
@@ -607,7 +613,9 @@ export class ModuleEmitter {
       case 'index': return `${this.expr(e.obj, ctx, P_CALL)}${this.isSafe(e.obj, ctx) ? '' : '?.'}[${this.key(e.index, ctx)}]`;
       case 'call': return this.call(e, ctx, min);
       case 'new': {
-        const callee = this.expr(e.callee, ctx, P_CALL);
+        let callee = this.expr(e.callee, ctx, P_CALL);
+        // `new a?.b()` is a syntax error: an optional chain as the constructor goes in parentheses
+        if (callee.includes('?.') && !/^\(.*\)$/.test(callee)) callee = `(${callee})`;
         return this.wrap(`new ${callee}(${e.args.map((a) => this.expr(a, ctx, PREC['='])).join(', ')})`, P_CALL, min);
       }
       case 'unary': {
@@ -676,6 +684,7 @@ export class ModuleEmitter {
         const cls = ctx.cls;
         if (cls && (cls.statics.has(e.name) || cls.instance.has(e.name))) return false;
         if (this.resolveClassName(e.name, cls?.pkg ?? '')) return true;
+        if (this.runtimeImport(e.name)) return true;
         return RUNTIME_FUNCTIONS.has(e.name) || RUNTIME_CLASSES.has(e.name) || JS_GLOBALS.has(e.name);
       }
       case 'member': { const chain = memberChain(e); return !!(chain && this.opts.classes?.has(chain)); }
@@ -830,6 +839,9 @@ export class ModuleEmitter {
     // project classes (imported, same package or default package)
     const q = this.resolveClassName(name, cls?.pkg ?? '');
     if (q) return this.aliasFor(q);
+    // `import flash.filters.GlowFilter;` names a runtime class: the runtime's `flash` package object
+    const runtimeImport = this.runtimeImport(name);
+    if (runtimeImport) { this.useRuntime('flash'); return runtimeImport; }
     const lvl = /^_level(\d+)$/.exec(name);
     if (lvl) { this.useRuntime('$rt'); return `$rt.level(${lvl[1]})`; }
     if (name === '_root') {

@@ -23,6 +23,7 @@ import { runtime, type PlayerContext } from './context';
 import { Event, EventDispatcher } from './events';
 import { ColorTransform, Matrix, Point, Rectangle, Transform } from './geom';
 import { definesBehaviour } from './utils';
+import { readFilters, writeFilters, type BitmapFilter } from '../../runtime/shared/filters';
 
 const TWIPS = 20;
 /** Timeline depths sit below script depths, as in Flash (-16384 + depth). */
@@ -147,8 +148,16 @@ export class DisplayObject extends EventDispatcher {
   private _visible = true;
   private _mask: DisplayObject | null = null;
   cacheAsBitmap = false;
-  filters: unknown[] = [];
   /** @internal surface filters in the compositor's model (timeline or `filters`) */ _filterData: SwfFilter[] | undefined;
+  /** @internal the filter objects a script assigned (undefined: the timeline's) */ _filterObjects: BitmapFilter[] | undefined;
+  /** Copies of the filters; assigning copies the array (flash.display.DisplayObject.filters). */
+  get filters(): unknown[] { return readFilters({ data: this._filterData, objects: this._filterObjects }); }
+  set filters(v: unknown[]) {
+    const state = writeFilters(v);
+    this._filterData = state.data;
+    this._filterObjects = state.objects;
+    this._scriptEffects = true;
+  }
   /** @internal */ _blend: BlendMode = 'normal';
   /** @internal a script set `filters` / `blendMode`: the timeline's no longer apply */ _scriptEffects = false;
   get blendMode(): string { return this._blend; }

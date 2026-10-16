@@ -56,7 +56,7 @@ export const PACKAGES: Record<string, Record<string, unknown>> = {
   'flash.net': pick(misc, ['URLRequest', 'URLVariables', 'URLRequestMethod', 'navigateToURL', 'sendToURL', 'SharedObject', 'SharedObjectFlushStatus', 'URLLoader', 'URLLoaderDataFormat', 'Socket']),
   'flash.system': { ...pick(misc, ['Capabilities', 'System', 'Security', 'ApplicationDomain', 'LoaderContext', 'fscommand']) },
   'flash.filters': pick(misc, ['BitmapFilter', 'GlowFilter', 'DropShadowFilter', 'BlurFilter', 'ColorMatrixFilter', 'BevelFilter',
-    'GradientGlowFilter', 'GradientBevelFilter', 'ConvolutionFilter', 'DisplacementMapFilter', 'BitmapFilterQuality']),
+    'GradientGlowFilter', 'GradientBevelFilter', 'ConvolutionFilter', 'DisplacementMapFilter', 'BitmapFilterQuality', 'BitmapFilterType']),
   'flash.external': pick(misc, ['ExternalInterface']),
   'flash.errors': pick(utils, ['IllegalOperationError', 'IOError', 'EOFError']),
   'fl.transitions': pick(fl, ['Tween', 'TweenEvent']),
