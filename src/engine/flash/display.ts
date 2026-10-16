@@ -70,6 +70,24 @@ interface Pending {
 let pending: Pending | null = null;
 let instanceCounter = 1;
 
+/**
+ * @internal An instance of an engine class made outside the movie: no player sees
+ * it (no symbol lookup, no frame script queued) and the automatic instance names go
+ * on as if it had never been made. For reading which fields the engine keeps.
+ */
+export function constructDetached<T>(Cls: new () => T): T {
+  const saved = { counter: instanceCounter, pending, player: runtime.player };
+  pending = null;
+  runtime.player = null;
+  try {
+    return new Cls();
+  } finally {
+    instanceCounter = saved.counter;
+    pending = saved.pending;
+    runtime.player = saved.player;
+  }
+}
+
 /** Construct `Cls` as if the player placed it: parent/name/matrix are set before the class body runs. */
 export function constructPlaced<T>(Cls: new () => T, context: Pending): T | null {
   pending = context;

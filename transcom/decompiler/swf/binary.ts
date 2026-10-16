@@ -812,7 +812,7 @@ function parseDefineText(tag: RawTag, is2: boolean): {
   return { id, bounds, matrix, records };
 }
 
-function parseEditText(tag: RawTag): {
+function parseEditText(tag: RawTag, version = 8): {
   id: number; charId: number; bounds: Rect; attrs: Record<string, string>; initialText: string;
 } {
   // DefineEditText layout (SWF spec / Ruffle read_define_edit_text):
@@ -862,7 +862,14 @@ function parseEditText(tag: RawTag): {
   }
   const variableName = br.str();
   let initialText = '';
-  if (hasText) initialText = latin1(br.bytes(br.remaining));
+  // InitialText is a STRING: it ends at its NUL (which is not part of the text),
+  // and from SWF 6 on it is UTF-8 — latin-1 before
+  if (hasText) {
+    const rest = br.bytes(br.remaining);
+    const end = rest.indexOf(0);
+    const bytes = end < 0 ? rest : rest.subarray(0, end);
+    initialText = version >= 6 ? new TextDecoder('utf-8').decode(bytes) : latin1(bytes);
+  }
 
   const attrs: Record<string, string> = {
     characterID: String(id),
@@ -1477,7 +1484,7 @@ export async function parseSwfBinary(
             break;
           }
           case 37: {
-            const et = parseEditText(tag);
+            const et = parseEditText(tag, version);
             // DefineEditText's own id is characterID; `fontId` is only the font it
             // references. Registering it under the font id (as an earlier revision did,
             // to match parseSwfXml's fontId-first charIdOf) collided with the font

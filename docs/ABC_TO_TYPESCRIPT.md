@@ -59,7 +59,12 @@ path serves the UI and the tests.
 2. **Jumps → structured statements.** No `goto` in TypeScript, so loops and
    `switch` tables have to be *recovered*:
    * `while` — entry jump to the test, test jumps back into the body
-     (`tryPreTestedWhile`), including the `for-in` shape (`hasnext2`);
+     (`tryPreTestedWhile`), including the `for-in` shape (`hasnext2`). What the
+     loop visits is AS3's, not JavaScript's: dynamic properties only. A class not
+     declared `dynamic` enumerates nothing; one that is emits
+     `__dynamic(Klass, [declared slots])` so its slots are left out too; and
+     what the engine's classes keep on an instance is never visited
+     (`src/engine/flash/enumeration.ts`);
    * `do…while`/latch loops — the branch at the bottom jumps back to the head;
    * `switch` — `lookupswitch` at the tail of the `switch`, case bodies laid out
      before it, arm targets sometimes *backwards*;

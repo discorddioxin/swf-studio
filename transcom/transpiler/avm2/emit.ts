@@ -188,6 +188,17 @@ export interface ClassModuleResult extends EmitResult {
   qualifiedName: string;
 }
 
+/** The instance slot names declared by a class and its ancestors in the same ABC. */
+function declaredSlots(qualified: string, byQualified: Map<string, AbcClassDef>): string[] {
+  const names = new Set<string>();
+  const seen = new Set<string>();
+  for (let cls = byQualified.get(qualified); cls && !seen.has(cls.instance.name); cls = byQualified.get(cls.instance.superName)) {
+    seen.add(cls.instance.name);
+    for (const t of cls.instance.traits) if (t.kind === 'slot' || t.kind === 'const') names.add(simpleName(t.name));
+  }
+  return [...names];
+}
+
 export function emitClassModule(options: ClassModuleOptions): ClassModuleResult {
   const { abc, classIndex, projectClasses } = options;
   const def: AbcClassDef = abc.classes[classIndex];
@@ -360,7 +371,14 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
     return `require(${quote(specifier(refs.self, target.replace(/\.ts$/, '')))}).${name}`;
   };
   const slotsCall = slotDefaults.length ? `__slots(${simple}, { ${slotDefaults.join(', ')} });\n` : '';
-  const cinitCall = `${slotsCall}${hasCinit ? `${simple}.__cinit();\n` : ''}`;
+  // `for (k in o)` sees an object's dynamic properties only. A class declared
+  // `dynamic` says so, with the slots it and its ancestors declare (those are
+  // traits, never enumerated); every other class is sealed, and its instances
+  // enumerate nothing (engine/flash/enumeration.ts).
+  const dynamicCall = !isInterface && !instance.sealed
+    ? `__dynamic(${simple}, ${JSON.stringify(declaredSlots(instance.name, byQualified))});\n`
+    : '';
+  const cinitCall = `${dynamicCall}${slotsCall}${hasCinit ? `${simple}.__cinit();\n` : ''}`;
   const tail = isInterface
     ? `\nexport const ${simple} = __interface(${quote(qualifiedName)}${supers.length ? `, ${supers.map(refOf).join(', ')}` : ''});`
     : supers.length

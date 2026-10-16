@@ -70,6 +70,19 @@ export class Timer extends EventDispatcher {
  * Map-style `get/set/has/delete` methods keep object keys by identity for
  * transpilers that emit them.
  */
+/** Each Dictionary (the proxy a script holds) → the map behind it: for-in visits its keys, objects included. */
+const DICTIONARIES = new WeakMap<object, Map<unknown, unknown>>();
+/** @internal A Dictionary's keys in insertion order; undefined for anything else. */
+export function dictionaryKeys(o: unknown): unknown[] | undefined {
+  const map = o && typeof o === 'object' ? DICTIONARIES.get(o) : undefined;
+  return map ? [...map.keys()] : undefined;
+}
+/** @internal The value under `key` when `o` is a Dictionary. */
+export function dictionaryValue(o: unknown, key: unknown): { found: boolean; value?: unknown } {
+  const map = o && typeof o === 'object' ? DICTIONARIES.get(o) : undefined;
+  return map ? { found: true, value: map.get(key) } : { found: false };
+}
+
 export class Dictionary {
   constructor(_weakKeys = false) {
     const map = new Map<unknown, unknown>();
@@ -79,7 +92,7 @@ export class Dictionary {
       keys: () => map.keys(), values: () => map.values(), entries: () => map.entries(),
       forEach: (fn: (v: unknown, k: unknown) => void) => map.forEach(fn), [Symbol.iterator]: () => map.entries(),
     };
-    return new Proxy(this, {
+    const proxy = new Proxy(this, {
       get: (_t, k) => (k === 'size' ? map.size : k in api && !map.has(k) ? api[k as string] : map.get(k)),
       set: (_t, k, v) => { map.set(k, v); return true; },
       has: (_t, k) => map.has(k),
@@ -89,6 +102,8 @@ export class Dictionary {
       ownKeys: () => [...map.keys()].filter((k): k is string | symbol => typeof k === 'string' || typeof k === 'symbol'),
       getOwnPropertyDescriptor: (_t, k) => (map.has(k) ? { enumerable: true, configurable: true, writable: true, value: map.get(k) } : undefined),
     });
+    DICTIONARIES.set(proxy, map);
+    return proxy;
   }
 }
 
@@ -375,25 +390,6 @@ export function __applyType(base: unknown, ...types: unknown[]): unknown {
     return klass;
   }
   throw new TypeError('applytype of a non-class');
-}
-
-/**
- * `hasnext2` + `nextname`: the cursor of a `for-in` is a key here, so advancing
- * means "the key after this one". `null` means the object is exhausted.
- */
-export function __iterAdvance(object: unknown, cursor: unknown): string | null {
-  if (object == null) return null;
-  const keys = Object.keys(object as Record<string, unknown>);
-  if (cursor == null) return keys.length ? keys[0] : null;
-  const at = keys.indexOf(String(cursor));
-  const next = at < 0 ? 0 : at + 1;
-  return next < keys.length ? keys[next] : null;
-}
-
-/** `nextvalue` — the value the cursor is standing on (`for each`). */
-export function __iterValue(object: unknown, cursor: unknown): unknown {
-  if (object == null || cursor == null) return undefined;
-  return (object as Record<string, unknown>)[String(cursor)];
 }
 
 /** `convert_o` — coercing to Object throws on null and undefined. */

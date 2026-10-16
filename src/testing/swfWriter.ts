@@ -170,6 +170,16 @@ export const tag = {
     for (const [id, name] of links) b.u16(id).str(name);
     return { code: 76, body: b.bytes() };
   },
+  /**
+   * DefineEditText (tag 37) with only HasText set (flags byte 1 bit 7): id, bounds,
+   * flags, `STRING variableName`, `STRING initialText`. `text` is written as given
+   * (UTF-8, NUL-terminated); pass bytes to write an exact, pre-SWF 6 encoding.
+   */
+  defineEditText: (id: number, text: string | Uint8Array, variableName = ''): SwfTag => {
+    const b = new Bytes().u16(id).raw(rect(0, 2000, 0, 400)).u16(0x0080).str(variableName);
+    if (typeof text === 'string') b.str(text); else b.raw(text).u8(0);
+    return { code: 37, body: b.bytes() };
+  },
   /** DefineSprite: id, frame count, then its own control tags (ShowFrames and End included). */
   defineSprite: (id: number, tags: SwfTag[]): SwfTag => {
     const b = new Bytes().u16(id).u16(tags.filter((t) => t.code === 1).length);
