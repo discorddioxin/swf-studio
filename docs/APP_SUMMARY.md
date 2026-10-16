@@ -168,6 +168,12 @@ idempotent.
 - **Stage** (`Stage.tsx`, `lib/render.ts`): `flatten()` resolves nested sprites into world
   matrices with deterministic local playheads (`localFrameOf`). `render()` draws shape SVG
   and bitmap assets on a 2D canvas with zoom and pan. `pick()` performs hit-testing.
+- **Filters and blend modes** (`lib/compositor.ts`): PlaceObject3 / button-record filter lists
+  and blend modes, and script-set `filters` / `blendMode`, are drawn by one compositor shared
+  by the Workbench and both players. A subtree with effects is painted into an offscreen layer,
+  filtered in JS (Flash's box-blur passes, shadow / glow / bevel / gradient / colour-matrix /
+  convolution) and drawn back with the blend's composite operation. Layers are cached per
+  display object, keyed by what the subtree draws, the device transform and the filters.
 - **TimelineView**: frame strip with special-frame markers, loop range, fps and start frame.
   Keyboard: Space plays or pauses, arrows step, Home/End jump. This handler is installed on
   `window` for the whole app (PROBLEMS P-05).
@@ -219,7 +225,8 @@ useAS2Build → program.ts
   sucrase → CommonJS → new Function(...) → AS2Program
 AS2Player (engine/as2/player.ts)
   per tick: enterFrame → timeline advance → action queue; goto diffs display snapshots;
-  canvas renderer, text layout, sound, input, focus, buttons, loadMovie/MovieClipLoader,
+  canvas renderer (filters / blend modes via lib/compositor), text layout, sound, input,
+  focus, buttons, loadMovie/MovieClipLoader,
   XML / LoadVars / XMLSocket via the adapter's offline network, SharedObject in localStorage
 ```
 
@@ -233,7 +240,8 @@ doc.abc (DoABC payloads) ──abcSources──▶ transpileAbc (transcom/transp
 compileSources (sucrase) → linkProgram (new Function per module, CommonJS-style require,
    flash.* packages resolved from engine/flash/packages.ts, cyclic-retry passes)
 FlashPlayer (engine/flash/player.ts)
-   document class + SymbolClass linkage, display list, events, enterFrame, text, sound,
+   document class + SymbolClass linkage, display list (filters / blend modes via
+   lib/compositor), events, enterFrame, text, sound,
    URLLoader served from uploaded files
 ```
 

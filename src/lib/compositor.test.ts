@@ -3,7 +3,7 @@
 // glue and the blend modes.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createCanvas } from '@napi-rs/canvas';
-import { applyFilter, applyFilters, composite, filterPadding, needsComposite, setCanvasFactory, type Pixels } from './compositor';
+import { applyFilter, applyFilters, composite, compositeStats, filterPadding, invalidateLayers, needsComposite, setCanvasFactory, type Pixels } from './compositor';
 import type { SwfFilter } from '@/types';
 
 type Rgba = [number, number, number, number];
@@ -232,5 +232,41 @@ describe('composite on a canvas', () => {
     } });
     expect(a.px(15, 15)).toEqual([0, 0, 255, 255]); // the layer kept where the alpha object is
     expect(a.px(40, 40)).toEqual([0, 255, 0, 255]);
+  });
+
+  it('a cached layer is reused while its key, the device transform and the filters stay the same', () => {
+    const owner = {};
+    let painted = 0;
+    const paint = (l: CanvasRenderingContext2D) => { painted++; redSquare(l); };
+    const draw = (key: string, ctx = target().ctx, filters = [shadow()]) => {
+      composite(ctx, { filters, bounds, filterScale: 1, paint, cache: { owner, key } });
+      return ctx;
+    };
+    const reused = compositeStats.reused;
+    const first = draw('a');
+    const again = draw('a');
+    expect(painted).toBe(1);
+    expect(compositeStats.reused).toBe(reused + 1);
+    // the reused layer draws the same pixels
+    expect(Array.from(again.getImageData(0, 0, 60, 60).data)).toEqual(Array.from(first.getImageData(0, 0, 60, 60).data));
+    draw('b'); // the subtree changed
+    expect(painted).toBe(2);
+    const moved = target().ctx; moved.translate(5, 0);
+    draw('b', moved); // the object moved
+    expect(painted).toBe(3);
+    draw('b', moved, [shadow({ distance: 8 })]); // other filters
+    expect(painted).toBe(4);
+    draw('b', moved, [shadow({ distance: 8 })]);
+    expect(painted).toBe(4);
+    invalidateLayers(); // an image or a font arrived
+    draw('b', moved, [shadow({ distance: 8 })]);
+    expect(painted).toBe(5);
+    // one owner drawn twice a frame with different results keeps both
+    draw('c'); draw('d'); draw('c'); draw('d');
+    expect(painted).toBe(7);
+    // no cache entry: always painted
+    composite(target().ctx, { filters: [shadow()], bounds, filterScale: 1, paint });
+    composite(target().ctx, { filters: [shadow()], bounds, filterScale: 1, paint });
+    expect(painted).toBe(9);
   });
 });

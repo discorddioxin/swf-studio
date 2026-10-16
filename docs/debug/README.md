@@ -106,6 +106,8 @@ them with `npm run test:debug` (`vitest.debug.config.ts`), or one of them with
 | `__dumpShapes.dev.test.ts`, `__shapeAudit.dev.test.ts` | shape/fill inventory across the sample SWFs. |
 | `avm1-action-audit.dev.test.ts` | extracts and hashes every sample SWF's `avm1Actions` payload, retains per-SWF tag paths, and writes a static bytecode report under `docs/debug/tools/e2e-output/avm1-action-audit/`. |
 | `__placeframe.dev.mjs` | standalone helper for the frame-placement dump. |
+| `filters.census.dev.test.ts` | counts the surface filters and blend modes per corpus SWF (timeline records) and the `flash.filters` / `blendMode` names in their code. |
+| `filters.shots.dev.test.ts` | real-game check for filters / blend modes: renders the corpus sprites with the most effects through the Workbench renderer with the SWF's own shapes, writes before (effects dropped) / after PNGs side by side to `/tmp/p04-shots`, and times redraws with and without the layer cache (`SWF=`, `PICK=`, `SCALE=`, `OUT=`). |
 
 Scenario tests that boot the sample game through its own adapter are **not** here —
 they live with the adapter (`src/adapters/<game>/__tests__/`), e.g. the full

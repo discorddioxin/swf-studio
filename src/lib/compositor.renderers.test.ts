@@ -9,7 +9,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createCanvas, type Canvas } from '@napi-rs/canvas';
 import { parseSwfXml } from './parser';
 import { drawTimeline } from './render';
-import { setCanvasFactory } from './compositor';
+import { compositeStats, setCanvasFactory } from './compositor';
 import type { AssetCache, LoadedAsset } from './assets';
 import type { Rect } from '@/types';
 import { AS2Player } from '@/engine/as2/player';
@@ -17,6 +17,7 @@ import { buildAS2Program } from '@/engine/as2/program';
 import { FlashPlayer } from '@/engine/flash/player';
 import { compileSources, linkProgram } from '@/engine/flash/loader';
 import { runtime } from '@/engine/flash/context';
+import { Bitmap, Shape, type DisplayObjectContainer, type MovieClip } from '@/engine/flash/display';
 
 const W = 200, H = 150;
 const M = (tx: number, ty: number) => `<matrix type="MATRIX" hasScale="false" hasRotate="false" translateX="${tx * 20}" translateY="${ty * 20}"/>`;
@@ -138,5 +139,72 @@ describe('filters and blend modes in all three renderers', () => {
     const diff = (x: Uint8ClampedArray, y: Uint8ClampedArray) => { let n = 0; for (let i = 0; i < x.length; i++) if (Math.abs(x[i] - y[i]) > 1) n++; return n; };
     expect(diff(a, b)).toBe(0);
     expect(diff(a, c)).toBe(0);
+  });
+
+  describe('the layer cache', () => {
+    const counts = () => ({ ...compositeStats });
+    const since = (c: { painted: number; reused: number }) => ({ painted: compositeStats.painted - c.painted, reused: compositeStats.reused - c.reused });
+    // three layers per frame: the shadowed square, the multiplied square, the glowing sprite
+
+    it('Workbench: the same frame again reuses every layer', () => {
+      const doc = parseSwfXml(XML, { fileName: 'effects.xml' });
+      const opts = {
+        doc, cache: assets as unknown as AssetCache, timeline: doc.timelines.get('root')!, frame: 0,
+        view: { zoom: 1, panX: 0, panY: 0 }, showOutlines: false, showMasks: false, background: '#ffffff', filterScale: 1,
+      };
+      const draw = () => { const { ctx } = target(); ctx.scale(1 / 20, 1 / 20); drawTimeline(ctx, opts, opts.timeline, 0, undefined, 0); return ctx; };
+      const fresh = draw().getImageData(0, 0, W, H).data;
+      const c = counts();
+      const cached = draw().getImageData(0, 0, W, H).data;
+      expect(since(c)).toEqual({ painted: 0, reused: 3 });
+      expect(Array.from(cached)).toEqual(Array.from(fresh));
+    });
+
+    it('AS2: reused while nothing changes; a moved child repaints its layer, never a stale one', () => {
+      const doc = parseSwfXml(XML, { fileName: 'effects.xml' });
+      const player = new AS2Player({ doc, program: buildAS2Program([]).program, assets });
+      player.start();
+      const draw = () => { const { ctx } = target(); player.renderTo(ctx, 1, 0, 0); return ctx; };
+      draw();
+      let c = counts();
+      draw();
+      expect(since(c)).toEqual({ painted: 0, reused: 3 });
+      // move the red square inside the glowing sprite 10 px right
+      const glowing = player.root.children.find((n) => n.name === 'glowing')!;
+      glowing.children[0].matrix = { ...glowing.children[0].matrix, tx: 200 };
+      c = counts();
+      const ctx = draw();
+      expect(since(c)).toEqual({ painted: 1, reused: 2 });
+      expect(px(ctx, 25, 110)).not.toEqual([255, 0, 0, 255]); // was the square's left edge
+      expect(px(ctx, 65, 110)).toEqual([255, 0, 0, 255]);
+    });
+
+    it('AS3: reused while nothing changes; drawing into a child repaints; a Bitmap is never cached', () => {
+      const doc = parseSwfXml(XML, { fileName: 'effects.xml' });
+      flash = new FlashPlayer({ doc, program: linkProgram(compileSources([])), assets });
+      flash.start();
+      const draw = () => { const { ctx } = target(); flash!.render(ctx, 1, 0, 0); return ctx; };
+      draw();
+      let c = counts();
+      draw();
+      expect(since(c)).toEqual({ painted: 0, reused: 3 });
+      const glowing = (flash.root as MovieClip).getChildByName('glowing') as DisplayObjectContainer;
+      const dot = new Shape();
+      dot.graphics.beginFill(0x0000ff); dot.graphics.drawRect(0, 0, 10, 10); dot.graphics.endFill();
+      glowing.addChild(dot);
+      c = counts();
+      let ctx = draw();
+      expect(since(c)).toEqual({ painted: 1, reused: 2 });
+      expect(px(ctx, 25, 95)).toEqual([0, 0, 255, 255]);
+      dot.graphics.clear(); dot.graphics.beginFill(0x00ff00); dot.graphics.drawRect(0, 0, 10, 10); dot.graphics.endFill();
+      ctx = draw();
+      expect(px(ctx, 25, 95)).toEqual([0, 255, 0, 255]);
+      // BitmapData can change without the tree knowing: its layer is painted every time
+      glowing.addChild(new Bitmap());
+      draw();
+      c = counts();
+      draw();
+      expect(since(c)).toEqual({ painted: 1, reused: 2 });
+    });
   });
 });

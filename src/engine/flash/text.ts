@@ -260,6 +260,9 @@ export class TextField extends InteractiveObject {
   }
 
   /** @internal */ _localBounds() { return this._autoRect(); }
+  /** @internal */ _renderSig() {
+    return JSON.stringify([this._lines(), this._format, this._autoRect(), this.background, this.backgroundColor, this.border, this.borderColor]);
+  }
   /** @internal */ _drawSelf(ctx: CanvasRenderingContext2D) {
     const r = this._autoRect();
     if (this.background) { ctx.fillStyle = hex(this.backgroundColor); ctx.fillRect(r.x, r.y, r.width, r.height); }

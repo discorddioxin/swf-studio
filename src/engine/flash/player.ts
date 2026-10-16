@@ -813,10 +813,33 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
           const shifted = new DOMMatrixLike(base.a, base.b, base.c, base.d, base.e + l.e - outer.e, base.f + l.f - outer.f);
           this.drawObjectContent(layer, obj, own, shifted, ignoreOwnTransform);
         },
+        cache: this.layerKey(obj, own, ignoreOwnTransform, base, outer),
       });
       return;
     }
     this.drawObjectContent(ctx, obj, alpha, base, ignoreOwnTransform);
+  }
+
+  /** The compositor's cache entry for `obj`'s layer, or none when its drawing cannot be described. */
+  private layerKey(obj: DisplayObject, own: number, ignoreOwnTransform: boolean, base: DOMMatrixLike, outer: DOMMatrix): { owner: object; key: string } | undefined {
+    // stage-space masks inside the subtree are drawn relative to `base`
+    const out: string[] = [`${own}:${ignoreOwnTransform}:${base.a},${base.b},${base.c},${base.d},${base.e - outer.e},${base.f - outer.f}`];
+    return this.describeSubtree(obj, out, true) ? { owner: obj, key: out.join('') } : undefined;
+  }
+
+  /** Everything `obj`'s subtree draws, as text; false when that is not knowable from the tree. */
+  private describeSubtree(obj: DisplayObject, out: string[], top = false): boolean {
+    if (!top && (!obj.visible || obj._isMaskFor > 0)) { out.push('-'); return true; }
+    const self = obj._renderSig();
+    // a mask object sits elsewhere in the tree
+    if (self == null || obj.mask) return false;
+    const m = obj._matrix(), c = obj._colorRef(), r = obj.scrollRect;
+    out.push(`(${self}|${obj._depth}:${obj._clipDepth ?? ''}:${m.a},${m.b},${m.c},${m.d},${m.tx},${m.ty}|${JSON.stringify(c)}`);
+    if (r) out.push(`${r.x},${r.y},${r.width},${r.height}`);
+    if (obj._filterData?.length || obj._blend !== 'normal') out.push(JSON.stringify(obj._filterData ?? null), String(obj._blend));
+    if (obj instanceof DisplayObjectContainer) for (const k of obj._children) if (!this.describeSubtree(k, out)) return false;
+    out.push(')');
+    return true;
   }
 
   private drawObjectContent(ctx: CanvasRenderingContext2D, obj: DisplayObject, alpha: number, base: DOMMatrixLike, ignoreOwnTransform: boolean) {

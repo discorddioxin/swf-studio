@@ -315,6 +315,12 @@ export class DisplayObject extends EventDispatcher {
 
   /** @internal drawn by the player before children */
   _drawSelf(_ctx: CanvasRenderingContext2D, _h: DisplayHost) {}
+  /**
+   * @internal What `_drawSelf` draws, as text (the compositor's layer cache);
+   * null when unknown. A class that draws itself must describe it here, or it
+   * is not cached.
+   */
+  _renderSig(): string | null { return this._drawSelf === DisplayObject.prototype._drawSelf ? '' : null; }
 
   toString() { return `[object ${this.constructor.name || 'DisplayObject'}]`; }
 }
@@ -569,6 +575,9 @@ export class Shape extends DisplayObject {
     }
     this.graphics._draw(ctx);
   }
+  /** @internal */ _renderSig() {
+    return this._drawSelf === Shape.prototype._drawSelf ? `S${String(this._symbol)}${JSON.stringify(this.graphics._cmds)}` : null;
+  }
 }
 
 export class StaticText extends Shape {
@@ -603,6 +612,9 @@ export class Sprite extends DisplayObjectContainer {
 
   /** @internal */ _ownBounds() { return this.graphics._getBounds(); }
   /** @internal */ _drawSelf(ctx: CanvasRenderingContext2D) { this.graphics._draw(ctx); }
+  /** @internal */ _renderSig() {
+    return this._drawSelf === Sprite.prototype._drawSelf ? (this.graphics._cmds.length ? `G${JSON.stringify(this.graphics._cmds)}` : 'G') : null;
+  }
 }
 
 // --------------------------------------------------------------- MovieClip --

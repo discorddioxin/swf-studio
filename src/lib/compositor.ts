@@ -183,6 +183,8 @@ function gradientLut(colors: number[], alphas: number[], ratios: number[]): Floa
  * is shadow, the opposite edge highlight; `inner` keeps the part inside the
  * object, `outer` the part outside, `full` both.
  */
+const LUT_STEPS = 1021;
+
 function bevelLike(
   src: Premul, w: number, h: number, scale: number,
   o: { blurX: number; blurY: number; quality: number; strength: number; angle: number; distance: number;
@@ -196,9 +198,15 @@ function bevelLike(
   const lit = shiftPlane(blurred, w, h, dx, dy); // A(p − off)
   const away = shiftPlane(blurred, w, h, -dx, -dy); // A(p + off)
   const out = new Float32Array(src.length);
+  // the colour per bevel value, tabulated: no call (and no array) per pixel
+  const lut = new Float32Array(LUT_STEPS * 4);
+  for (let k = 0; k < LUT_STEPS; k++) lut.set(o.color(k / (LUT_STEPS - 1) * 2 - 1), k * 4);
   for (let i = 0, j = 0; j < a.length; i += 4, j++) {
     const v = Math.max(-1, Math.min(1, (lit[j] - away[j]) * o.strength));
-    const [r, g, b, ca] = o.color(v);
+    // linear between entries: exact for the plain bevel (linear on each side of v = 0, an entry)
+    const f = (v + 1) * (LUT_STEPS - 1) / 2, k = Math.min(LUT_STEPS - 2, Math.floor(f)), t = f - k, l = k * 4;
+    const r = lut[l] + (lut[l + 4] - lut[l]) * t, g = lut[l + 1] + (lut[l + 5] - lut[l + 1]) * t;
+    const b = lut[l + 2] + (lut[l + 6] - lut[l + 2]) * t, ca = lut[l + 3] + (lut[l + 7] - lut[l + 3]) * t;
     const da = a[j];
     const mask = o.type === 'inner' ? da : o.type === 'outer' ? 1 - da : 1;
     const ba = ca * mask;
@@ -376,7 +384,30 @@ export interface CompositeOptions {
    * exactly as onto `ctx`, its own alpha and colour transform included.
    */
   paint: (layer: Ctx2D) => void;
+  /**
+   * Reuse the filtered layer while nothing changed: `owner` is the display
+   * object, `key` describes everything its subtree draws (the renderer's
+   * choice). The device transform and the filters are added to the key here.
+   */
+  cache?: { owner: object; key: string };
 }
+
+/**
+ * Layers kept per owner. One display object can be drawn more than once a
+ * frame with different results — the Workbench draws every instance of a
+ * sprite from the same placement record, each under its own parent tint and
+ * transform — so an owner keeps its last few, most recent first.
+ */
+const PER_OWNER = 8;
+const layerCache = new WeakMap<object, Map<string, LayerCanvas>>();
+let layerGeneration = 0;
+/**
+ * Something every layer may show changed outside the display tree (an image
+ * or a font finished loading): no cached layer is reused after this.
+ */
+export function invalidateLayers() { layerGeneration++; }
+/** Layers reused from the cache since start (tests read it). */
+export const compositeStats = { painted: 0, reused: 0 };
 
 /**
  * Draws a subtree through a layer: filters on its pixels, then onto `ctx` with
@@ -405,18 +436,39 @@ export function composite(ctx: Ctx2D, opts: CompositeOptions): boolean {
   }
   const w = x1 - x0, h = y1 - y0;
   if (w <= 0 || h <= 0 || !Number.isFinite(w) || !Number.isFinite(h)) return false;
-  const layer = makeCanvas(w, h);
-  const lctx = layer.getContext('2d');
-  if (!lctx) return false;
-  lctx.setTransform(m.a, m.b, m.c, m.d, m.e - x0, m.f - y0);
-  layerContexts.add(lctx);
-  try { opts.paint(lctx); } finally { layerContexts.delete(lctx); }
-  if (filters.length) {
-    lctx.setTransform(1, 0, 0, 1, 0, 0);
-    const img = lctx.getImageData(0, 0, w, h);
-    const out = applyFilters({ width: w, height: h, data: img.data }, filters, opts.filterScale);
-    img.data.set(out.data);
-    lctx.putImageData(img, 0, 0);
+  const key = opts.cache
+    ? `${layerGeneration}|${opts.cache.key}|${[m.a, m.b, m.c, m.d, m.e, m.f].map((v) => Math.round(v * 1000)).join(',')}|${x0},${y0},${w},${h}|${opts.filterScale}|${JSON.stringify(filters)}`
+    : '';
+  const entries = opts.cache ? layerCache.get(opts.cache.owner) : undefined;
+  const hit = entries?.get(key);
+  let layer: LayerCanvas;
+  if (hit) {
+    layer = hit;
+    entries!.delete(key); entries!.set(key, hit); // most recent last
+    compositeStats.reused++;
+  } else {
+    layer = makeCanvas(w, h);
+    const lctx = layer.getContext('2d');
+    if (!lctx) return false;
+    lctx.setTransform(m.a, m.b, m.c, m.d, m.e - x0, m.f - y0);
+    layerContexts.add(lctx);
+    try { opts.paint(lctx); } finally { layerContexts.delete(lctx); }
+    if (filters.length) {
+      lctx.setTransform(1, 0, 0, 1, 0, 0);
+      const img = lctx.getImageData(0, 0, w, h);
+      const out = applyFilters({ width: w, height: h, data: img.data }, filters, opts.filterScale);
+      img.data.set(out.data);
+      lctx.putImageData(img, 0, 0);
+    }
+    compositeStats.painted++;
+    // alpha / erase children cut into this layer while it is painted: a layer holding
+    // them is still cacheable, it is the result that is kept
+    if (opts.cache) {
+      const own = entries ?? new Map<string, LayerCanvas>();
+      own.set(key, layer);
+      if (own.size > PER_OWNER) own.delete(own.keys().next().value!);
+      if (!entries) layerCache.set(opts.cache.owner, own);
+    }
   }
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);

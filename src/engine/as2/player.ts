@@ -1749,10 +1749,38 @@ export class AS2Player {
         filters: node.filters, blendMode: node.blendMode, filterScale: this.renderScale,
         bounds: b ? transformRect(node.matrix, b) : null,
         paint: (layer) => this.drawNodeContent(layer, node, 1, ct),
+        cache: this.layerKey(node, ct),
       });
       return;
     }
     this.drawNodeContent(ctx, node, alpha, ct);
+  }
+
+  /** The compositor's cache entry for `node`'s layer, or none when its drawing cannot be described. */
+  private layerKey(node: DisplayNode, ct: ColorTransform | undefined): { owner: object; key: string } | undefined {
+    const out: string[] = [JSON.stringify(ct ?? null)];
+    return this.describeSubtree(node, out) ? { owner: node, key: out.join('') } : undefined;
+  }
+
+  /** Everything `node`'s subtree draws, as text; false when that is not knowable from the tree. */
+  private describeSubtree(node: DisplayNode, out: string[]): boolean {
+    if (!node.visible || node.removed) { out.push('-'); return true; }
+    // a setMask mask sits elsewhere in the tree; a focused field blinks its caret
+    if (node.maskedBy || node.mask || this.focus === node) return false;
+    const m = node.matrix;
+    out.push(`(${node.id}:${node.characterId}:${node.frame}:${node.btnState}:${node.clipDepth}:${node.depth}:${m.a},${m.b},${m.c},${m.d},${m.tx},${m.ty}`);
+    if (node.ct) out.push(JSON.stringify(node.ct));
+    if (node.filters?.length || node.blendMode !== 'normal') out.push(JSON.stringify(node.filters ?? null), node.blendMode);
+    if (node.text) {
+      if (node.text.input) return false;
+      const t = node.text;
+      out.push(JSON.stringify([t.paras, t.format, t.bounds, t.scroll, t.wordWrap, t.multiline, t.border, t.borderColor,
+        t.background, t.backgroundColor, t.password, t.autoSize, t.embedFonts, t.fontId ?? null, t.html]));
+    }
+    if (node.drawing?.length) out.push(JSON.stringify(node.drawing));
+    for (const k of node.children) if (!this.describeSubtree(k, out)) return false;
+    out.push(')');
+    return true;
   }
 
   private drawNodeContent(ctx: CanvasRenderingContext2D, node: DisplayNode, alpha: number, ct: ColorTransform | undefined) {

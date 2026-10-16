@@ -293,10 +293,17 @@ export function drawTimeline(
       // here) applies when the layer is drawn back, after the filters
       const own = mulColor(parentColor ? { ...parentColor, am: 1, aa: 0 } : undefined, item.colorTransform);
       const local = itemBounds(o, item, frame, level);
+      // what the subtree draws follows from the character and its local frame
+      const child = ch?.timelineId ? o.doc.timelines.get(ch.timelineId) : undefined;
+      const lf = child ? (child.kind === 'button' ? 0 : localFrameOf(item, frame, child.frameCount)) : 0;
       composite(ctx, {
         filters: item.filters, blendMode: item.blendMode, filterScale: filterScaleOf(o),
         bounds: local ? transformRect(m, local) : null,
         paint: (layer) => drawItem(layer, own),
+        cache: {
+          owner: item,
+          key: `${item.characterId}:${lf}:${item.ratio ?? ''}:${level}:${JSON.stringify(own ?? null)}:${o.showOutlines}:${o.showMasks}:${o.selectedPath ?? ''}:${o.onlyDepth ?? ''}`,
+        },
       });
     } else {
       drawItem(ctx, color);
