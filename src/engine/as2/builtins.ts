@@ -35,6 +35,22 @@ const def = (target: object, props: Record<string, { get?: (this: any) => any; s
 const num = (v: unknown, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
 const hex = (n: number) => `#${(Math.max(0, Math.min(0xffffff, Math.floor(n))) >>> 0).toString(16).padStart(6, '0')}`;
 
+const utf8 = new TextDecoder('utf-8');
+
+/**
+ * One name or value of URL-encoded variables (loadVariables, LoadVars), decoded
+ * as Flash does: `+` is a space, each run of valid `%XX` escapes is decoded as
+ * UTF-8 bytes, and a `%` that starts no valid escape stays literal — Flash
+ * never rejects the data, unlike `decodeURIComponent`.
+ */
+export function decodeFormComponent(s: string): string {
+  return s.replace(/\+/g, ' ').replace(/(?:%[0-9A-Fa-f]{2})+/g, (run) => {
+    const bytes = new Uint8Array(run.length / 3);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(run.slice(i * 3 + 1, i * 3 + 3), 16);
+    return utf8.decode(bytes);
+  });
+}
+
 export function installBuiltins(p: AS2Player): BuiltinState {
   const N = (o: any): DisplayNode | null => nodeOf(o);
   const state: BuiltinState = {
@@ -263,8 +279,10 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   function loadVariables(url: string, node: DisplayNode | null) {
     fetchText(url, 'GET', null, 'loadVariables').then((txt) => {
       if (txt == null || !node || node.removed) return;
-      decodeVars(node.obj, txt);
-      p.dispatchClipEvent(node, 'data');
+      p.guard(`loadVariables ${url}`, () => {
+        decodeVars(node.obj, txt);
+        p.dispatchClipEvent(node, 'data');
+      });
       p.runQueue();
     });
   }
@@ -310,8 +328,8 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     for (const part of txt.split('&')) {
       if (!part) continue;
       const i = part.indexOf('=');
-      const k = decodeURIComponent((i < 0 ? part : part.slice(0, i)).replace(/\+/g, ' '));
-      const v = i < 0 ? '' : decodeURIComponent(part.slice(i + 1).replace(/\+/g, ' '));
+      const k = decodeFormComponent(i < 0 ? part : part.slice(0, i));
+      const v = i < 0 ? '' : decodeFormComponent(part.slice(i + 1));
       if (k) target[k] = v;
     }
   }
