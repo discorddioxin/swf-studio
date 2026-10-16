@@ -1551,7 +1551,9 @@ export async function parseSwfBinary(
         continue;
       }
       if (k === 'remove') {
+        // RemoveObject (5): CharacterId u16, Depth u16. RemoveObject2 (28): Depth u16.
         const br2 = new BitReader(tag.data);
+        if (tag.type === 5) br2.u16();
         const depth = br2.u16();
         const gone = state.get(depth);
         ops.push({ op: 'remove', tagType: type, depth, characterId: gone?.characterId });

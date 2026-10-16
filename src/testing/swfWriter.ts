@@ -67,6 +67,10 @@ export const tag = {
     if (format === 3) b.u8(colorTableSize);
     return { code: version === 1 ? 20 : 36, body: b.raw(deflateSync(Uint8Array.from(data))).bytes() };
   },
+  /** RemoveObject (tag 5): `UI16 characterId, UI16 depth`. */
+  removeObject: (character: number, depth: number): SwfTag => ({ code: 5, body: new Bytes().u16(character).u16(depth).bytes() }),
+  /** RemoveObject2 (tag 28): `UI16 depth`. */
+  removeObject2: (depth: number): SwfTag => ({ code: 28, body: new Bytes().u16(depth).bytes() }),
   /** PlaceObject2 of `character` at `depth` (PlaceFlagHasCharacter only, identity matrix). */
   placeObject2: (depth: number, character: number): SwfTag => ({ code: 26, body: new Bytes().u8(0x02).u16(depth).u16(character).bytes() }),
 };

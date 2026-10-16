@@ -813,8 +813,8 @@ The agent updates this table as each item lands (commit hash, date).
 | P-02 | 2 | done 2026-10-15 | `a29cf4f` — sample read from the corpus (`fishing-swfs`, SHA-identical to the old bundle); bundled index optional (`BundledIndexState`); FFDec only via `SWF_FFDEC`; spec-based `lossless.test.ts` + `movies.ts`. 0 failures with the corpus (668 passed / 3 skipped) and without (595 / 34) |
 | P-05 | 3 | done 2026-10-15 | `f4e48f8` — Workbench keys only while the Workbench is open and not already handled; its playback/audio stop outside it; game canvases stop propagation of their keys. `workspaceKeys.ui.test.tsx` (first full-App UI test) |
 | P-35 | 3 | done 2026-10-15 | `d3ecb94` — one `resetSession()` (adapter pick, game set, filters, timeline/frame/playback/loop, selections, flattened sprites, error) used by "New folder" and every load. `newFolder.ui.test.tsx`; shared full-App harness `appHarness.tsx` |
-| P-17 | 3 | done 2026-10-15 | `decodeFormComponent` (Flash-tolerant: `+`, UTF-8 `%XX` runs, stray `%` literal) for loadVariables/LoadVars; `loadVariables` guarded. `src/engine/as2/__tests__/loadVars.test.ts` |
-| P-09 | 3 | open | |
+| P-17 | 3 | done 2026-10-15 | `a2d09fa` — `decodeFormComponent` (Flash-tolerant: `+`, UTF-8 `%XX` runs, stray `%` literal) for loadVariables/LoadVars; `loadVariables` guarded. `src/engine/as2/__tests__/loadVars.test.ts` |
+| P-09 | 3 | done 2026-10-15 | tag 5 read as CharacterId, Depth (tag 28 unchanged). `src/lib/swf/removeObject.test.ts`; the corpus has no tag 5 |
 | P-10 | 3 | open | |
 | P-11 | 3 | open | |
 | P-13 | 3 | open | |
