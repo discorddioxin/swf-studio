@@ -13,27 +13,29 @@ import { buildTrueType } from '../../../src/lib/swfFont';
 import { decodeAdpcm, encodeWav } from '../../../src/engine/as2/adpcm';
 import { shapeToSvg, type SvgBitmapInfo, type SvgFillStyle, type SvgLineStyle, type SvgShapeRecord } from './shapeSvg';
 
-/** SWF tag codes → JPEXS FFDec type names (the XML "type" attribute). */
+/** SWF tag codes → JPEXS FFDec type names (the XML "type" attribute; FFDec's
+ *  tag class names, e.g. `tags/PlaceObjectTag.java` ID 4). */
 export const TAG_NAMES: Record<number, string> = {
-  0: 'EndTag', 1: 'ShowFrameTag', 2: 'DefineShapeTag', 5: 'RemoveObjectTag',
+  0: 'EndTag', 1: 'ShowFrameTag', 2: 'DefineShapeTag', 4: 'PlaceObjectTag', 5: 'RemoveObjectTag',
   6: 'DefineBitsTag', 7: 'DefineButtonTag', 8: 'JPEGTablesTag', 9: 'SetBackgroundColorTag',
-  10: 'DefineFontTag', 11: 'DefineTextTag', 12: 'DoActionTag', 14: 'DefineSoundTag',
+  10: 'DefineFontTag', 11: 'DefineTextTag', 12: 'DoActionTag', 13: 'DefineFontInfoTag', 14: 'DefineSoundTag',
   15: 'StartSoundTag', 17: 'DefineButtonCxformTag', 18: 'SoundStreamHeadTag',
   19: 'SoundStreamBlockTag', 20: 'DefineBitsLosslessTag', 21: 'DefineBitsJPEG2Tag',
   22: 'DefineShape2Tag', 23: 'DefineButtonCxformTag', 24: 'ProtectTag',
   26: 'PlaceObject2Tag', 28: 'RemoveObject2Tag', 32: 'DefineShape3Tag',
   33: 'DefineText2Tag', 34: 'DefineButton2Tag', 35: 'DefineBitsJPEG3Tag',
   36: 'DefineBitsLossless2Tag', 37: 'DefineEditTextTag', 39: 'DefineSpriteTag',
-  43: 'FrameLabelTag', 45: 'SoundStreamHead2Tag', 46: 'DefineMorphShapeTag',
+  41: 'ProductInfoTag', 43: 'FrameLabelTag', 45: 'SoundStreamHead2Tag', 46: 'DefineMorphShapeTag',
   48: 'DefineFont2Tag', 56: 'ExportAssetsTag', 57: 'ImportAssetsTag',
   59: 'DoInitActionTag', 60: 'DefineVideoStreamTag', 61: 'VideoFrameTag',
-  64: 'EnableDebugger2Tag', 65: 'LimitDataTag', 69: 'FileAttributesTag',
-  70: 'PlaceObject3Tag', 73: 'DefineFontAlignZonesTag', 74: 'CSMTextSettingsTag',
+  62: 'DefineFontInfo2Tag', 63: 'DebugIDTag', 64: 'EnableDebugger2Tag', 65: 'LimitDataTag',
+  66: 'SetTabIndexTag', 69: 'FileAttributesTag', 70: 'PlaceObject3Tag', 71: 'ImportAssets2Tag',
+  72: 'DoABCTag', 73: 'DefineFontAlignZonesTag', 74: 'CSMTextSettingsTag',
   75: 'DefineFont3Tag', 76: 'SymbolClassTag', 77: 'MetadataTag',
-  78: 'EnableDebuggerTag', 82: 'DoABCTag', 83: 'DefineShape4Tag',
+  78: 'EnableDebuggerTag', 82: 'DoABC2Tag', 83: 'DefineShape4Tag',
   84: 'DefineMorphShape2Tag', 86: 'DefineSceneAndFrameLabelDataTag',
   87: 'DefineBinaryDataTag', 88: 'DefineFontNameTag', 89: 'StartSound2Tag',
-  90: 'DefineBitsJPEG4Tag',
+  90: 'DefineBitsJPEG4Tag', 91: 'DefineFont4Tag',
 };
 
 export interface SwfFile {
@@ -934,6 +936,17 @@ const CLIP_EVENT_BITS: [number, string, 'clip' | 'button'][] = [
   [18, 'construct', 'clip'],
 ];
 
+/** PlaceObject (tag 4): CharacterId u16, Depth u16, MATRIX, then a CXFORM (no alpha) if bytes remain. */
+function parsePlace1(data: Uint8Array): Place2Info {
+  const br = new BitReader(data);
+  const characterId = br.u16();
+  const depth = br.u16();
+  const matrix = readMatrix(br);
+  const ct = br.remaining > 0 ? normalizeCt(readCxform(br, false)) : undefined;
+  br.align();
+  return { depth, characterId, hasChar: true, move: false, matrix, ct, hasFilters: false, leftover: br.remaining };
+}
+
 function parsePlace2(
   data: Uint8Array, isPlace3 = false, version = 8,
   warn: (message: string) => void = () => {},
@@ -1497,7 +1510,7 @@ export async function parseSwfBinary(
       kinds.add(k);
 
       if (k === 'place') {
-        const info = parsePlace2(tag.data, tag.type === 70, version,
+        const info = tag.type === 4 ? parsePlace1(tag.data) : parsePlace2(tag.data, tag.type === 70, version,
           (m) => warnStructural(`${m} (${characterId != null ? `sprite ${characterId}` : 'root timeline'}, tag ${tag.type})`));
         if (info.depth < 0) continue;
         const prev = state.get(info.depth);

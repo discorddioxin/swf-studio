@@ -239,7 +239,8 @@ export function classify(type: string): EventKind {
 
 /** everything the user asked to be emphasised */
 export function isSpecialTag(type: string): boolean {
-  return type !== 'PlaceObject2Tag' && type !== 'RemoveObject2Tag' &&
+  return type !== 'PlaceObjectTag' && type !== 'PlaceObject2Tag' &&
+    type !== 'RemoveObjectTag' && type !== 'RemoveObject2Tag' &&
     type !== 'ShowFrameTag' && type !== 'EndTag' && !/^Define/.test(type) &&
     type !== 'JPEGTablesTag';
 }

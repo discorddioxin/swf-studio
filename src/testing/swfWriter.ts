@@ -28,6 +28,47 @@ function rect(xMin: number, xMax: number, yMin: number, yMax: number): Uint8Arra
   return Uint8Array.from({ length: bits.length / 8 }, (_, i) => bits.slice(i * 8, i * 8 + 8).reduce((a, b) => (a << 1) | b, 0));
 }
 
+/** Bit-packed fields (MATRIX, CXFORM): big-endian bit order, padded to a byte. */
+class Bits {
+  private bits: number[] = [];
+  ub(v: number, n: number) { for (let i = n - 1; i >= 0; i--) this.bits.push((v >> i) & 1); return this; }
+  sb(v: number, n: number) { return this.ub(v & ((1 << n) - 1), n); }
+  bytes(): Uint8Array {
+    const bits = [...this.bits];
+    while (bits.length % 8) bits.push(0);
+    return Uint8Array.from({ length: bits.length / 8 }, (_, i) => bits.slice(i * 8, i * 8 + 8).reduce((x, y) => (x << 1) | y, 0));
+  }
+}
+/** Bits a signed field needs to hold every value. */
+const signedBits = (values: number[]) => Math.max(1, ...values.map((v) => (v === 0 ? 1 : (v < 0 ? ~v : v).toString(2).length + 1)));
+
+export interface MatrixFields { scaleX?: number; scaleY?: number; tx?: number; ty?: number }
+/** MATRIX: optional scale (16.16), no rotation, translation in twips. */
+function matrix({ scaleX = 1, scaleY = 1, tx = 0, ty = 0 }: MatrixFields): Uint8Array {
+  const b = new Bits();
+  if (scaleX !== 1 || scaleY !== 1) {
+    const sx = Math.round(scaleX * 65536), sy = Math.round(scaleY * 65536);
+    const n = signedBits([sx, sy]);
+    b.ub(1, 1).ub(n, 5).sb(sx, n).sb(sy, n);
+  } else b.ub(0, 1);
+  b.ub(0, 1);
+  const n = tx || ty ? signedBits([tx, ty]) : 0;
+  b.ub(n, 5);
+  if (n) b.sb(tx, n).sb(ty, n);
+  return b.bytes();
+}
+
+export interface CxformFields { mult?: [number, number, number]; add?: [number, number, number] }
+/** CXFORM (no alpha): multipliers in 8.8 fixed point, additive terms as given. */
+function cxform({ mult, add }: CxformFields): Uint8Array {
+  const m = mult?.map((v) => Math.round(v * 256)) ?? [];
+  const values = [...m, ...(add ?? [])];
+  const n = signedBits(values);
+  const b = new Bits().ub(add ? 1 : 0, 1).ub(mult ? 1 : 0, 1).ub(n, 4);
+  for (const v of values) b.sb(v, n);
+  return b.bytes();
+}
+
 /** The record header of one tag: short form below 63 bytes, else long form. */
 function tagBytes(out: Bytes, { code, body }: SwfTag) {
   if (body.length < 0x3f) out.u16((code << 6) | body.length);
@@ -66,6 +107,12 @@ export const tag = {
     const b = new Bytes().u16(id).u8(format).u16(width).u16(height);
     if (format === 3) b.u8(colorTableSize);
     return { code: version === 1 ? 20 : 36, body: b.raw(deflateSync(Uint8Array.from(data))).bytes() };
+  },
+  /** PlaceObject (tag 4): `UI16 characterId, UI16 depth, MATRIX`, then a CXFORM if given. */
+  placeObject: (character: number, depth: number, m: MatrixFields = {}, ct?: CxformFields): SwfTag => {
+    const b = new Bytes().u16(character).u16(depth).raw(matrix(m));
+    if (ct) b.raw(cxform(ct));
+    return { code: 4, body: b.bytes() };
   },
   /** RemoveObject (tag 5): `UI16 characterId, UI16 depth`. */
   removeObject: (character: number, depth: number): SwfTag => ({ code: 5, body: new Bytes().u16(character).u16(depth).bytes() }),

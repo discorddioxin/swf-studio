@@ -92,7 +92,7 @@ const TAG_CODES = {
   ImportAssetsTag: 57, DoInitActionTag: 59, DefineVideoStreamTag: 60,
   FileAttributesTag: 69, PlaceObject3Tag: 70, DefineFontAlignZonesTag: 73,
   CSMTextSettingsTag: 74, DefineFont3Tag: 75, SymbolClassTag: 76,
-  DoABCTag: 82, DefineShape4Tag: 83, DefineMorphShape2Tag: 84,
+  DoABCTag: 72, DoABC2Tag: 82, DefineShape4Tag: 83, DefineMorphShape2Tag: 84,
   DefineBinaryDataTag: 87, DefineFontNameTag: 88, DefineBitsJPEG4Tag: 90,
 };
 
