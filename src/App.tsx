@@ -293,8 +293,14 @@ export default function App() {
   const count = timeline?.frameCount ?? 1;
 
   // ------------------------------------------------------------ playback --
+  // Workbench playback belongs to the Workbench: it stops when another
+  // workspace is opened, so a hidden timeline never re-renders the app.
   useEffect(() => {
-    if (!playing || !timeline) return;
+    if (workspace !== 'workbench') setPlaying(false);
+  }, [workspace]);
+
+  useEffect(() => {
+    if (!playing || !timeline || workspace !== 'workbench') return;
     let raf = 0;
     let last = performance.now();
     let acc = 0;
@@ -318,13 +324,13 @@ export default function App() {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [playing, fps, loopRange, count, timeline]);
+  }, [playing, fps, loopRange, count, timeline, workspace]);
 
   // frame audio triggers
   const lastAudioTrigger = useRef<{ frame: number; time: number } | null>(null);
 
   useEffect(() => {
-    if (!audio || !doc || !timeline || !cacheRef.current) return;
+    if (!audio || !doc || !timeline || !cacheRef.current || workspace !== 'workbench') return;
     const f = timeline.frames[frame];
     if (!f) return;
     const now = performance.now();
@@ -342,11 +348,14 @@ export default function App() {
       a.volume = 0.7;
       void a.play().catch(() => {});
     }
-  }, [frame, audio, doc, timeline]);
+  }, [frame, audio, doc, timeline, workspace]);
 
-  // keyboard
+  // keyboard: the Workbench's timeline keys, only while the Workbench is open,
+  // and never for a key something else (a game, a field) already handled
   useEffect(() => {
+    if (workspace !== 'workbench') return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       const t = e.target as HTMLElement;
       if (t && /INPUT|TEXTAREA|SELECT/.test(t.tagName)) return;
       if (e.code === 'Space') { e.preventDefault(); setPlaying((p) => !p); }
@@ -357,7 +366,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [count]);
+  }, [count, workspace]);
 
   const openTimeline = useCallback((id: string) => {
     setTimelineId(id);

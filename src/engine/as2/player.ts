@@ -1597,8 +1597,9 @@ export class AS2Player {
     const move = (e: MouseEvent) => { const p = pos(e); this.pointerMove(p.x, p.y); canvas.style.cursor = this.hovered && this.hovered.obj?.useHandCursor !== false && this.hovered.kind !== 'text' ? 'pointer' : this.hovered?.kind === 'text' ? 'text' : 'default'; };
     const down = (e: MouseEvent) => { const p = pos(e); canvas.focus?.(); this.pointerDown(p.x, p.y); };
     const up = (e: MouseEvent) => { const p = pos(e); this.pointerUp(p.x, p.y); };
-    const kd = (e: KeyboardEvent) => { if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return; this.keyDown(e.keyCode, e.key); if (this.focus || [32, 37, 38, 39, 40, 8].includes(e.keyCode)) e.preventDefault(); };
-    const ku = (e: KeyboardEvent) => this.keyUp(e.keyCode);
+    // a key the movie receives is the movie's: it does not reach page-level shortcuts
+    const kd = (e: KeyboardEvent) => { if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return; e.stopPropagation(); this.keyDown(e.keyCode, e.key); if (this.focus || [32, 37, 38, 39, 40, 8].includes(e.keyCode)) e.preventDefault(); };
+    const ku = (e: KeyboardEvent) => { e.stopPropagation(); this.keyUp(e.keyCode); };
     canvas.addEventListener('mousemove', move);
     canvas.addEventListener('mousedown', down);
     window.addEventListener('mouseup', up);

@@ -479,6 +479,7 @@ export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNA
   }, []);
   const onKey = (down: boolean) => (e: React.KeyboardEvent) => {
     if (e.metaKey) return;
+    e.stopPropagation();   // the game's key: page-level shortcuts (the Workbench's) never see it
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab', 'Backspace'].includes(e.key)) e.preventDefault();
     if (down) playerRef.current?.keyDown(e.keyCode, e.key); else playerRef.current?.keyUp(e.keyCode);
   };

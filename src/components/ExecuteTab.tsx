@@ -320,6 +320,7 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
   }, []);
   const onKey = (down: boolean) => (e: React.KeyboardEvent) => {
     if (e.metaKey) return;
+    e.stopPropagation();   // the game's key: page-level shortcuts (the Workbench's) never see it
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab', 'Backspace'].includes(e.key)) e.preventDefault();
     const payload = { keyCode: e.keyCode, key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, location: e.location };
     if (down) playerRef.current?.keyDown(payload); else playerRef.current?.keyUp(payload);

@@ -811,7 +811,7 @@ The agent updates this table as each item lands (commit hash, date).
 | P-26 | 1 | done 2026-10-15 | `5196584` |
 | P-21 | 2 | done 2026-10-15 | `5da10a1` — corpus resolver `src/testing/corpus.ts`; AVM2/ABC gates promoted to `src/**`; dumpers out of `npm test`; AS3 fixture movie. Without the corpus, failures 58 → 19 (all P-02 `game-files`) |
 | P-02 | 2 | done 2026-10-15 | `a29cf4f` — sample read from the corpus (`fishing-swfs`, SHA-identical to the old bundle); bundled index optional (`BundledIndexState`); FFDec only via `SWF_FFDEC`; spec-based `lossless.test.ts` + `movies.ts`. 0 failures with the corpus (668 passed / 3 skipped) and without (595 / 34) |
-| P-05 | 3 | open | |
+| P-05 | 3 | done 2026-10-15 | Workbench keys only while the Workbench is open and not already handled; its playback/audio stop outside it; game canvases stop propagation of their keys. `workspaceKeys.ui.test.tsx` (first full-App UI test) |
 | P-35 | 3 | open | |
 | P-17 | 3 | open | |
 | P-09 | 3 | open | |
@@ -843,7 +843,7 @@ The agent updates this table as each item lands (commit hash, date).
 | P-34 | 9 | open | |
 | P-36 | 9 | open | |
 | P-37 | 2 | done 2026-10-15 | `61436a3` — v1 RGB colormaps, big-endian PIX15, missing palette index → transparent/black; 3 failing-first spec tests in `lossless.test.ts`. Corpus: 1 v1 colormap bitmap (towns2) was wrong; no format-4 bitmaps |
-| P-38 | 2 | done 2026-10-15 | the AS2 player starts once the movie's (and external SWFs') embedded fonts are registered, instead of being rebuilt when they arrive; failing-first UI test holds font registration back until the game started (2 starts → 1) |
+| P-38 | 2 | done 2026-10-15 | `1254f08` — the AS2 player starts once the movie's (and external SWFs') embedded fonts are registered, instead of being rebuilt when they arrive; failing-first UI test holds font registration back until the game started (2 starts → 1) |
 
 ## 11. Risks and rollback
 
