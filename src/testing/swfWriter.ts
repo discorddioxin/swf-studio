@@ -3,6 +3,7 @@
 // movie the app's reader parses like any other. Nothing in src/ imports this at
 // run time.
 import { deflateSync } from 'node:zlib';
+import type { SwfFilter } from '@/types';
 
 export interface SwfTag { code: number; body: Uint8Array }
 
@@ -74,7 +75,65 @@ function soundInfo(i: SoundInfoFields, b: Bytes) {
   if (i.envelope) { b.u8(i.envelope.length); for (const e of i.envelope) b.u32(e.pos44).u16(e.left).u16(e.right); }
 }
 
-export interface ButtonRecordFields { up?: boolean; over?: boolean; down?: boolean; hit?: boolean; character: number; depth: number }
+export interface ButtonRecordFields {
+  up?: boolean; over?: boolean; down?: boolean; hit?: boolean; character: number; depth: number;
+  /** ButtonHasFilterList / ButtonHasBlendMode (blend mode as the SWF byte) */
+  filters?: SwfFilter[]; blendMode?: number;
+}
+
+/**
+ * FILTERLIST (SWF 19): count, then per filter an id byte and its fields — FIXED
+ * 16.16 blur/angle(radians)/distance, FIXED8 strength, FLOAT singles, RGBA colours.
+ */
+export function filterList(filters: SwfFilter[]): Uint8Array {
+  const b = new Bytes().u8(filters.length);
+  const fixed = (v: number) => b.u32(Math.round(v * 65536) | 0);
+  const fixed8 = (v: number) => b.u16(Math.round(v * 256));
+  const f32 = (v: number) => { const d = new DataView(new ArrayBuffer(4)); d.setFloat32(0, v, true); b.raw(new Uint8Array(d.buffer)); };
+  const rgba = (c: number, a: number) => b.u8(c >> 16).u8(c >> 8).u8(c).u8(Math.round(a * 255));
+  const rad = (deg: number) => deg * Math.PI / 180;
+  const ids = { dropShadow: 0, blur: 1, glow: 2, bevel: 3, gradientGlow: 4, convolution: 5, colorMatrix: 6, gradientBevel: 7 } as const;
+  const placeBits = (t: string) => (t === 'inner' ? 0x80 : 0) | (t === 'full' ? 0x10 : 0);
+  for (const f of filters) {
+    b.u8(ids[f.kind]);
+    switch (f.kind) {
+      case 'dropShadow':
+        rgba(f.color, f.alpha); fixed(f.blurX); fixed(f.blurY); fixed(rad(f.angle)); fixed(f.distance); fixed8(f.strength);
+        b.u8((f.inner ? 0x80 : 0) | (f.knockout ? 0x40 : 0) | (f.hideObject ? 0 : 0x20) | (f.quality & 0x1f));
+        break;
+      case 'blur': fixed(f.blurX); fixed(f.blurY); b.u8((f.quality & 0x1f) << 3); break;
+      case 'glow':
+        rgba(f.color, f.alpha); fixed(f.blurX); fixed(f.blurY); fixed8(f.strength);
+        b.u8((f.inner ? 0x80 : 0) | (f.knockout ? 0x40 : 0) | 0x20 | (f.quality & 0x1f));
+        break;
+      case 'bevel':
+        rgba(f.highlightColor, f.highlightAlpha); rgba(f.shadowColor, f.shadowAlpha);
+        fixed(f.blurX); fixed(f.blurY); fixed(rad(f.angle)); fixed(f.distance); fixed8(f.strength);
+        b.u8(placeBits(f.type) | (f.knockout ? 0x40 : 0) | 0x20 | (f.quality & 0x0f));
+        break;
+      case 'gradientGlow': case 'gradientBevel':
+        b.u8(f.colors.length);
+        f.colors.forEach((c, i) => rgba(c, f.alphas[i]));
+        for (const r of f.ratios) b.u8(r);
+        fixed(f.blurX); fixed(f.blurY); fixed(rad(f.angle)); fixed(f.distance); fixed8(f.strength);
+        b.u8(placeBits(f.type) | (f.knockout ? 0x40 : 0) | 0x20 | (f.quality & 0x0f));
+        break;
+      case 'convolution':
+        b.u8(f.matrixX).u8(f.matrixY); f32(f.divisor); f32(f.bias);
+        for (const v of f.matrix) f32(v);
+        rgba(f.color, f.alpha);
+        b.u8((f.clamp ? 2 : 0) | (f.preserveAlpha ? 1 : 0));
+        break;
+      case 'colorMatrix': for (const v of f.matrix) f32(v); break;
+    }
+  }
+  return b.bytes();
+}
+
+export interface Place3Fields {
+  depth: number; character?: number; move?: boolean; matrix?: MatrixFields; name?: string;
+  filters?: SwfFilter[]; /** the SWF byte */ blendMode?: number;
+}
 
 export interface CxformFields { mult?: [number, number, number]; add?: [number, number, number] }
 /** CXFORM (no alpha): multipliers in 8.8 fixed point, additive terms as given. */
@@ -137,8 +196,11 @@ export const tag = {
   defineButton2: (id: number, records: ButtonRecordFields[]): SwfTag => {
     const b = new Bytes().u16(id).u8(0).u16(0);
     for (const r of records) {
-      b.u8((r.hit ? 8 : 0) | (r.down ? 4 : 0) | (r.over ? 2 : 0) | (r.up ? 1 : 0)).u16(r.character).u16(r.depth);
+      b.u8((r.blendMode != null ? 0x20 : 0) | (r.filters ? 0x10 : 0) | (r.hit ? 8 : 0) | (r.down ? 4 : 0) | (r.over ? 2 : 0) | (r.up ? 1 : 0))
+        .u16(r.character).u16(r.depth);
       b.raw(matrix({})).raw(new Bits().ub(0, 1).ub(0, 1).ub(1, 4).bytes()); // MATRIX, CXFORMWITHALPHA (no terms)
+      if (r.filters) b.raw(filterList(r.filters));
+      if (r.blendMode != null) b.u8(r.blendMode);
     }
     return { code: 34, body: b.u8(0).bytes() };
   },
@@ -160,6 +222,22 @@ export const tag = {
   /** RemoveObject2 (tag 28): `UI16 depth`. */
   removeObject2: (depth: number): SwfTag => ({ code: 28, body: new Bytes().u16(depth).bytes() }),
   /** PlaceObject2 of `character` at `depth` (PlaceFlagHasCharacter only, identity matrix). */
+  /**
+   * PlaceObject3 (tag 70): flags (ClipActions, ClipDepth, Name, Ratio, ColorTransform,
+   * Matrix, Character, Move), flags (reserved 3, Image, ClassName, CacheAsBitmap,
+   * BlendMode, FilterList), Depth, CharacterId, MATRIX, Name, FILTERLIST, BlendMode.
+   */
+  placeObject3: (p: Place3Fields): SwfTag => {
+    const f1 = (p.name != null ? 0x20 : 0) | (p.matrix ? 0x04 : 0) | (p.character != null ? 0x02 : 0) | (p.move ? 0x01 : 0);
+    const f2 = (p.blendMode != null ? 0x02 : 0) | (p.filters ? 0x01 : 0);
+    const b = new Bytes().u8(f1).u8(f2).u16(p.depth);
+    if (p.character != null) b.u16(p.character);
+    if (p.matrix) b.raw(matrix(p.matrix));
+    if (p.name != null) b.str(p.name);
+    if (p.filters) b.raw(filterList(p.filters));
+    if (p.blendMode != null) b.u8(p.blendMode);
+    return { code: 70, body: b.bytes() };
+  },
   placeObject2: (depth: number, character: number): SwfTag => ({ code: 26, body: new Bytes().u8(0x02).u16(depth).u16(character).bytes() }),
 };
 

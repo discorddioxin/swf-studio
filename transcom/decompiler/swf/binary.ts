@@ -5,8 +5,9 @@
 
 import type {
   ColorTransform, DisplayItem, EventKind, Frame, FrameEvent, Matrix, PlaceOp,
-  ButtonSound, GlyphPoint, Rect, SoundInfo, SwfCharacter, SwfDocument, SwfFontOutline, SwfHeader, TextRecord, Timeline,
+  BlendMode, ButtonSound, FilterPlacement, GlyphPoint, Rect, SoundInfo, SwfCharacter, SwfFilter, SwfDocument, SwfFontOutline, SwfHeader, TextRecord, Timeline,
 } from '../../../src/types';
+import { toBlendMode } from '../../../src/types';
 import { classify, kindOfTag, isSpecialTag, actionFileCandidates } from '../parser';
 import { BitReader, avm1ActionSource, isLikelyActionStream, latin1 } from './bitio';
 import { buildTrueType } from '../../../src/lib/swfFont';
@@ -900,6 +901,7 @@ interface Place2Info {
   depth: number; hasChar: boolean; move: boolean; characterId: number;
   matrix?: Matrix; ct?: ColorTransform; ratio?: number; name?: string;
   clipDepth?: number; hasFilters: boolean; clipActions?: ClipActionRec[];
+  filters?: SwfFilter[]; blendMode?: BlendMode;
   /** bytes left in the tag body after every field — 0 for a well-formed record.
    *  Anything else means a field was misread (wrong size/order/flag handling). */
   leftover: number;
@@ -991,8 +993,8 @@ function parsePlace2(
     const v = br.u16();
     if (v > 0) clipDepth = v;
   }
-  if (hasFilterList) skipFilterList(br, `PlaceObject${isPlace3 ? 3 : 2} depth ${depth}`);
-  if (hasBlendMode) br.u8();
+  const filters = hasFilterList ? readFilterList(br, `PlaceObject${isPlace3 ? 3 : 2} depth ${depth}`) : undefined;
+  const blendMode = hasBlendMode ? readBlendMode(br, warn, `PlaceObject3 depth ${depth}`) : undefined;
   if (hasCacheAsBitmap) br.u8();
   if (hasVisibility) br.u8();
   if (hasBackgroundColor) br.skip(4); // RGBA — not modelled
@@ -1038,7 +1040,7 @@ function parsePlace2(
   return {
     depth, hasChar, move, characterId, matrix,
     ct: ct ? normalizeCt(ct) : undefined, ratio, name, clipDepth, hasFilters: hasFilterList, clipActions,
-    leftover,
+    filters, blendMode, leftover,
   };
 }
 
@@ -1047,7 +1049,7 @@ function parsePlace2(
 interface ButtonRec {
   up: boolean; over: boolean; down: boolean; hit: boolean;
   characterId: number; placeDepth: number; matrix: Matrix; ct?: ColorTransform;
-  hasFilters: boolean;
+  hasFilters: boolean; filters?: SwfFilter[]; blendMode?: BlendMode;
 }
 
 interface ButtonCondAction {
@@ -1116,9 +1118,9 @@ function parseButton2(
     const placeDepth = br.u16();
     const matrix = readMatrix(br);
     const ct = normalizeCt(readCxform(br, true));
-    if (hasFilters) skipFilterList(br, `DefineButton2 #${id}`);
-    if (hasBlend) br.u8();
-    records.push({ up, over, down, hit, characterId, placeDepth, matrix, ct, hasFilters });
+    const filters = hasFilters ? readFilterList(br, `DefineButton2 #${id}`) : undefined;
+    const blendMode = hasBlend ? readBlendMode(br, warn, `DefineButton2 #${id}`) : undefined;
+    records.push({ up, over, down, hit, characterId, placeDepth, matrix, ct, hasFilters, filters, blendMode });
     void recReserved;
   }
   br.align();
@@ -1179,26 +1181,89 @@ function parseButton2(
  *                        + defaultColor(4) + flags(1)                                      = 15 + 4wh
  *   6 colour matrix   20 × FLOAT(80)                                                      = 80
  */
-function skipFilterList(br: BitReader, context: string) {
+function readFilterList(br: BitReader, context: string): SwfFilter[] {
   const start = br.offsetBytes;
   const count = br.u8();
+  const out: SwfFilter[] = [];
+  // FIXED is 16.16 signed, FIXED8 8.8 (strength), FLOAT an IEEE single; angles are radians.
+  const fixed = () => br.s32() / 65536;
+  const fixed8 = () => br.u16() / 256;
+  const f32 = () => { const v = new DataView(new ArrayBuffer(4)); v.setUint32(0, br.u32()); return v.getFloat32(0); };
+  const rgba = () => { const r = br.u8(), g = br.u8(), b = br.u8(), a = br.u8(); return { color: (r << 16) | (g << 8) | b, alpha: a / 255 }; };
+  const deg = (rad: number) => rad * 180 / Math.PI;
+  const placement = (inner: boolean, onTop: boolean): FilterPlacement => (onTop ? 'full' : inner ? 'inner' : 'outer');
   for (let i = 0; i < count; i++) {
     const at = br.offsetBytes - start;
     const id = br.u8();
     switch (id) {
-      case 0: br.skip(4 + 16 + 2 + 1); break;
-      case 1: br.skip(8 + 1); break;
-      case 2: br.skip(4 + 8 + 2 + 1); break;
-      case 3: br.skip(8 + 16 + 2 + 1); break;
-      case 4: case 7: { const n = br.u8(); br.skip(n * 4 + n + 16 + 2 + 1); break; }
-      case 5: { const w = br.u8(); const h = br.u8(); br.skip(4 + 4 + w * h * 4 + 4 + 1); break; }
-      case 6: br.skip(20 * 4); break;
+      case 0: { // DropShadow: RGBA, BlurX, BlurY, Angle, Distance, Strength, flags
+        const c = rgba();
+        const blurX = fixed(), blurY = fixed(), angle = deg(fixed()), distance = fixed(), strength = fixed8();
+        const f = br.u8(); // InnerShadow, Knockout, CompositeSource, Passes(5)
+        out.push({ kind: 'dropShadow', color: c.color, alpha: c.alpha, blurX, blurY, angle, distance, strength,
+          quality: f & 0x1f, inner: !!(f & 0x80), knockout: !!(f & 0x40), hideObject: !(f & 0x20) });
+        break;
+      }
+      case 1: { // Blur: BlurX, BlurY, Passes(5), reserved(3)
+        const blurX = fixed(), blurY = fixed();
+        out.push({ kind: 'blur', blurX, blurY, quality: br.u8() >> 3 });
+        break;
+      }
+      case 2: { // Glow: RGBA, BlurX, BlurY, Strength, flags
+        const c = rgba();
+        const blurX = fixed(), blurY = fixed(), strength = fixed8();
+        const f = br.u8(); // InnerGlow, Knockout, CompositeSource, Passes(5)
+        out.push({ kind: 'glow', color: c.color, alpha: c.alpha, blurX, blurY, strength,
+          quality: f & 0x1f, inner: !!(f & 0x80), knockout: !!(f & 0x40) });
+        break;
+      }
+      case 3: { // Bevel: highlight RGBA then shadow RGBA (the spec lists them the other way round)
+        const hi = rgba(), sh = rgba();
+        const blurX = fixed(), blurY = fixed(), angle = deg(fixed()), distance = fixed(), strength = fixed8();
+        const f = br.u8(); // InnerShadow, Knockout, CompositeSource, OnTop, Passes(4)
+        out.push({ kind: 'bevel', highlightColor: hi.color, highlightAlpha: hi.alpha, shadowColor: sh.color, shadowAlpha: sh.alpha,
+          blurX, blurY, angle, distance, strength, quality: f & 0x0f, knockout: !!(f & 0x40), type: placement(!!(f & 0x80), !!(f & 0x10)) });
+        break;
+      }
+      case 4: case 7: { // GradientGlow / GradientBevel: NumColors, colours, ratios, …
+        const n = br.u8();
+        const stops = Array.from({ length: n }, rgba);
+        const ratios = Array.from({ length: n }, () => br.u8());
+        const blurX = fixed(), blurY = fixed(), angle = deg(fixed()), distance = fixed(), strength = fixed8();
+        const f = br.u8();
+        out.push({ kind: id === 4 ? 'gradientGlow' : 'gradientBevel',
+          colors: stops.map((c) => c.color), alphas: stops.map((c) => c.alpha), ratios,
+          blurX, blurY, angle, distance, strength, quality: f & 0x0f, knockout: !!(f & 0x40), type: placement(!!(f & 0x80), !!(f & 0x10)) });
+        break;
+      }
+      case 5: { // Convolution: MatrixX, MatrixY, Divisor, Bias, Matrix, DefaultColor, reserved(6) Clamp PreserveAlpha
+        const matrixX = br.u8(), matrixY = br.u8();
+        const divisor = f32(), bias = f32();
+        const matrix = Array.from({ length: matrixX * matrixY }, f32);
+        const c = rgba();
+        const f = br.u8();
+        out.push({ kind: 'convolution', matrixX, matrixY, matrix, divisor, bias,
+          clamp: !!(f & 0x02), preserveAlpha: !!(f & 0x01), color: c.color, alpha: c.alpha });
+        break;
+      }
+      case 6: // ColorMatrix: 20 FLOATs
+        out.push({ kind: 'colorMatrix', matrix: Array.from({ length: 20 }, f32) });
+        break;
       default:
         throw new Error(
           `unknown filter ${id} (${context}, filter ${i + 1}/${count}, +${at} bytes into the list)`,
         );
     }
   }
+  return out;
+}
+
+/** BlendMode byte; values past 14 are reported and read as normal. */
+function readBlendMode(br: BitReader, warn: (m: string) => void, context: string): BlendMode {
+  const v = br.u8();
+  const mode = toBlendMode(v);
+  if (!mode) warn(`${context}: unknown blend mode ${v}`);
+  return mode ?? 'normal';
 }
 
 // main parse ---------------------------------------------------------------
@@ -1575,6 +1640,8 @@ export async function parseSwfBinary(
           matrix: info.matrix, colorTransform: info.ct,
           ratio: info.ratio, name: info.name, clipDepth: info.clipDepth,
           hasFilters: info.hasFilters,
+          ...(info.filters ? { filters: info.filters } : {}),
+          ...(info.blendMode ? { blendMode: info.blendMode } : {}),
         });
         if (info.clipActions?.length) {
           const effCid = cid || prev?.characterId || 0;
@@ -1603,6 +1670,8 @@ export async function parseSwfBinary(
             matrix: info.matrix ?? { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 },
             colorTransform: info.ct, ratio: info.ratio ?? 0, name: info.name,
             clipDepth: info.clipDepth, hasFilters: info.hasFilters, startFrame: frameIndex,
+            ...(info.filters?.length ? { filters: info.filters } : {}),
+            ...(info.blendMode && info.blendMode !== 'normal' ? { blendMode: info.blendMode } : {}),
           });
         } else if (prev) {
           const next: DisplayItem = { ...prev };
@@ -1611,6 +1680,9 @@ export async function parseSwfBinary(
           if (info.ratio != null) next.ratio = info.ratio;
           if (info.name) next.name = info.name;
           if (info.clipDepth != null) next.clipDepth = info.clipDepth;
+          // a move that carries a filter list / blend mode replaces the current one
+          if (info.filters) { if (info.filters.length) next.filters = info.filters; else delete next.filters; next.hasFilters = true; }
+          if (info.blendMode) { if (info.blendMode !== 'normal') next.blendMode = info.blendMode; else delete next.blendMode; }
           state.set(info.depth, next);
         }
         events.push({ kind: 'place', tagType: type, detail: `depth ${info.depth}`, characterId: cid });
@@ -1735,6 +1807,8 @@ export async function parseSwfBinary(
         display.push({
           depth: r.placeDepth, characterId: r.characterId, matrix: r.matrix,
           colorTransform: r.ct, ratio: 0, hasFilters: r.hasFilters, startFrame: i,
+          ...(r.filters?.length ? { filters: r.filters } : {}),
+          ...(r.blendMode && r.blendMode !== 'normal' ? { blendMode: r.blendMode } : {}),
         });
       }
       display.sort((a, b) => a.depth - b.depth);

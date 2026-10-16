@@ -131,7 +131,10 @@ export interface PlaceOp {
   ratio?: number;
   name?: string;
   clipDepth?: number;
-  blendMode?: string;
+  /** PlaceObject3 BlendMode (a move without it keeps the current one). */
+  blendMode?: BlendMode;
+  /** PlaceObject3 SurfaceFilterList (a move without it keeps the current list). */
+  filters?: SwfFilter[];
   hasFilters?: boolean;
 }
 
@@ -143,12 +146,78 @@ export interface DisplayItem {
   ratio: number;
   name?: string;
   clipDepth?: number;
-  blendMode?: string;
+  blendMode?: BlendMode;
+  filters?: SwfFilter[];
   hasFilters?: boolean;
   /** frame (in this timeline) at which this instance was created — used to
    *  derive the local playhead of nested sprites deterministically. */
   startFrame: number;
 }
+
+/**
+ * Blend modes by their ActionScript names (flash.display.BlendMode). The SWF
+ * stores them as a byte: 0 and 1 normal, 2 layer, 3 multiply, 4 screen,
+ * 5 lighten, 6 darken, 7 difference, 8 add, 9 subtract, 10 invert, 11 alpha,
+ * 12 erase, 13 overlay, 14 hardlight (SWF 19, PlaceObject3).
+ */
+export type BlendMode =
+  | 'normal' | 'layer' | 'multiply' | 'screen' | 'lighten' | 'darken' | 'difference'
+  | 'add' | 'subtract' | 'invert' | 'alpha' | 'erase' | 'overlay' | 'hardlight';
+
+export const BLEND_MODES: readonly BlendMode[] = [
+  'normal', 'normal', 'layer', 'multiply', 'screen', 'lighten', 'darken', 'difference',
+  'add', 'subtract', 'invert', 'alpha', 'erase', 'overlay', 'hardlight',
+];
+
+/** A blend mode from the SWF byte or a name in any case ("Add", "HARDLIGHT"); unknown → undefined. */
+export function toBlendMode(v: string | number | null | undefined): BlendMode | undefined {
+  if (v == null || v === '') return undefined;
+  const n = typeof v === 'number' ? v : /^\d+$/.test(v) ? Number(v) : NaN;
+  if (Number.isFinite(n)) return BLEND_MODES[n];
+  const name = String(v).toLowerCase().replace(/[^a-z]/g, '');
+  return (BLEND_MODES as readonly string[]).includes(name) ? name as BlendMode : undefined;
+}
+
+/**
+ * Surface filters (SWF 19, FILTERLIST), in the units of the ActionScript filter
+ * classes (flash.filters.*): blur and distance in pixels, angle in degrees,
+ * colour 0xRRGGBB with alpha 0–1, quality = the number of blur passes.
+ */
+export type SwfFilter =
+  | DropShadowFilterData | BlurFilterData | GlowFilterData | BevelFilterData
+  | GradientFilterData | ConvolutionFilterData | ColorMatrixFilterData;
+
+/** Where a bevel / gradient filter is drawn (`type` in ActionScript). */
+export type FilterPlacement = 'inner' | 'outer' | 'full';
+
+export interface DropShadowFilterData {
+  kind: 'dropShadow'; color: number; alpha: number; blurX: number; blurY: number;
+  angle: number; distance: number; strength: number; quality: number;
+  inner: boolean; knockout: boolean; hideObject: boolean;
+}
+export interface BlurFilterData { kind: 'blur'; blurX: number; blurY: number; quality: number }
+export interface GlowFilterData {
+  kind: 'glow'; color: number; alpha: number; blurX: number; blurY: number;
+  strength: number; quality: number; inner: boolean; knockout: boolean;
+}
+export interface BevelFilterData {
+  kind: 'bevel'; highlightColor: number; highlightAlpha: number; shadowColor: number; shadowAlpha: number;
+  blurX: number; blurY: number; angle: number; distance: number; strength: number; quality: number;
+  knockout: boolean; type: FilterPlacement;
+}
+export interface GradientFilterData {
+  kind: 'gradientGlow' | 'gradientBevel';
+  /** gradient stops: colour, alpha 0–1, ratio 0–255 */
+  colors: number[]; alphas: number[]; ratios: number[];
+  blurX: number; blurY: number; angle: number; distance: number; strength: number; quality: number;
+  knockout: boolean; type: FilterPlacement;
+}
+export interface ConvolutionFilterData {
+  kind: 'convolution'; matrixX: number; matrixY: number; matrix: number[];
+  divisor: number; bias: number; preserveAlpha: boolean; clamp: boolean; color: number; alpha: number;
+}
+/** 4×5 row-major: R' = m0·R + m1·G + m2·B + m3·A + m4 (offsets in 0–255), then G', B', A'. */
+export interface ColorMatrixFilterData { kind: 'colorMatrix'; matrix: number[] }
 
 export interface Frame {
   index: number;

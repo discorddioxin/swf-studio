@@ -415,6 +415,114 @@ function writePlace2(w, el) {
   if (clipActions) writeClipActions(w, clipActions);
 }
 
+/**
+ * FILTERLIST (SWF 19) from FFDec's list element (`surfaceFilterList` / `filterList`):
+ * FIXED fields 16.16, strength FIXED8, FLOAT singles; the bevel stores its highlight
+ * colour before the shadow colour.
+ */
+function writeFilterList(w, listEl) {
+  const items = listEl ? [...listEl.children] : [];
+  const ids = { DROPSHADOWFILTER: 0, BLURFILTER: 1, GLOWFILTER: 2, BEVELFILTER: 3, GRADIENTGLOWFILTER: 4, CONVOLUTIONFILTER: 5, COLORMATRIXFILTER: 6, GRADIENTBEVELFILTER: 7 };
+  w.u8(items.length);
+  for (const f of items) {
+    const type = f.getAttribute('type');
+    const id = ids[type];
+    if (id == null) throw new Error(`unsupported filter ${type}`);
+    w.u8(id);
+    const fixed = (k) => w.u32(Math.round(Number(f.getAttribute(k) ?? 0) * 65536) | 0);
+    const fixed8 = (k) => w.u16(Math.round(Number(f.getAttribute(k) ?? 0) * 256));
+    const rgba = (c) => { w.u8(num(c, 'red')); w.u8(num(c, 'green')); w.u8(num(c, 'blue')); w.u8(c && has(c, 'alpha') ? num(c, 'alpha') : 255); };
+    const bit = (k) => (BOOL(f.getAttribute(k)) ? 1 : 0);
+    const passes = () => num(f, 'passes');
+    const list = (k) => { const l = childByTag(f, k); return l ? [...l.children] : []; };
+    switch (id) {
+      case 0:
+        rgba(childByTag(f, 'dropShadowColor'));
+        fixed('blurX'); fixed('blurY'); fixed('angle'); fixed('distance'); fixed8('strength');
+        w.u8((bit('innerShadow') << 7) | (bit('knockout') << 6) | (bit('compositeSource') << 5) | (passes() & 0x1f));
+        break;
+      case 1:
+        fixed('blurX'); fixed('blurY');
+        w.u8((passes() & 0x1f) << 3);
+        break;
+      case 2:
+        rgba(childByTag(f, 'glowColor'));
+        fixed('blurX'); fixed('blurY'); fixed8('strength');
+        w.u8((bit('innerGlow') << 7) | (bit('knockout') << 6) | (bit('compositeSource') << 5) | (passes() & 0x1f));
+        break;
+      case 3:
+        rgba(childByTag(f, 'highlightColor')); rgba(childByTag(f, 'shadowColor'));
+        fixed('blurX'); fixed('blurY'); fixed('angle'); fixed('distance'); fixed8('strength');
+        w.u8((bit('innerShadow') << 7) | (bit('knockout') << 6) | (bit('compositeSource') << 5) | (bit('onTop') << 4) | (passes() & 0x0f));
+        break;
+      case 4: case 7: {
+        const colors = list('gradientColors'), ratios = list('gradientRatio');
+        w.u8(colors.length);
+        for (const c of colors) rgba(c);
+        for (const r of ratios) w.u8(Number(r.textContent) || 0);
+        fixed('blurX'); fixed('blurY'); fixed('angle'); fixed('distance'); fixed8('strength');
+        w.u8((bit('innerShadow') << 7) | (bit('knockout') << 6) | (bit('compositeSource') << 5) | (bit('onTop') << 4) | (passes() & 0x0f));
+        break;
+      }
+      case 5:
+        w.u8(num(f, 'matrixX')); w.u8(num(f, 'matrixY'));
+        w.f32(f.getAttribute('divisor')); w.f32(f.getAttribute('bias'));
+        for (const c of list('matrix')) w.f32(c.textContent);
+        rgba(childByTag(f, 'defaultColor'));
+        w.u8((bit('clamp') << 1) | bit('preserveAlpha'));
+        break;
+      case 6:
+        for (const c of list('matrix')) w.f32(c.textContent);
+        break;
+    }
+  }
+}
+
+/** Whether `c` lies in a filter record below `root` (its `matrix` list is no placement matrix). */
+function inFilter(c, root) {
+  for (let n = c.parentElement; n && n !== root; n = n.parentElement) {
+    if (/FILTER$/.test(n.getAttribute('type') ?? '') || /^(surfaceFilterList|filterList)$/.test(n.tagName)) return true;
+  }
+  return false;
+}
+
+/** PlaceObject3: the PlaceObject2 fields plus a second flags byte, ClassName, filters, blend mode, bitmap cache. */
+function writePlace3(w, el) {
+  const move = BOOL(el.getAttribute('placeFlagMove'));
+  const hasChar = BOOL(el.getAttribute('placeFlagHasCharacter'));
+  const matrix = BOOL(el.getAttribute('placeFlagHasMatrix')) ? firstData(el, (c) => (c.getAttribute('type') === 'MATRIX' || c.tagName === 'matrix') && !inFilter(c, el)) : null;
+  const ct = BOOL(el.getAttribute('placeFlagHasColorTransform')) ? firstData(el, (c) => /^CXFORM/.test(c.getAttribute('type') ?? '') || /^colorTransform/.test(c.tagName)) : null;
+  const flag = (k) => BOOL(el.getAttribute(k));
+  const clipActions = flag('placeFlagHasClipActions') ? firstData(el, (c) => c.tagName === 'clipActions' || c.getAttribute('type') === 'CLIPACTIONS') : null;
+  let f1 = 0, f2 = 0;
+  if (clipActions) f1 |= 0x80;
+  if (flag('placeFlagHasClipDepth')) f1 |= 0x40;
+  if (flag('placeFlagHasName')) f1 |= 0x20;
+  if (flag('placeFlagHasRatio')) f1 |= 0x10;
+  if (ct) f1 |= 0x08;
+  if (matrix) f1 |= 0x04;
+  if (hasChar) f1 |= 0x02;
+  if (move) f1 |= 0x01;
+  if (flag('placeFlagHasImage')) f2 |= 0x10;
+  if (flag('placeFlagHasClassName')) f2 |= 0x08;
+  if (flag('placeFlagHasCacheAsBitmap')) f2 |= 0x04;
+  if (flag('placeFlagHasBlendMode')) f2 |= 0x02;
+  if (flag('placeFlagHasFilterList')) f2 |= 0x01;
+  w.u8(f1); w.u8(f2);
+  w.u16(num(el, 'depth'));
+  if (f2 & 0x08) w.str(el.getAttribute('className') ?? '');
+  if (hasChar) w.u16(num(el, 'characterId'));
+  if (matrix) writeMatrix(w, matrix);
+  if (ct) writeCxform(w, ct, true);
+  if (f1 & 0x10) w.u16(num(el, 'ratio'));
+  if (f1 & 0x20) w.str(el.getAttribute('name') ?? '');
+  if (f1 & 0x40) w.u16(num(el, 'clipDepth'));
+  if (f2 & 0x01) writeFilterList(w, childByTag(el, 'surfaceFilterList'));
+  if (f2 & 0x02) w.u8(num(el, 'blendMode'));
+  if (f2 & 0x04) w.u8(num(el, 'bitmapCache'));
+  if (clipActions) writeClipActions(w, clipActions);
+}
+
 function clipEventMask(el) {
   if (!el) return 0;
   // CLIPEVENTFLAGS bytes in SWF stream order (little-endian u32):
@@ -723,6 +831,9 @@ function tagPayload(itemEl, type) {
     case 'PlaceObject2Tag':
       writePlace2(w, itemEl);
       break;
+    case 'PlaceObject3Tag':
+      writePlace3(w, itemEl);
+      break;
     case 'RemoveObject2Tag':
       writeRemove2(w, itemEl);
       break;
@@ -814,7 +925,7 @@ function tagPayload(itemEl, type) {
         const ct = firstData(r, (c) => /^CXFORM/.test(c.getAttribute('type') ?? ''));
         if (ct) writeCxform(recW, ct, true);
         else writeIdentityCxform(recW);
-        if (BOOL(r.getAttribute('buttonHasFilterList'))) throw new Error('button filter lists unsupported');
+        if (BOOL(r.getAttribute('buttonHasFilterList'))) writeFilterList(recW, childByTag(r, 'filterList'));
         if (BOOL(r.getAttribute('buttonHasBlendMode'))) recW.u8(num(r, 'blendMode'));
       }
       recW.u8(0); // terminator

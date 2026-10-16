@@ -88,7 +88,7 @@ export function FramePanel({ doc, timeline, frame, api, onSelect, selectedPath, 
                 {o.characterId != null ? `#${o.characterId}` : '—'} {o.name ? `“${o.name}”` : ''}
                 {o.matrix ? ` · ${fmt(o.matrix.tx / TWIPS)},${fmt(o.matrix.ty / TWIPS)}px` : ''}
                 {o.clipDepth ? ` · mask→${o.clipDepth}` : ''}
-                {o.blendMode && o.blendMode !== 'Normal' ? ` · ${o.blendMode}` : ''}
+                {o.blendMode && o.blendMode !== 'normal' ? ` · ${o.blendMode}` : ''}
                 {o.hasFilters ? ' · filters' : ''}
               </span>
               {o.tagType !== 'PlaceObject2Tag' && o.tagType !== 'RemoveObject2Tag' && (
