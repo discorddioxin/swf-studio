@@ -10,6 +10,7 @@ import type { Stmt } from '../as2/ast';
 import type { AbcClassDef, AbcFile, AbcMethodInfo, AbcTrait } from '../../decompiler/swf/abc';
 import { FLASH_DEFINITIONS, TOP_LEVEL } from '../../../src/engine/flash/packages';
 import { liftMethod, parameterNames, type LiftDiagnostic } from './lift';
+import { binding, isBindable, memberKey, pathSegment, quote, reference, UnsafeName } from './names';
 
 export interface EmittedFile { path: string; text: string }
 
@@ -28,9 +29,13 @@ export interface EmitResult {
   unsupported: string[];
 }
 
-/** `com.foo.Bar` -> `com/foo/Bar.ts`; a default-package class stays at the root. */
+/**
+ * `com.foo.Bar` -> `com/foo/Bar.ts`; a default-package class stays at the root.
+ * A segment that is not an identifier is spelt in a safe encoding, so a name from
+ * the ABC can never point outside the project folder (`..`, `/`).
+ */
 export function classPath(qualifiedName: string): string {
-  return `${qualifiedName.split('.').join('/')}.ts`;
+  return `${qualifiedName.split('.').map(pathSegment).join('/')}.ts`;
 }
 
 export interface AbcModuleOptions {
@@ -83,7 +88,11 @@ export function transpileAbc(options: AbcModuleOptions): EmitResult {
         files.push(...result.files);
         diagnostics.push(...result.diagnostics);
       } else if (trait.kind === 'function' && trait.method != null) {
-        files.push({ path: `functions/${simpleName(trait.name)}.ts`, text: emitFunctionModule(abc, trait, pathOf) });
+        if (!isBindable(simpleName(trait.name))) {
+          diagnostics.push({ offset: 0, message: new UnsafeName(simpleName(trait.name), 'function').message, where: trait.name });
+          continue;
+        }
+        files.push({ path: `functions/${simpleName(trait.name)}.ts`, text: emitFunctionModule(abc, trait, pathOf, diagnostics) });
       } else if (trait.kind === 'slot' || trait.kind === 'const') {
         // A script-level constant: a package constant of the movie (`fl.video`'s
         // `SKIN_AUTO_HIDE_INTERVAL`). The name it is written under may carry a
@@ -91,13 +100,17 @@ export function transpileAbc(options: AbcModuleOptions): EmitResult {
         // each have their own.
         if (trait.value !== undefined) {
           const name = simpleName(trait.name);
+          if (!isBindable(name)) {
+            diagnostics.push({ offset: 0, message: new UnsafeName(name, 'constant').message, where: trait.name });
+            continue;
+          }
           const where = `constants/${trait.name.replace(/[^\w$]+/g, '_').replace(/^_+|_+$/g, '')}.ts`;
           pathOf.set(name, where);
           files.push({ path: where, text: `export const ${name} = ${literalOf(trait.value)};\n` });
         }
       }
     }
-    const init = emitScriptInit(abc, script.init, script.traits, pathOf);
+    const init = emitScriptInit(abc, script.init, script.traits, pathOf, diagnostics);
     if (init) files.push(init);
   }
 
@@ -175,6 +188,17 @@ export interface ClassModuleResult extends EmitResult {
   qualifiedName: string;
 }
 
+/** The instance slot names declared by a class and its ancestors in the same ABC. */
+function declaredSlots(qualified: string, byQualified: Map<string, AbcClassDef>): string[] {
+  const names = new Set<string>();
+  const seen = new Set<string>();
+  for (let cls = byQualified.get(qualified); cls && !seen.has(cls.instance.name); cls = byQualified.get(cls.instance.superName)) {
+    seen.add(cls.instance.name);
+    for (const t of cls.instance.traits) if (t.kind === 'slot' || t.kind === 'const') names.add(simpleName(t.name));
+  }
+  return [...names];
+}
+
 export function emitClassModule(options: ClassModuleOptions): ClassModuleResult {
   const { abc, classIndex, projectClasses } = options;
   const def: AbcClassDef = abc.classes[classIndex];
@@ -186,6 +210,18 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
   // require at the point of use), a type use only needs `import type`.
   const used: NameUse = { values: new Set(), types: new Set() };
   const isInterface = instance.isInterface;
+
+  // The class, its base and its interfaces are named in declarations: a name that
+  // cannot be one refuses the module, loudly, instead of being printed.
+  const unusable = [
+    { name: simple, role: 'class' },
+    ...(instance.superName ? [{ name: simpleName(instance.superName), role: 'superclass' }] : []),
+    ...instance.interfaces.map((i) => ({ name: simpleName(i), role: 'interface' })),
+  ].find((n) => !isBindable(n.name));
+  if (unusable) {
+    const message = `${new UnsafeName(unusable.name, unusable.role).message}: module not emitted`;
+    return { files: [], diagnostics: [{ offset: 0, message, where: qualifiedName }], unsupported: [], provides: [], qualifiedName };
+  }
 
   // Timeline frame scripts are ordinary instance traits named `frameN` (namespace
   // = the class's package), so the member loops below emit them like any method.
@@ -273,7 +309,7 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
   for (const [frameName, method] of [...frames.entries()].sort()) {
     const where = `${qualifiedName}::${frameName}`;
     members.push({
-      open: `  public ${frameName}(): any {\n`, close: '\n  }',
+      open: `  public ${memberKey(frameName)}(): any {\n`, close: '\n  }',
       stmts: liftStmts(abc, method, instanceScope, diagnostics, where), where,
     });
   }
@@ -298,7 +334,22 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
   };
   const body = members.map((m) => {
     if (m.stmts === undefined) return m.open;
-    const printed = m.stmts === null ? refusalStub(m.where, diagnostics) : printStmts(m.stmts, used, refs);
+    let printed: string;
+    if (m.stmts === null) printed = refusalStub(m.where, diagnostics);
+    else {
+      // A body that names something unprintable is refused like one the lifter
+      // could not lift; the names it used only count once it printed.
+      const own: NameUse = { values: new Set(), types: new Set() };
+      try {
+        printed = printStmts(m.stmts, own, refs);
+        for (const n of own.values) used.values.add(n);
+        for (const n of own.types) used.types.add(n);
+      } catch (e) {
+        if (!(e instanceof UnsafeName)) throw e;
+        diagnostics.push({ offset: 0, message: e.message, where: m.where });
+        printed = refusalStub(m.where, diagnostics);
+      }
+    }
     return `${m.open}${m.hoistSuper ? hoistSuper(printed) : printed}${m.close}`;
   });
   // JavaScript has no `super` without a base class, so one that uses `super` gets `extends Object`.
@@ -317,12 +368,19 @@ export function emitClassModule(options: ClassModuleOptions): ClassModuleResult 
     if (refs.skip?.has(name)) return name;
     const target = refs.pathOf.get(name);
     if (!target) return name;
-    return `require('${specifier(refs.self, target.replace(/\.ts$/, ''))}').${name}`;
+    return `require(${quote(specifier(refs.self, target.replace(/\.ts$/, '')))}).${name}`;
   };
   const slotsCall = slotDefaults.length ? `__slots(${simple}, { ${slotDefaults.join(', ')} });\n` : '';
-  const cinitCall = `${slotsCall}${hasCinit ? `${simple}.__cinit();\n` : ''}`;
+  // `for (k in o)` sees an object's dynamic properties only. A class declared
+  // `dynamic` says so, with the slots it and its ancestors declare (those are
+  // traits, never enumerated); every other class is sealed, and its instances
+  // enumerate nothing (engine/flash/enumeration.ts).
+  const dynamicCall = !isInterface && !instance.sealed
+    ? `__dynamic(${simple}, ${JSON.stringify(declaredSlots(instance.name, byQualified))});\n`
+    : '';
+  const cinitCall = `${dynamicCall}${slotsCall}${hasCinit ? `${simple}.__cinit();\n` : ''}`;
   const tail = isInterface
-    ? `\nexport const ${simple} = __interface('${qualifiedName}'${supers.length ? `, ${supers.map(refOf).join(', ')}` : ''});`
+    ? `\nexport const ${simple} = __interface(${quote(qualifiedName)}${supers.length ? `, ${supers.map(refOf).join(', ')}` : ''});`
     : supers.length
       ? `\n${cinitCall}__implements(${simple}, ${supers.map(refOf).join(', ')});`
       : `\n${cinitCall}`;
@@ -408,36 +466,42 @@ function memberPiece(
   const name = simpleName(trait.name);
   const stat = isStatic ? 'static ' : '';
   const literal = (text: string): MemberPiece => ({ open: text, close: '', where: '' });
+  // JavaScript reserves a class's static `prototype`; no key spelling defines it.
+  if (isStatic && name === 'prototype') {
+    diagnostics.push({ offset: 0, message: 'a static member named "prototype" cannot be declared in JavaScript', where: `${owner}::${name}` });
+    return null;
+  }
+  const key = memberKey(name);
   if (trait.kind === 'slot' || trait.kind === 'const') {
     const type = trait.type ? typeName(trait.type) : 'any';
-    if (isInterface) return literal(`  ${name}: ${type};`);
+    if (isInterface) return literal(`  ${key}: ${type};`);
     const initial = slotDefault(trait);
     // A static slot is set when the class is defined, before `cinit`: a field initializer.
-    if (isStatic) return literal(`  public static ${name}: ${type}${initial === 'undefined' ? '' : ` = ${initial}`};`);
+    if (isStatic) return literal(`  public static ${key}: ${type}${initial === 'undefined' ? '' : ` = ${initial}`};`);
     // An instance slot holds its default from the moment the object exists — before
     // any constructor in the chain runs (a base constructor calling an overridden
     // method sees it). A JavaScript field initializer runs only after `super()`
     // returns, so the default goes on the prototype (`__slots` below) instead.
     if (initial !== 'undefined') slotDefaults?.push(`${JSON.stringify(name)}: ${initial}`);
-    return literal(`  public ${name}: ${type};`);
+    return literal(`  public ${key}: ${type};`);
   }
   if (trait.kind !== 'method' && trait.kind !== 'getter' && trait.kind !== 'setter') return null;
-  if (trait.method == null) return literal(`  public ${stat}${name}: any;`);
+  if (trait.method == null) return literal(`  public ${stat}${key}: any;`);
   const info = abc.methods[trait.method];
   const params = paramsOf(abc, trait.method);
   const ret = info?.returnType ? typeName(info.returnType) : 'any';
   const hasBody = abc.bodies.some((b) => b.method === trait.method);
   if (isInterface) {
-    if (trait.kind === 'getter') return literal(`  get ${name}(): ${ret};`);
-    if (trait.kind === 'setter') return literal(`  set ${name}(${params});`);
-    return literal(`  ${name}(${params}): ${ret};`);
+    if (trait.kind === 'getter') return literal(`  get ${key}(): ${ret};`);
+    if (trait.kind === 'setter') return literal(`  set ${key}(${params});`);
+    return literal(`  ${key}(${params}): ${ret};`);
   }
-  if (!hasBody) return literal(`  public ${stat}${name}(${params}): ${ret} { throw new Error(${JSON.stringify(`${owner}::${name} has no body in the ABC`)}); }`);
+  if (!hasBody) return literal(`  public ${stat}${key}(${params}): ${ret} { throw new Error(${JSON.stringify(`${owner}::${name} has no body in the ABC`)}); }`);
   const where = `${owner}::${name}`;
   const stmts = liftStmts(abc, trait.method, scope, diagnostics, where);
-  if (trait.kind === 'getter') return { open: `  public ${stat}get ${name}()${ret === 'void' ? '' : `: ${ret}`} {\n`, close: '\n  }', stmts, where };
-  if (trait.kind === 'setter') return { open: `  public ${stat}set ${name}(${params}) {\n`, close: '\n  }', stmts, where };
-  return { open: `  public ${stat}${name}(${params}): ${ret} {\n`, close: '\n  }', stmts, where };
+  if (trait.kind === 'getter') return { open: `  public ${stat}get ${key}()${ret === 'void' ? '' : `: ${ret}`} {\n`, close: '\n  }', stmts, where };
+  if (trait.kind === 'setter') return { open: `  public ${stat}set ${key}(${params}) {\n`, close: '\n  }', stmts, where };
+  return { open: `  public ${stat}${key}(${params}): ${ret} {\n`, close: '\n  }', stmts, where };
 }
 
 /** Lift a method body to statements; a refusal is recorded and reported as `null`. */
@@ -474,7 +538,17 @@ function refusalStub(where: string, diagnostics: EmitDiagnostic[]): string {
 }
 
 /** The module that runs a script's top level (its trait bindings are the class objects). */
-function emitScriptInit(abc: AbcFile, method: number, traits: AbcTrait[], pathOf: Map<string, string>): EmittedFile | null {
+function emitScriptInit(abc: AbcFile, method: number, traits: AbcTrait[], pathOf: Map<string, string>, diagnostics: EmitDiagnostic[]): EmittedFile | null {
+  try {
+    return scriptInitModule(abc, method, traits, pathOf);
+  } catch (e) {
+    if (!(e instanceof UnsafeName)) throw e;
+    diagnostics.push({ offset: 0, message: `${e.message}: script init not emitted`, where: `script/init_${method}` });
+    return null;
+  }
+}
+
+function scriptInitModule(abc: AbcFile, method: number, traits: AbcTrait[], pathOf: Map<string, string>): EmittedFile | null {
   const body = abc.bodies.find((b) => b.method === method);
   if (!body) return null;
   const result = liftMethod({ abc, body, target: 'none' });
@@ -511,13 +585,22 @@ function emitScriptInit(abc: AbcFile, method: number, traits: AbcTrait[], pathOf
 }
 
 /** An `internal function frame1()` binding, for the rare block that names a function. */
-function emitFunctionModule(abc: AbcFile, trait: AbcTrait, pathOf?: Map<string, string>): string {
+function emitFunctionModule(abc: AbcFile, trait: AbcTrait, pathOf: Map<string, string> | undefined, diagnostics: EmitDiagnostic[]): string {
   const name = simpleName(trait.name);
   const body = trait.method != null ? abc.bodies.find((b) => b.method === trait.method) : undefined;
   if (!body) return `export function ${name}(...args: any[]): any { throw new Error("no body"); }\n`;
   const result = liftMethod({ abc, body, target: 'none', paramNames: paramNamesOf(abc, trait.method as number) });
   const refs: RefMaps = { pathOf: pathOf ?? new Map<string, string>(), self: `functions/${name}` };
-  const text = result.stmts ? new Printer({ values: new Set(), types: new Set() }, refs).print(result.stmts) : `throw new Error("not lifted yet");`;
+  let text = `throw new Error(${JSON.stringify(`${name}: not lifted yet`)});`;
+  if (result.stmts) {
+    try {
+      text = new Printer({ values: new Set(), types: new Set() }, refs).print(result.stmts);
+    } catch (e) {
+      if (!(e instanceof UnsafeName)) throw e;
+      diagnostics.push({ offset: 0, message: e.message, where: `functions/${name}` });
+      text = `throw new Error(${JSON.stringify(`${name}: not lifted yet (${e.message})`)});`;
+    }
+  }
   return `export function ${name}(${paramsOf(abc, trait.method as number)}): any {\n${text.split('\n').map((l) => `  ${l}`).join('\n')}\n}\n`;
 }
 
@@ -665,7 +748,7 @@ function importLines(
   const lines: string[] = [];
   const typeLines: string[] = [];
   for (const name of [...uses].sort()) {
-    if (BUILTINS.has(name) || name === simple || ownNames?.has(name)) continue;
+    if (BUILTINS.has(name) || name === simple || ownNames?.has(name) || !isBindable(name)) continue;
     const asValue = values?.has(name) ?? true;
     const asType = types?.has(name) ?? false;
     const project = bySimple.get(name);
@@ -674,10 +757,10 @@ function importLines(
       // Required at the point of use: import it as a type only if a type position
       // names it too, and otherwise not at all.
       if (required?.has(name)) {
-        if (asType) typeLines.push(`import type { ${name} } from '${specifier(self, from)}';`);
+        if (asType) typeLines.push(`import type { ${name} } from ${quote(specifier(self, from))};`);
         continue;
       }
-      const line = `import { ${name} } from '${specifier(self, from)}';`;
+      const line = `import { ${name} } from ${quote(specifier(self, from))};`;
       (asType && !asValue ? typeLines : lines).push(line);
       continue;
     }
@@ -687,16 +770,16 @@ function importLines(
     // `http://www.adobe.com/2007/flash/flvplayback/internal`) names no module.
     if (!/^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)+$/.test(qualified)) continue;
     if (!asValue && asType) {
-      typeLines.push(`import type { ${name} } from '${qualified.split('.').join('/')}';`);
+      typeLines.push(`import type { ${name} } from ${quote(qualified.split('.').join('/'))};`);
       continue;
     }
     if (flashAvailable && !flashAvailable(qualified)) {
       unsupported?.add(qualified);
-      lines.push(`import { unsupportedFlash } from '${specifier(self, UNSUPPORTED_HELPER.replace(/\.ts$/, ''))}';`);
+      lines.push(`import { unsupportedFlash } from ${quote(specifier(self, UNSUPPORTED_HELPER.replace(/\.ts$/, '')))};`);
       lines.push(`const ${name}: any = unsupportedFlash(${JSON.stringify(qualified)});`);
       continue;
     }
-    lines.push(`import { ${name} } from '${qualified.split('.').join('/')}';`);
+    lines.push(`import { ${name} } from ${quote(qualified.split('.').join('/'))};`);
   }
   return [...lines, ...typeLines];
 }
@@ -713,7 +796,8 @@ interface RefMaps {
 
 /** A relative import specifier between two project modules, both root-relative. */
 function specifier(self: string, target: string): string {
-  const from = classPath(self).split('/').slice(0, -1);
+  // `self` is a qualified class name, or already a module path (`script/init_7`).
+  const from = (self.includes('/') ? `${self}.ts` : classPath(self)).split('/').slice(0, -1);
   const to = target.split('/');
   while (from.length && to.length > 1 && from[0] === to[0]) { from.shift(); to.shift(); }
   const rel = [...from.map(() => '..'), ...to].join('/');
@@ -754,7 +838,7 @@ class Printer {
       case 'empty': case 'import': case 'include': return;
       case 'expr': this.line(`${this.expr(s.e)};`); return;
       case 'var':
-        this.line(`${s.decls.map((d) => `var ${d.name}${d.init ? ` = ${this.expr(d.init)}` : ''}`).join(', ')};`);
+        this.line(`${s.decls.map((d) => `var ${binding(d.name, 'variable')}${d.init ? ` = ${this.expr(d.init)}` : ''}`).join(', ')};`);
         return;
       case 'block': for (const b of s.body) this.stmt(b); return;
       case 'if':
@@ -764,7 +848,7 @@ class Printer {
       case 'while': this.line(`while (${this.expr(s.test)}) ${this.blockish(s.body)}`); return;
       case 'dowhile': this.line(`do ${this.blockish(s.body)} while (${this.expr(s.test)});`); return;
       case 'for': this.line(`for (${s.init ? this.inline(s.init) : ''}; ${s.test ? this.expr(s.test) : ''}; ${s.update ? this.expr(s.update) : ''}) ${this.blockish(s.body)}`); return;
-      case 'forin': this.line(`for (${s.left.decl ? 'const ' : ''}${this.expr(s.left.target)} in ${this.expr(s.obj)}) ${this.blockish(s.body)}`); return;
+      case 'forin': this.line(`for (${s.left.decl ? 'const ' : ''}${this.target(s.left.target)} in ${this.expr(s.obj)}) ${this.blockish(s.body)}`); return;
       case 'switch': {
         this.line(`switch (${this.expr(s.disc)}) {`);
         this.indent++;
@@ -778,8 +862,8 @@ class Printer {
         this.line('}');
         return;
       }
-      case 'break': this.line(`break${s.label ? ` ${s.label}` : ''};`); return;
-      case 'continue': this.line(`continue${s.label ? ` ${s.label}` : ''};`); return;
+      case 'break': this.line(`break${s.label ? ` ${binding(s.label, 'label')}` : ''};`); return;
+      case 'continue': this.line(`continue${s.label ? ` ${binding(s.label, 'label')}` : ''};`); return;
       case 'return': this.line(s.arg ? `return ${this.expr(s.arg)};` : 'return;'); return;
       case 'throw': this.line(`throw ${this.expr(s.arg)};`); return;
       case 'try': {
@@ -788,7 +872,7 @@ class Printer {
         for (const b of s.block) this.stmt(b);
         this.indent--;
         if (s.handler) {
-          this.line(`} catch (${s.param ?? '__e'}) {`);
+          this.line(`} catch (${binding(s.param ?? '__e', 'catch parameter')}) {`);
           this.indent++;
           for (const b of s.handler) this.stmt(b);
           this.indent--;
@@ -802,9 +886,9 @@ class Printer {
         this.line('}');
         return;
       }
-      case 'label': this.line(`${s.label}: ${this.blockish(s.body)}`); return;
+      case 'label': this.line(`${binding(s.label, 'label')}: ${this.blockish(s.body)}`); return;
       case 'function': {
-        this.line(`function ${s.name}(${s.params.map((p) => p.name).join(', ')}) {`);
+        this.line(`function ${binding(s.name, 'function')}(${s.params.map((p) => binding(p.name, 'parameter')).join(', ')}) {`);
         this.indent++;
         for (const b of s.body) this.stmt(b);
         this.indent--;
@@ -857,8 +941,24 @@ class Printer {
       : e.k === 'member' && e.obj.k === 'id' && e.obj.name === 'this' ? e.prop
         : null;
     if (named == null || !/^[A-Z]/.test(named)) return this.expr(e);
-    if (how === 'type') { this.used.types.add(named); return named; }
+    if (how === 'type') { reference(named); this.used.types.add(named); return named; }
     return this.expr({ k: 'id', name: named, line: 0 });
+  }
+
+  /**
+   * A property access as a place (or a plain read). A literal name prints as
+   * `obj.name` / `obj["name"]`; a computed key that is not plainly a number goes
+   * through `__key`, so a runtime-built `"constructor"` cannot reach the host's
+   * `Function` (`runtime/shared/hostGuard.ts`). A write to a literal `.constructor`
+   * stays a plain write: only reads are guarded.
+   */
+  private target(e: import('../as2/ast').Expr): string {
+    if (e.k === 'member') {
+      const obj = this.atom(e.obj);
+      return /^[A-Za-z_$][\w$]*$/.test(e.prop) ? `${obj}.${e.prop}` : `${obj}[${JSON.stringify(e.prop)}]`;
+    }
+    if (e.k === 'index') return `${this.atom(e.obj)}[${plainlyNumeric(e.index) || safeLiteralKey(e.index) ? this.expr(e.index) : `__key(${this.expr(e.index)})`}]`;
+    return this.atom(e);
   }
 
   /** An operand of an operator: parenthesised when it is an operator itself. */
@@ -877,12 +977,13 @@ class Printer {
       case 'str': return JSON.stringify(e.v);
       case 'lit': return e.v;
       case 'id': {
+        reference(e.name);
         this.used.values.add(e.name);
         const refs = this.refs;
         if (!refs || refs.skip?.has(e.name)) return e.name;
         const target = refs.pathOf.get(e.name);
         if (!target) return e.name;
-        return `require('${specifier(refs.self, target.replace(/\.ts$/, ''))}').${e.name}`;
+        return `require(${quote(specifier(refs.self, target.replace(/\.ts$/, '')))}).${e.name}`;
       }
       case 'array': return `[${e.items.map((i) => (i ? this.expr(i) : '')).join(', ')}]`;
       case 'object': return `{ ${e.props.map((p) => `${key(p.key)}: ${this.expr(p.value)}`).join(', ')} }`;
@@ -895,13 +996,14 @@ class Printer {
         const inner = this.out.join('\n');
         this.out = savedOut;
         this.indent = savedIndent;
-        return `function (${e.params.map((p) => p.name).join(', ')}) {${inner ? `\n${inner}\n` : ' '}}`;
+        return `function (${e.params.map((p) => binding(p.name, 'parameter')).join(', ')}) {${inner ? `\n${inner}\n` : ' '}}`;
       }
       case 'member': {
-        const obj = this.atom(e.obj);
-        return /^[A-Za-z_$][\w$]*$/.test(e.prop) ? `${obj}.${e.prop}` : `${obj}[${JSON.stringify(e.prop)}]`;
+        // A `.constructor` read is guarded: it may not hand out the host's `Function`.
+        if (e.prop === 'constructor') return `__ctor(${this.expr(e.obj)})`;
+        return this.target(e);
       }
-      case 'index': return `${this.atom(e.obj)}[${this.expr(e.index)}]`;
+      case 'index': return this.target(e);
       case 'call': {
         // `T(x)` on a class is a cast in ActionScript: a class object called as a
         // function coerces its one argument. A JavaScript class cannot be called, so
@@ -922,9 +1024,9 @@ class Printer {
       case 'unary': {
         const op = e.op.trim();
         const arg = isOperator(e.arg) ? `(${this.expr(e.arg)})` : this.expr(e.arg);
-        return op === 'delete' ? `delete ${arg}` : /^[a-z]+$/.test(op) ? `${op} ${arg}` : `${op}${arg}`;
+        return op === 'delete' ? `delete ${this.target(e.arg)}` : /^[a-z]+$/.test(op) ? `${op} ${arg}` : `${op}${arg}`;
       }
-      case 'update': return e.prefix ? `${e.op}${this.atom(e.arg)}` : `${this.atom(e.arg)}${e.op}`;
+      case 'update': return e.prefix ? `${e.op}${this.target(e.arg)}` : `${this.target(e.arg)}${e.op}`;
       case 'binary': {
         // `x as Foo` is a type: TypeScript erases it, so it must not force a value
         // import for `Foo`.
@@ -932,7 +1034,7 @@ class Printer {
         if (e.op === 'is') return `(${this.atom(e.left)} instanceof ${this.classText(e.right, 'value')})`;
         return `${this.operand(e.left)} ${e.op} ${this.operand(e.right)}`;
       }
-      case 'assign': return `${this.atom(e.target)} ${e.op} ${this.expr(e.value)}`;
+      case 'assign': return `${this.target(e.target)} ${e.op} ${this.expr(e.value)}`;
       case 'cond': return `${this.operand(e.test)} ? ${this.expr(e.then)} : ${this.expr(e.else)}`;
       case 'seq': return e.items.map((i) => this.expr(i)).join(', ');
       default: return '/* unsupported expression */';
@@ -954,6 +1056,23 @@ const STMT_KINDS = new Set(['expr', 'var', 'function', 'block', 'if', 'for', 'fo
 /** True for expression kinds that need parentheses inside a larger expression. */
 function isOperator(e: import('../as2/ast').Expr): boolean {
   return e.k === 'binary' || e.k === 'cond' || e.k === 'assign' || e.k === 'seq';
+}
+
+/** An index that can only be a number: no guard needed (`a[i + 1]`, `a[3]`, `a[i++]`). */
+function plainlyNumeric(e: import('../as2/ast').Expr): boolean {
+  switch (e.k) {
+    case 'num': return true;
+    case 'update': return true;
+    case 'unary': return ['-', '~', '+'].includes(e.op.trim());
+    case 'binary': return ['-', '*', '/', '%', '|', '&', '^', '<<', '>>', '>>>'].includes(e.op);
+    case 'call': return e.callee.k === 'id' && ['int', 'uint', 'Number'].includes(e.callee.name);
+    default: return false;
+  }
+}
+
+/** A string literal key other than the guarded `constructor`. */
+function safeLiteralKey(e: import('../as2/ast').Expr): boolean {
+  return e.k === 'str' && e.v !== 'constructor';
 }
 
 function key(k: string): string { return /^[A-Za-z_$][\w$]*$/.test(k) ? k : JSON.stringify(k); }

@@ -1,6 +1,7 @@
 // The AS3 package table: `flash.display` → { MovieClip, Sprite, … }.
 // The loader resolves every flash.* / fl.* import (in any spelling) here.
 
+import { safeConstructor, safeKey } from '../../runtime/shared/hostGuard';
 import * as display from './display';
 import * as events from './events';
 import * as fl from './fl';
@@ -10,6 +11,7 @@ import * as media from './media';
 import * as misc from './misc';
 import * as text from './text';
 import * as utils from './utils';
+import * as enumeration from './enumeration';
 import { runtime } from './context';
 
 const pick = <T extends object>(mod: T, names: (keyof T)[]) =>
@@ -55,7 +57,7 @@ export const PACKAGES: Record<string, Record<string, unknown>> = {
   'flash.net': pick(misc, ['URLRequest', 'URLVariables', 'URLRequestMethod', 'navigateToURL', 'sendToURL', 'SharedObject', 'SharedObjectFlushStatus', 'URLLoader', 'URLLoaderDataFormat', 'Socket']),
   'flash.system': { ...pick(misc, ['Capabilities', 'System', 'Security', 'ApplicationDomain', 'LoaderContext', 'fscommand']) },
   'flash.filters': pick(misc, ['BitmapFilter', 'GlowFilter', 'DropShadowFilter', 'BlurFilter', 'ColorMatrixFilter', 'BevelFilter',
-    'GradientGlowFilter', 'GradientBevelFilter', 'ConvolutionFilter', 'DisplacementMapFilter', 'BitmapFilterQuality']),
+    'GradientGlowFilter', 'GradientBevelFilter', 'ConvolutionFilter', 'DisplacementMapFilter', 'BitmapFilterQuality', 'BitmapFilterType']),
   'flash.external': pick(misc, ['ExternalInterface']),
   'flash.errors': pick(utils, ['IllegalOperationError', 'IOError', 'EOFError']),
   'fl.transitions': pick(fl, ['Tween', 'TweenEvent']),
@@ -88,8 +90,15 @@ export const TOP_LEVEL: Record<string, unknown> = {
   // Helpers a transpiled ABC module calls directly (see `engine/flash/utils.ts`).
   __applyType: utils.__applyType,
   __coerceObject: utils.__coerceObject,
-  __iterAdvance: utils.__iterAdvance,
-  __iterValue: utils.__iterValue,
+  // for-in / for-each: dynamic properties only (`engine/flash/enumeration.ts`), and
+  // the registration a class declared `dynamic` emits.
+  __iterAdvance: enumeration.__iterAdvance,
+  __iterValue: enumeration.__iterValue,
+  __dynamic: enumeration.__dynamic,
+  // A `.constructor` read and a computed key: the guarded forms the emitter prints,
+  // so neither can reach the host's `Function` (`runtime/shared/hostGuard.ts`).
+  __ctor: safeConstructor,
+  __key: safeKey,
 };
 
 /** Every class/function in the table by simple and qualified name. */
@@ -102,3 +111,5 @@ for (const [pkg, members] of Object.entries(PACKAGES)) {
   }
 }
 for (const [name, value] of Object.entries(TOP_LEVEL)) FLASH_DEFINITIONS.set(name, value);
+// The engine's classes are not the movie's: for-in sees none of their fields.
+enumeration.registerEngineClasses(FLASH_DEFINITIONS);

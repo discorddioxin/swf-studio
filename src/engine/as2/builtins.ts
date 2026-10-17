@@ -4,6 +4,8 @@
 
 import * as RT from '../../runtime/as2';
 import type { ColorTransform, Rect } from '../../types';
+import { BLEND_MODES } from '../../types';
+import { readFilters, writeFilters } from '../../runtime/shared/filters';
 import { dependencyKind, isServiceEndpoint } from '../flash/dependencies';
 import { identity, invert, apply as applyM, transformRect } from './geom';
 import { avm1Root } from './player';
@@ -34,6 +36,22 @@ const def = (target: object, props: Record<string, { get?: (this: any) => any; s
 
 const num = (v: unknown, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
 const hex = (n: number) => `#${(Math.max(0, Math.min(0xffffff, Math.floor(n))) >>> 0).toString(16).padStart(6, '0')}`;
+
+const utf8 = new TextDecoder('utf-8');
+
+/**
+ * One name or value of URL-encoded variables (loadVariables, LoadVars), decoded
+ * as Flash does: `+` is a space, each run of valid `%XX` escapes is decoded as
+ * UTF-8 bytes, and a `%` that starts no valid escape stays literal — Flash
+ * never rejects the data, unlike `decodeURIComponent`.
+ */
+export function decodeFormComponent(s: string): string {
+  return s.replace(/\+/g, ' ').replace(/(?:%[0-9A-Fa-f]{2})+/g, (run) => {
+    const bytes = new Uint8Array(run.length / 3);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(run.slice(i * 3 + 1, i * 3 + 3), 16);
+    return utf8.decode(bytes);
+  });
+}
 
 export function installBuiltins(p: AS2Player): BuiltinState {
   const N = (o: any): DisplayNode | null => nodeOf(o);
@@ -263,8 +281,10 @@ export function installBuiltins(p: AS2Player): BuiltinState {
   function loadVariables(url: string, node: DisplayNode | null) {
     fetchText(url, 'GET', null, 'loadVariables').then((txt) => {
       if (txt == null || !node || node.removed) return;
-      decodeVars(node.obj, txt);
-      p.dispatchClipEvent(node, 'data');
+      p.guard(`loadVariables ${url}`, () => {
+        decodeVars(node.obj, txt);
+        p.dispatchClipEvent(node, 'data');
+      });
       p.runQueue();
     });
   }
@@ -310,8 +330,8 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     for (const part of txt.split('&')) {
       if (!part) continue;
       const i = part.indexOf('=');
-      const k = decodeURIComponent((i < 0 ? part : part.slice(0, i)).replace(/\+/g, ' '));
-      const v = i < 0 ? '' : decodeURIComponent(part.slice(i + 1).replace(/\+/g, ' '));
+      const k = decodeFormComponent(i < 0 ? part : part.slice(0, i));
+      const v = i < 0 ? '' : decodeFormComponent(part.slice(i + 1));
       if (k) target[k] = v;
     }
   }
@@ -354,6 +374,26 @@ export function installBuiltins(p: AS2Player): BuiltinState {
     _alpha: {
       get(this: any) { const n = N(this); return n?.ct ? n.ct.am * 100 : 100; },
       set(this: any, v: any) { const n = N(this); if (!n || !Number.isFinite(+v)) return; n.ct = { ...(n.ct ?? { rm: 1, gm: 1, bm: 1, am: 1, ra: 0, ga: 0, ba: 0, aa: 0 }), am: +v / 100 }; n.scriptMoved = true; },
+    },
+    // Flash 8: copies on read; assigning copies the array (MovieClip / Button / TextField.filters)
+    filters: {
+      get(this: any) { const n = N(this); return n ? readFilters({ data: n.filters, objects: n.filterObjects }) : []; },
+      set(this: any, v: any) {
+        const n = N(this); if (!n) return;
+        const state = writeFilters(v);
+        n.filters = state.data; n.filterObjects = state.objects; n.scriptEffects = true;
+      },
+    },
+    // a BlendMode name ("multiply") or its number (1 normal … 14 hardlight); anything else is ignored
+    blendMode: {
+      get(this: any) { return N(this)?.blendMode ?? 'normal'; },
+      set(this: any, v: any) {
+        const n = N(this); if (!n) return;
+        const mode = typeof v === 'number' ? (v >= 1 ? BLEND_MODES[v] : undefined)
+          : BLEND_MODES.includes(String(v) as never) ? String(v) as typeof BLEND_MODES[number] : undefined;
+        if (!mode) return;
+        n.blendMode = mode; n.scriptEffects = true;
+      },
     },
     _visible: {
       get(this: any) { return N(this)?.visible ?? true; },

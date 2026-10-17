@@ -17,16 +17,17 @@ import { createExternalResolver, swfNameOf, type ExternalSwf } from '../engine/a
 import { readAS2Text, useAS2Build } from '../engine/as2/useAS2Build';
 import { buildWorkbenchTimelineMetadata } from '../engine/as2/workbenchMetadata';
 import { _global as as2Global } from '../runtime/as2';
-import { MissingDependenciesBanner, MissingDependenciesPanel, dependencyProblems, useMissingDependencies } from './MissingDependencies';
+import { MissingDependenciesBanner, MissingDependenciesPanel, dependencyProblems, useMissingDependencies, type DependencyAdder } from './MissingDependencies';
 import type { DependencyFiles } from '../engine/flash/dependencies';
 import { AS2AudioBackend, embeddedFontFamily, registerFonts, soundFilesOf } from '../engine/as2/audio';
 import { GAME_ADAPTERS, resolveAdapter, type AdapterSwf, type GameAdapter, type GameContext } from '../adapters';
 import { useDebugger, useDebuggerState } from '../debug/store';
 import { DebugPanel } from '../debug/DebugPanel';
 import { usePopout } from '../debug/Popout';
+import { assignLegacyBoot, bootKey, discardLegacyBoot, migrateLegacyBoot, readBoot, writeBoot } from './bootScripts';
+import { runtimeLogMessage, type RuntimeChoice } from './runtimeChoice';
 
 const MAX_LOG = 500;
-const BOOT_KEY = 'swf-studio.as2.boot';
 
 function flattenDisplayIds(root: ActiveDisplaySnapshot | null): number[] {
   if (!root) return [];
@@ -57,22 +58,30 @@ function sameRunningTimelines(a: readonly RunningTimelineSnapshot[], b: readonly
  */
 const NO_BOOT = { id: 'none', label: 'None', code: '', hint: 'Start exactly like the SWF does.' } as const;
 
-export const isAs2Bundle = (doc: SwfDocument, assets: AssetBundle | null) =>
-  !!assets?.files.some((f) => /\.as$/i.test(f.path)) && (Number(doc.header.version ?? 0) <= 8 || !doc.symbolClasses?.size);
+
+/** The default for `externals`: one shared array, because the player effect depends
+ *  on it — a fresh `[]` per render would recreate the player on every render. */
+const NO_EXTERNALS: SwfPackage[] = [];
+const NO_FONTS = new Set<number>(); // shared and never written to
 
 /** An external SWF export with its key (used for its fonts). */
 interface ExternalEntry { pkg: SwfPackage; name: string; key: string }
 
-export function As2Execute({ doc, cache, assets, project, externals = [], adapterId = null, gameSetId = null, onAdapterChange, dependencyFiles = null }: {
+export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNALS, adapterId = null, gameSetId = null, onAdapterChange, dependencyFiles = null, dependencyAdder, runtimeChoice }: {
   doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
   /** non-SWF files uploaded with the movies, which they may request at run time */
   dependencyFiles?: DependencyFiles | null;
+  /** "Add Dependency": puts missing files into the session for testing */
+  dependencyAdder?: DependencyAdder;
   /** adapter id picked by the user ("auto"/null = detect from the loaded SWFs) */
   adapterId?: string | null;
   /** bundled game set this load came from, if any (supplies the adapter hint) */
   gameSetId?: string | null;
   onAdapterChange?: (id: string) => void;
+  /** why this movie runs on AVM1 (logged when the player starts) */
+  runtimeChoice?: RuntimeChoice;
 }) {
+  const runtimeMessage = runtimeChoice ? runtimeLogMessage(runtimeChoice) : '';
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<AS2Player | null>(null);
@@ -98,9 +107,10 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
   const dependencies = useMissingDependencies(useCallback(() => playerRef.current?.dependencies, []));
   const missingFiles = dependencies.filter((d) => !d.service && !d.optional);
   const [size, setSize] = useState({ w: 800, h: 500 });
-  const [boot, setBoot] = useState<string>(() => { try { return localStorage.getItem(BOOT_KEY) ?? ''; } catch { return ''; } });
-  const [fontIds, setFontIds] = useState<Set<number>>(new Set());
-  const [extFontIds, setExtFontIds] = useState<Map<string, Set<number>>>(new Map());
+  // Embedded fonts registered for the current movie / external SWFs, tagged with
+  // what they were registered for (a stale result is not ready).
+  const [ownFonts, setOwnFonts] = useState<{ of: unknown; ids: Set<number> } | null>(null);
+  const [extFonts, setExtFonts] = useState<{ of: unknown; ids: Map<string, Set<number>> } | null>(null);
   const [loadedExternals, setLoadedExternals] = useState<{ name: string; ms: number; errors: number }[]>([]);
   const extEntries = useMemo<ExternalEntry[]>(() => externals.map((pkg, i) => {
     const name = swfNameOf(pkg.bundle.xmlName || pkg.doc.header.fileName || `external${i}`);
@@ -133,6 +143,23 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
     () => [NO_BOOT, ...(adapter.bootPresets ?? [])],
     [adapter],
   );
+  // ---- boot script: one per game (adapter + main SWF), see bootScripts.ts. It is
+  // derived while rendering so a player created for a new game never sees the
+  // previous game's script.
+  const bootStorageKey = bootKey(adapter.id, adapterCtx.main.name);
+  const loadBootState = (key: string) => ({
+    key,
+    unassigned: migrateLegacyBoot(key, bootPresets.map((p) => p.code.trim()).filter(Boolean),
+      GAME_ADAPTERS.flatMap((a) => (a.bootPresets ?? []).map((p) => p.code.trim())).filter(Boolean)),
+    code: readBoot(key),
+  });
+  const [bootState, setBootState] = useState(() => loadBootState(bootStorageKey));
+  let bootNow = bootState;
+  if (bootState.key !== bootStorageKey) { bootNow = loadBootState(bootStorageKey); setBootState(bootNow); }
+  const boot = bootNow.code;
+  const setBoot = (code: string) => { writeBoot(bootStorageKey, code); setBootState({ ...bootNow, code }); };
+  const adoptLegacyBoot = () => setBootState({ ...bootNow, code: assignLegacyBoot(bootStorageKey), unassigned: null });
+  const dropLegacyBoot = () => { discardLegacyBoot(); setBootState({ ...bootNow, unassigned: null }); };
   const pendingLogs = useRef<LogEntry[]>([]);
   const runtimeTimelinesRef = useRef<RunningTimelineSnapshot[]>([]);
   const displayTreeRef = useRef<ActiveDisplaySnapshot | null>(null);
@@ -195,7 +222,6 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [build.status, doc]);
 
-  useEffect(() => { try { localStorage.setItem(BOOT_KEY, boot); } catch { /* storage unavailable */ } }, [boot]);
 
   useEffect(() => {
     const unsub = dbg.subscribe(() => {
@@ -215,11 +241,14 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
     return () => dbg.unregisterCallbacks('as2');
   }, [dbg]);
 
-  // Embedded fonts are independent of the source project build.
+  // Embedded fonts are independent of the source project build. A SWF's fonts
+  // are there before its first frame runs, so the player starts once they are
+  // registered (below) rather than being rebuilt — restarting the game — when
+  // they arrive.
   useEffect(() => {
     let cancelled = false;
     const fontsController = new AbortController();
-    registerFonts(assets?.files ?? [], undefined, fontsController.signal).then((ids) => { if (!cancelled) setFontIds(ids); });
+    registerFonts(assets?.files ?? [], undefined, fontsController.signal).then((ids) => { if (!cancelled) setOwnFonts({ of: assets, ids }); });
     return () => { cancelled = true; fontsController.abort(); };
   }, [assets]);
 
@@ -227,14 +256,16 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
     let cancelled = false;
     const fontsController = new AbortController();
     Promise.all(extEntries.map(async (e) => [e.key, await registerFonts(e.pkg.bundle.files, e.key, fontsController.signal)] as const))
-      .then((pairs) => { if (!cancelled) setExtFontIds(new Map(pairs)); });
+      .then((pairs) => { if (!cancelled) setExtFonts({ of: extEntries, ids: new Map(pairs) }); });
     return () => { cancelled = true; fontsController.abort(); };
   }, [extEntries]);
+  const fontIds = ownFonts?.of === assets ? ownFonts.ids : null;
+  const extFontIds = extFonts?.of === extEntries ? extFonts.ids : null;
 
   const fontFamily = useCallback((f: number | string, movie?: Movie) => {
     const libs: { doc: SwfDocument; key?: string; ids: Set<number> }[] = [
-      { doc, ids: fontIds },
-      ...extEntries.map((e) => ({ doc: e.pkg.doc, key: e.key, ids: extFontIds.get(e.key) ?? new Set<number>() })),
+      { doc, ids: fontIds ?? NO_FONTS },
+      ...extEntries.map((e) => ({ doc: e.pkg.doc, key: e.key, ids: extFontIds?.get(e.key) ?? NO_FONTS })),
     ];
     const own = movie?.key ? libs.find((l) => l.key === movie.key) : libs[0];
     const fontName = (c: { attrs: Record<string, string> } | undefined) => (c?.attrs.fontName ?? '').replace(/\u0000/g, '');
@@ -255,9 +286,9 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
     return `${embedded}${name ? `"${name}", ` : ''}sans-serif`;
   }, [doc, fontIds, extEntries, extFontIds]);
 
-  // ---- a player per (document, build, restart)
+  // ---- a player per (document, build, restart), once the fonts are registered
   useEffect(() => {
-    if (build.status !== 'ready') return;
+    if (build.status !== 'ready' || !fontIds || !extFontIds) return;
     executionFaultRef.current = false;
     pendingLogs.current = [];
     runtimeTimelinesRef.current = [];
@@ -288,6 +319,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
       onError: (swf, e) => playerForLog?.log('error', `external SWF ${swf.name}: ${e.message}`, e.stack, { source: 'forge', kind: 'problem', context: `external SWF ${swf.name}` }),
     });
     const bootCode = boot.trim();
+    const customBoot = !bootPresets.some((preset) => preset.code.trim() === bootCode);
     const player = new AS2Player({
       doc,
       program: build.build.program,
@@ -320,13 +352,14 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
       afterStart: (root, p) => {
         adapterLog.current = (level, message) => p.log(level, message, undefined, { source: 'network' });
         if (bootCode) {
-          p.log('info', 'running boot script');
+          p.log('info', customBoot ? 'running the custom boot script saved for this game' : 'running boot script');
           new Function('_root', 'player', '_global', bootCode)(root, p, as2Global);
         }
         adapter.onStart?.(root, p, adapterCtx, network);
       },
     });
     playerForLog = player;
+    if (runtimeMessage) player.log('info', runtimeMessage);
     if (swfs.length) player.log('info', `external SWFs available: ${swfs.map((s) => s.name).join(', ')}`);
     playerRef.current = player;
     (globalThis as any).__as2player = player;
@@ -338,7 +371,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
       if (playerRef.current === player) playerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, cache, build, session, fontFamily, extEntries, dependencyFiles]);
+  }, [doc, cache, build, session, fontFamily, extEntries, dependencyFiles, runtimeMessage]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.muted = muted;
@@ -451,6 +484,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
   }, []);
   const onKey = (down: boolean) => (e: React.KeyboardEvent) => {
     if (e.metaKey) return;
+    e.stopPropagation();   // the game's key: page-level shortcuts (the Workbench's) never see it
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab', 'Backspace'].includes(e.key)) e.preventDefault();
     if (down) playerRef.current?.keyDown(e.keyCode, e.key); else playerRef.current?.keyUp(e.keyCode);
   };
@@ -532,6 +566,11 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
           <div className="flex items-center gap-2">
             <div className="text-sm font-semibold text-zinc-100">Execute</div>
             {dbgState.paused && <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">⏸ Paused{dbgState.pauseReason ? ` · ${dbgState.pauseReason}` : ''}</span>}
+            {boot.trim() && !preset && (
+              <span className="rounded bg-sky-500/20 px-2 py-0.5 text-[10px] font-bold text-sky-300" title={`Runs on _root after frame 1 of ${adapterCtx.main.name}:\n${boot.trim().slice(0, 300)}`}>
+                Custom boot script active
+              </span>
+            )}
           </div>
           <div className="truncate text-[10px] text-zinc-500">
             {build.status === 'loading' ? 'Transpiling ActionScript…' : build.status === 'failed' ? 'Could not read the scripts'
@@ -598,6 +637,15 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
         </div>
       </div>
 
+      {bootNow.unassigned && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-sky-900/60 bg-sky-950/40 px-3 py-1.5 text-[11px] text-sky-200">
+          <span className="font-semibold">A boot script saved by an earlier version is not tied to any game, so it does not run.</span>
+          <span className="min-w-0 flex-1 truncate font-mono text-sky-100/80" title={bootNow.unassigned}>{bootNow.unassigned.trim().split('\n')[0]}</span>
+          <Button variant="default" className="px-2 py-0.5 text-[11px]" onClick={adoptLegacyBoot}>Use for this game</Button>
+          <Button variant="ghost" className="px-2 py-0.5 text-[11px]" onClick={dropLegacyBoot}>Discard</Button>
+        </div>
+      )}
+
       {uiHint && panel !== 'troubleshooter' && (
         <div className="flex shrink-0 items-center gap-2 border-b border-rose-900/60 bg-rose-950/40 px-3 py-1.5 text-[11px] text-rose-200">
           <span className="font-semibold">UI troubleshooter found {uiHint.errors} problem{uiHint.errors === 1 ? '' : 's'}</span>
@@ -623,7 +671,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
         </div>
       )}
 
-      <MissingDependenciesBanner list={dependencies} />
+      <MissingDependenciesBanner list={dependencies} adder={dependencyAdder} />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
       <div ref={wrapRef} className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -720,7 +768,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
                     </div>
                   );
                 })}
-                <div className="mt-3"><MissingDependenciesPanel list={dependencies} /></div>
+                <div className="mt-3"><MissingDependenciesPanel list={dependencies} adder={dependencyAdder} /></div>
                 <div className="mt-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Generated TypeScript</div>
                 <select
                   aria-label="Generated module"
@@ -756,7 +804,7 @@ export function As2Execute({ doc, cache, assets, project, externals = [], adapte
           <UiTroubleshooter
             getPlayer={() => playerRef.current}
             canvasRef={canvasRef}
-            fontIds={fontIds}
+            fontIds={fontIds ?? NO_FONTS}
             epoch={playerEpoch}
             onSendToConsole={appendTroubleshooterFindings}
             onFocus={handleHighlight}

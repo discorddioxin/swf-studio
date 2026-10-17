@@ -21,7 +21,18 @@
 
 import * as RT from '../../runtime/as2';
 import type { AS2Handler, AS2Program } from '../../runtime/as2';
-import type { ColorTransform, DisplayItem, Frame, Matrix, PlaceOp, Rect, SwfCharacter, SwfDocument, Timeline } from '../../types';
+import type { BlendMode, ColorTransform, DisplayItem, Frame, Matrix, PlaceOp, Rect, SwfCharacter, SoundInfo, SwfDocument, SwfFilter, Timeline } from '../../types';
+import { composite, needsComposite } from '../../lib/compositor';
+import type { BitmapFilter } from '../../runtime/shared/filters';
+
+/**
+ * Which DefineButtonSound record a button event plays. The records are
+ * [OverUpToIdle, IdleToOverUp, OverUpToOverDown, OverDownToOverUp]; release
+ * outside ends in the idle state, and drag out / drag over play nothing.
+ */
+const BUTTON_SOUND_RECORD: Partial<Record<string, number>> = {
+  rollOut: 0, releaseOutside: 0, rollOver: 1, press: 2, release: 3,
+};
 import type { AssetSource, LogEntry, LogLevel, LogMetadata, NetworkEvent, NetworkObserver } from '../flash/player';
 import type { AudioBackend, AudioHandle } from '../flash/media';
 import { DependencyTracker, describeDependency, type DependencyFiles } from '../flash/dependencies';
@@ -163,6 +174,13 @@ export class DisplayNode {
   startFrame = -1;
   /** a script changed the transform: timeline moves no longer apply */
   scriptMoved = false;
+  /** surface filters (PlaceObject3 / `filters`), drawn through the compositor */
+  filters: SwfFilter[] | undefined;
+  blendMode: BlendMode = 'normal';
+  /** the filter objects a script assigned (undefined: the timeline's) */
+  filterObjects: BitmapFilter[] | undefined;
+  /** a script set `filters` / `blendMode`: the timeline's no longer apply */
+  scriptEffects = false;
   removed = false;
   bornTick = 0;
   handlers: AS2Handler[] = [];
@@ -758,11 +776,25 @@ export class AS2Player {
   private frameSounds(frame: Frame, movie: Movie) {
     for (const e of frame.events) {
       if (e.kind !== 'sound' || e.characterId == null || !/^StartSound/.test(e.tagType)) continue;
-      const stop = /\bstop\b/.test(e.detail);
-      const loops = Number(/loop ×(\d+)/.exec(e.detail)?.[1] ?? 1);
-      if (stop) this.stopSound(e.characterId, movie);
-      else if (!(/noMultiple/.test(e.detail) && [...this.channels].some((c) => c.id === e.characterId && c.movie === movie))) this.playSound(e.characterId, null, 0, loops, 1, movie);
+      this.startSound(e.characterId, {
+        syncStop: /\bstop\b/.test(e.detail),
+        syncNoMultiple: /noMultiple/.test(e.detail),
+        loopCount: Number(/loop ×(\d+)/.exec(e.detail)?.[1] ?? 1),
+      }, movie);
     }
+  }
+
+  /**
+   * Start (or, with SyncStop, stop) an event sound as SOUNDINFO describes it:
+   * SyncNoMultiple skips a sound that is already playing, LoopCount is the
+   * number of plays, InPoint (44.1 kHz samples) is where playback starts.
+   * OutPoint and the envelope are not applied — the audio backend has no
+   * way to express them.
+   */
+  startSound(id: number, info: SoundInfo, movie: Movie) {
+    if (info.syncStop) { this.stopSound(id, movie); return; }
+    if (info.syncNoMultiple && [...this.channels].some((c) => c.id === id && c.movie === movie)) return;
+    this.playSound(id, null, (info.inPoint ?? 0) / 44.1, Math.max(1, info.loopCount ?? 1), 1, movie);
   }
 
   /** First frame of a newly created clip: children + its frame-1 script. */
@@ -803,6 +835,7 @@ export class AS2Player {
       this.placeFromTimeline(parent, {
         depth: op.depth, characterId: op.characterId, matrix: op.matrix ?? identity(), colorTransform: op.colorTransform,
         ratio: op.ratio ?? 0, name: op.name, clipDepth: op.clipDepth, startFrame: frameIndex,
+        filters: op.filters?.length ? op.filters : undefined, blendMode: op.blendMode,
       });
       return;
     }
@@ -816,6 +849,10 @@ export class AS2Player {
     }
     if (op.ratio != null) existing.ratio = op.ratio;
     if (op.clipDepth != null) existing.clipDepth = op.clipDepth - DEPTH_OFFSET;
+    if (!existing.scriptEffects) {
+      if (op.filters) existing.filters = op.filters.length ? op.filters : undefined;
+      if (op.blendMode) existing.blendMode = op.blendMode;
+    }
   }
 
   private placeFromTimeline(parent: DisplayNode, item: DisplayItem) {
@@ -824,6 +861,8 @@ export class AS2Player {
       matrix: item.matrix, ct: item.colorTransform, ratio: item.ratio, clipDepth: item.clipDepth,
       fromTimeline: true, startFrame: item.startFrame, handlers,
     });
+    node.filters = item.filters;
+    node.blendMode = item.blendMode ?? 'normal';
     return node;
   }
 
@@ -855,6 +894,7 @@ export class AS2Player {
       const sameChar = c != null && (c.characterId === d.characterId || c.url !== null);
       if (c && c.fromTimeline && sameChar && c.startFrame === d.startFrame) {
         if (!c.scriptMoved) { c.matrix = { ...d.matrix }; c.comps = null; if (d.colorTransform) c.ct = d.colorTransform; }
+        if (!c.scriptEffects) { c.filters = d.filters; c.blendMode = d.blendMode ?? 'normal'; }
         c.ratio = d.ratio;
         continue;
       }
@@ -1096,16 +1136,14 @@ export class AS2Player {
     }
   }
 
-  /** Clips with on(...) mouse handlers or onPress/onRelease… behave like buttons. */
+  /**
+   * Every enabled button takes the mouse — its states and DefineButtonSound
+   * records need no script. Clips do when they have on(...) mouse handlers or
+   * onPress/onRelease… methods.
+   */
   isMouseTarget(node: DisplayNode): boolean {
     if (node.removed || !node.obj) return false;
-    if (node.kind === 'button') {
-      if (node.obj.enabled === false) return false;
-      const handlers = [...node.handlers, ...(node.movie.program?.buttons[node.characterId] ?? [])];
-      return handlers.some((h) => h.kind === 'on' && h.events.some((e) => !e.startsWith('keyPress')))
-        || ['onPress', 'onRelease', 'onReleaseOutside', 'onRollOver', 'onRollOut', 'onDragOver', 'onDragOut']
-          .some((k) => typeof node.obj[k] === 'function');
-    }
+    if (node.kind === 'button') return node.obj.enabled !== false;
     if (node.kind === 'text') return !!node.text && (node.text.input || node.text.selectable) && false;
     if (node.kind !== 'clip' || node.obj.enabled === false) return false;
     if (node.handlers.some((h) => h.kind === 'on' && h.events.some((e) => !e.startsWith('keyPress')))) return true;
@@ -1117,6 +1155,10 @@ export class AS2Player {
   /** Fire a button-style event (press, release, rollOver …) on a clip or button. */
   buttonEvent(node: DisplayNode, event: 'press' | 'release' | 'releaseOutside' | 'rollOver' | 'rollOut' | 'dragOver' | 'dragOut') {
     const self = node.kind === 'button' ? node.parent?.obj ?? node.obj : node.obj;
+    if (node.kind === 'button') {
+      const sound = node.movie.doc.characters.get(node.characterId)?.buttonSounds?.[BUTTON_SOUND_RECORD[event] ?? -1];
+      if (sound) this.startSound(sound.soundId, sound.info, node.movie);
+    }
     const hs = [...node.handlers, ...(node.kind === 'button' ? node.movie.program?.buttons[node.characterId] ?? [] : [])];
     for (const h of hs) {
       if (h.kind === 'on' && h.events.includes(event)) this.enqueue(node, `${this.describe(node)} on(${event})`, () => h.run.call(self));
@@ -1597,8 +1639,9 @@ export class AS2Player {
     const move = (e: MouseEvent) => { const p = pos(e); this.pointerMove(p.x, p.y); canvas.style.cursor = this.hovered && this.hovered.obj?.useHandCursor !== false && this.hovered.kind !== 'text' ? 'pointer' : this.hovered?.kind === 'text' ? 'text' : 'default'; };
     const down = (e: MouseEvent) => { const p = pos(e); canvas.focus?.(); this.pointerDown(p.x, p.y); };
     const up = (e: MouseEvent) => { const p = pos(e); this.pointerUp(p.x, p.y); };
-    const kd = (e: KeyboardEvent) => { if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return; this.keyDown(e.keyCode, e.key); if (this.focus || [32, 37, 38, 39, 40, 8].includes(e.keyCode)) e.preventDefault(); };
-    const ku = (e: KeyboardEvent) => this.keyUp(e.keyCode);
+    // a key the movie receives is the movie's: it does not reach page-level shortcuts
+    const kd = (e: KeyboardEvent) => { if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return; e.stopPropagation(); this.keyDown(e.keyCode, e.key); if (this.focus || [32, 37, 38, 39, 40, 8].includes(e.keyCode)) e.preventDefault(); };
+    const ku = (e: KeyboardEvent) => { e.stopPropagation(); this.keyUp(e.keyCode); };
     canvas.addEventListener('mousemove', move);
     canvas.addEventListener('mousedown', down);
     window.addEventListener('mouseup', up);
@@ -1634,6 +1677,7 @@ export class AS2Player {
 
   /** Draw the stage at `scale` (device px per stage px) with its top-left corner at (ox, oy). */
   renderTo(ctx: CanvasRenderingContext2D, scale: number, ox: number, oy: number) {
+    this.renderScale = scale;
     ctx.save();
     ctx.setTransform(scale, 0, 0, scale, ox, oy);
     ctx.globalAlpha = 1;
@@ -1692,8 +1736,54 @@ export class AS2Player {
   /** Game time in ms (what getTimer() returns). */
   get gameTime() { return this.clock; }
 
+  /** device pixels per stage pixel of the current renderTo (filter sizes are stage pixels) */
+  private renderScale = 1;
+
   private drawNode(ctx: CanvasRenderingContext2D, node: DisplayNode, alpha: number, ct: ColorTransform | undefined) {
     if (!node.visible || node.removed) return;
+    if (needsComposite(node.filters, node.blendMode)) {
+      // through a layer: the node at its own alpha; the parent's (ctx.globalAlpha) applies
+      // when the layer is drawn back, after the filters
+      const b = this.localBounds(node);
+      composite(ctx, {
+        filters: node.filters, blendMode: node.blendMode, filterScale: this.renderScale,
+        bounds: b ? transformRect(node.matrix, b) : null,
+        paint: (layer) => this.drawNodeContent(layer, node, 1, ct),
+        cache: this.layerKey(node, ct),
+      });
+      return;
+    }
+    this.drawNodeContent(ctx, node, alpha, ct);
+  }
+
+  /** The compositor's cache entry for `node`'s layer, or none when its drawing cannot be described. */
+  private layerKey(node: DisplayNode, ct: ColorTransform | undefined): { owner: object; key: string } | undefined {
+    const out: string[] = [JSON.stringify(ct ?? null)];
+    return this.describeSubtree(node, out) ? { owner: node, key: out.join('') } : undefined;
+  }
+
+  /** Everything `node`'s subtree draws, as text; false when that is not knowable from the tree. */
+  private describeSubtree(node: DisplayNode, out: string[]): boolean {
+    if (!node.visible || node.removed) { out.push('-'); return true; }
+    // a setMask mask sits elsewhere in the tree; a focused field blinks its caret
+    if (node.maskedBy || node.mask || this.focus === node) return false;
+    const m = node.matrix;
+    out.push(`(${node.id}:${node.characterId}:${node.frame}:${node.btnState}:${node.clipDepth}:${node.depth}:${m.a},${m.b},${m.c},${m.d},${m.tx},${m.ty}`);
+    if (node.ct) out.push(JSON.stringify(node.ct));
+    if (node.filters?.length || node.blendMode !== 'normal') out.push(JSON.stringify(node.filters ?? null), node.blendMode);
+    if (node.text) {
+      if (node.text.input) return false;
+      const t = node.text;
+      out.push(JSON.stringify([t.paras, t.format, t.bounds, t.scroll, t.wordWrap, t.multiline, t.border, t.borderColor,
+        t.background, t.backgroundColor, t.password, t.autoSize, t.embedFonts, t.fontId ?? null, t.html]));
+    }
+    if (node.drawing?.length) out.push(JSON.stringify(node.drawing));
+    for (const k of node.children) if (!this.describeSubtree(k, out)) return false;
+    out.push(')');
+    return true;
+  }
+
+  private drawNodeContent(ctx: CanvasRenderingContext2D, node: DisplayNode, alpha: number, ct: ColorTransform | undefined) {
     const m = node.matrix;
     ctx.save();
     ctx.transform(m.a, m.b, m.c, m.d, m.tx, m.ty);

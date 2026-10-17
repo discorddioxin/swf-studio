@@ -77,18 +77,55 @@ const fetchJson = async (path: string): Promise<unknown> => {
   return res.json();
 };
 
+const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
 /**
- * The game sets available in the public root.
- *
- * `manifest.json` is either an index (`{ "default": "mygame",
- * "games": ["games/mygame.json"] }`) or — as before a game set existed — a
- * single flat list (`{ "swfs": [...] }`), which loads as one anonymous set.
- * A game file that cannot be read is skipped so one broken set does not hide
- * the others; only a completely unreadable index throws.
+ * What the public root says about bundled games:
+ * - `none`: it ships none (no `manifest.json`) — the normal case, not an error;
+ * - `ready`: the game sets of a readable index;
+ * - `broken`: an index exists but cannot be used, with why.
  */
-export async function fetchGameIndex(): Promise<GameSet[]> {
-  const data = await fetchJson('manifest.json');
-  const source = data as { games?: unknown; swfs?: unknown; default?: unknown };
+export type BundledIndexState =
+  | { status: 'none' }
+  | { status: 'ready'; games: GameSet[] }
+  | { status: 'broken'; error: string };
+
+/**
+ * Read the bundled index. `manifest.json` is either an index (`{ "default":
+ * "mygame", "games": ["games/mygame.json"] }`) or — as before a game set existed
+ * — a single flat list (`{ "swfs": [...] }`), which loads as one anonymous set.
+ * A game file that cannot be read is skipped so one broken set does not hide the
+ * others; an index with no readable set at all is `broken`.
+ *
+ * "No index" is a 404, or the HTML page a dev/preview server answers any unknown
+ * path with (SPA fallback).
+ */
+export async function loadGameIndex(): Promise<BundledIndexState> {
+  let res: Response;
+  try {
+    res = await fetch('manifest.json', { cache: 'no-cache' });
+  } catch (e) {
+    return { status: 'broken', error: `manifest.json: ${message(e)}` };
+  }
+  if (res.status === 404) return { status: 'none' };
+  if (!res.ok) return { status: 'broken', error: `manifest.json: HTTP ${res.status}` };
+  const text = await res.text();
+  if (/text\/html/i.test(res.headers.get('content-type') ?? '') || /^\s*</.test(text)) return { status: 'none' };
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    return { status: 'broken', error: `manifest.json is not JSON (${message(e)})` };
+  }
+  try {
+    return { status: 'ready', games: await gamesOf(data) };
+  } catch (e) {
+    return { status: 'broken', error: message(e) };
+  }
+}
+
+async function gamesOf(data: unknown): Promise<GameSet[]> {
+  const source = (data ?? {}) as { games?: unknown; swfs?: unknown; default?: unknown };
   if (Array.isArray(source.games)) {
     const games: GameSet[] = [];
     for (let i = 0; i < source.games.length; i++) {
@@ -110,6 +147,13 @@ export async function fetchGameIndex(): Promise<GameSet[]> {
     return [{ ...LEGACY_SET, swfs }];
   }
   throw new Error('bundled manifest.json has neither "games" nor "swfs"');
+}
+
+/** The bundled game sets; throws when there are none or the index is broken. */
+export async function fetchGameIndex(): Promise<GameSet[]> {
+  const state = await loadGameIndex();
+  if (state.status === 'ready') return state.games;
+  throw new Error(state.status === 'none' ? 'No bundled game sets are available.' : state.error);
 }
 
 /** The first bundled set (kept for callers that only know about one game). */

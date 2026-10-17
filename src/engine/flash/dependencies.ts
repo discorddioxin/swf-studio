@@ -185,6 +185,15 @@ export class DependencyFiles {
   }
   get size() { return this.byPath.size; }
 
+  /**
+   * These files plus `added` — a new set; this one is left as it is (a running
+   * player keeps what it started with). An added file wins over one already here
+   * at the same path.
+   */
+  with(added: readonly { path: string; file: File }[]): DependencyFiles {
+    return new DependencyFiles([...added, ...this.files]);
+  }
+
   find(url: string): File | undefined {
     const path = dependencyPath(url).toLowerCase();
     if (!path) return undefined;
@@ -223,6 +232,39 @@ export class DependencyFiles {
     for (const u of this.urls.values()) { try { URL.revokeObjectURL(u); } catch { /* ignore */ } }
     this.urls.clear();
   }
+}
+
+/** A file the user adds to the session, stored under the path a movie asks for. */
+export interface DependencyAddition {
+  file: File;
+  /** where the movie will find it: the requested path, or the file's own name */
+  path: string;
+}
+
+const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
+
+/**
+ * Where picked files go. For one missing entry (`target`), the file is stored
+ * under the path that entry was requested at, whatever it is called. Otherwise
+ * each file goes under the requested path of the missing file of the same name
+ * (case-insensitive), and under its own name when none matches — a movie asking
+ * for that name later still finds it.
+ */
+export function matchDependencyFiles(files: readonly File[], missing: readonly MissingDependency[], target?: MissingDependency): DependencyAddition[] {
+  if (target) {
+    const path = target.path || dependencyPath(target.url);
+    return files.slice(0, 1).map((file) => ({ file, path: path || file.name }));
+  }
+  const byName = new Map<string, MissingDependency>();
+  for (const d of missing) {
+    if (d.service) continue;
+    const name = baseName(d.path).toLowerCase();
+    if (name && !byName.has(name)) byName.set(name, d);
+  }
+  return files.map((file) => {
+    const match = byName.get(file.name.toLowerCase());
+    return { file, path: match?.path || file.name };
+  });
 }
 
 /** Blob reads that also work where Blob lacks text()/arrayBuffer() (jsdom). */

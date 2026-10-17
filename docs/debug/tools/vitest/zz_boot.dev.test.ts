@@ -11,8 +11,9 @@ import { parseSwfBinary } from '@/../transcom/decompiler/swf/binary';
 import { abcSources } from '@/../src/engine/flash/abc';
 import { compileSources, linkProgram } from '@/../src/engine/flash/loader';
 import { FlashPlayer, type LogEntry } from '@/../src/engine/flash/player';
+import { corpusPath } from '@/testing/corpus';
 
-const FILE = process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/towns2-swfs/towns2.swf';
+const FILE = process.env.SWF_FILE ?? corpusPath('towns2-swfs/towns2.swf');
 const CORPUS_OK = existsSync(FILE);
 
 describe.skipIf(!CORPUS_OK)('corpus harness', () => {

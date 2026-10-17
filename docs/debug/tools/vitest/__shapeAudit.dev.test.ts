@@ -1,15 +1,17 @@
 // scratch: compare our shape parsing against FFDec's XML ground truth
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { it } from 'vitest';
+import { itCorpus } from '@/testing/corpus';
 import { parseSwfBinary } from '@/lib/swf/binary';
-import { SAMPLE_MAIN, SAMPLE_PIER, SAMPLE_SCENE, sampleExportDir, sampleSwfPath } from '@/adapters/gaiaFishing/sample';
+import { SAMPLE_MAIN, SAMPLE_PIER, SAMPLE_SCENE, sampleSwfPath } from '@/adapters/gaiaFishing/sample';
+import { ffdecExportDir } from '@/testing/corpusPaths'; // needs FFDec exports (SWF_FFDEC)
 
 const CASES = [
-  [SAMPLE_SCENE, `${sampleExportDir(SAMPLE_SCENE)}/${SAMPLE_SCENE}.xml`],
-  [SAMPLE_PIER, `${sampleExportDir(SAMPLE_PIER)}/${SAMPLE_PIER}.xml`],
+  [SAMPLE_SCENE, `${ffdecExportDir(SAMPLE_SCENE)}/${SAMPLE_SCENE}.xml`],
+  [SAMPLE_PIER, `${ffdecExportDir(SAMPLE_PIER)}/${SAMPLE_PIER}.xml`],
 ];
 
-it('compares shape parsing with the FFDec XML', async () => {
+itCorpus('compares shape parsing with the FFDec XML', async () => {
   for (const [name, xmlPath] of CASES) {
     const xml = readFileSync(xmlPath, 'utf8');
     const xmlGrad = (xml.match(/fillStyleType="16"/g) ?? []).length + (xml.match(/fillStyleType="18"/g) ?? []).length;
@@ -28,7 +30,7 @@ it('compares shape parsing with the FFDec XML', async () => {
     }
     console.log(`${name}: xml shapes=${xmlShapes} xmlGradients=${xmlGrad} | ours svg=${svgs.length} gradients=${grad} paths=${paths} nearEmpty=${empty}`);
   }
-}, 120000);
+}, 120000, () => CASES.every(([name, xmlPath]) => existsSync(xmlPath) && existsSync(sampleSwfPath(name))));
 
 it('audits the main movie shapes', async () => {
   const buf = readFileSync(sampleSwfPath(SAMPLE_MAIN));

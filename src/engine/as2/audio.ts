@@ -5,6 +5,7 @@
 import type { AudioBackend, AudioHandle } from '../flash/media';
 import { HtmlAudioBackend, type AssetSource } from '../flash/player';
 import { decodeFlvAudio, encodeWav } from './adpcm';
+import { invalidateLayers } from '../../lib/compositor';
 
 export class AS2AudioBackend implements AudioBackend {
   private readonly html: HtmlAudioBackend;
@@ -115,6 +116,7 @@ export async function registerFonts(files: { path: string; file: File }[], key?:
       if (signal?.aborted) return;
       fonts.add(face);
       faces.push(face);
+      invalidateLayers();
       done.add(Number(m[1]));
     } catch { /* unusable font file: fall back to the system font of the same name */ }
   }));

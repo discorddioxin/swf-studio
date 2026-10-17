@@ -4,13 +4,14 @@ import { describe, it } from 'vitest';
 import { parseSwfBinary } from '@/../transcom/decompiler/swf/binary';
 import { abcSources } from '@/../src/engine/flash/abc';
 import { compileSources, linkProgram } from '@/../src/engine/flash/loader';
+import { corpusPath } from '@/testing/corpus';
 
 /** SWF_FILE=<path> prints the symbol linkage table the program builds. */
-const CORPUS_OK = existsSync(process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf');
+const CORPUS_OK = existsSync(process.env.SWF_FILE ?? corpusPath('pinball-swfs/game.swf'));
 
 describe.skipIf(!CORPUS_OK)('corpus harness', () => {
   it('shows which symbol classes fail to resolve', async () => {
-  const file = process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/tiles-swfs/assets.swf';
+  const file = process.env.SWF_FILE ?? corpusPath('tiles-swfs/assets.swf');
   const bytes = readFileSync(file);
   const { doc } = await parseSwfBinary(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, 'x.swf');
   const lifted = abcSources(doc.abc ?? []);

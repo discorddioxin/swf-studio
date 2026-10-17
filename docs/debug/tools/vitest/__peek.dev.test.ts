@@ -1,12 +1,14 @@
 // @vitest-environment node
-import { it } from 'vitest';
 import { buildAS2Program } from '@/engine/as2/program';
-import { readFileSync } from 'node:fs';
-import { SAMPLE_SERVICE, sampleExportDir } from '@/adapters/gaiaFishing/sample';
+import { existsSync, readFileSync } from 'node:fs';
+import { itCorpus } from '@/testing/corpus';
+import { SAMPLE_SERVICE } from '@/adapters/gaiaFishing/sample';
+import { ffdecExportDir } from '@/testing/corpusPaths'; // needs an FFDec export (SWF_FFDEC)
 
-it('peek generated UIObject ts', () => {
-  const xmlDir = `${sampleExportDir(SAMPLE_SERVICE)}/scripts`;
-  const src = readFileSync(`${xmlDir}/__Packages/mx/core/UIObject.as`, 'utf8');
+const UI_OBJECT = `${ffdecExportDir(SAMPLE_SERVICE)}/scripts/__Packages/mx/core/UIObject.as`;
+
+itCorpus('peek generated UIObject ts', () => {
+  const src = readFileSync(UI_OBJECT, 'utf8');
   const build = buildAS2Program([{ path: '__Packages/mx/core/UIObject.as', text: src }]);
   console.log('keys:', [...build.files.keys()].join(', '));
   console.log('report:', JSON.stringify(build.project.report.map((r) => r.source.split('\n')[0] + ':' + r.diagnostics.length)));
@@ -18,4 +20,4 @@ it('peek generated UIObject ts', () => {
     writeFileSync('/tmp/peek_uiobject.ts', text);
     for (const line of text.split('\n')) if (/width|__get__|__set__/.test(line)) console.log('L:', line.slice(0, 160));
   }
-});
+}, undefined, () => existsSync(UI_OBJECT));

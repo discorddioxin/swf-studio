@@ -2,7 +2,8 @@ import { avm1ActionSource, hexToBytes } from './swf/bitio';
 import {
   type ColorTransform, type DisplayItem, type EventKind, type Frame, type FrameEvent,
   type Matrix, type PlaceOp, type Rect, type SwfCharacter, type TextRecord, type SwfDocument,
-  type Timeline, type CharacterKind, IDENTITY,
+  type Timeline, type CharacterKind, type ButtonSound, type SoundInfo, type SwfFilter, type FilterPlacement,
+  IDENTITY, toBlendMode,
 } from '../../src/types';
 
 // ---------------------------------------------------------------------------
@@ -48,6 +49,75 @@ function tagChildren(el: Element): Element[] {
   return out;
 }
 
+/** Whether `e` lies inside a filter record below `root`. */
+function inFilter(e: Element, root: Element): boolean {
+  for (let n = e.parentElement; n && n !== root; n = n.parentElement) {
+    if (/FILTER$/.test(n.getAttribute('type') ?? '') || /^(surfaceFilterList|filterList)$/.test(n.tagName)) return true;
+  }
+  return false;
+}
+
+/** The filter list of a PlaceObject3 (`surfaceFilterList`) or BUTTONRECORD (`filterList`), as FFDec exports it. */
+function filtersOf(el: Element): SwfFilter[] | undefined {
+  const list = Array.from(el.children).find((c) => c.tagName === 'surfaceFilterList' || c.tagName === 'filterList');
+  if (!list) return undefined;
+  const out: SwfFilter[] = [];
+  for (const f of Array.from(list.children)) {
+    const t = f.getAttribute('type') ?? '';
+    const n = (k: string, d = 0) => num(f.getAttribute(k), d);
+    const b = (k: string) => bool(f.getAttribute(k));
+    const child = (k: string) => Array.from(f.children).find((c) => c.tagName === k);
+    const rgba = (c: Element | undefined) => ({
+      color: (num(c?.getAttribute('red')) << 16) | (num(c?.getAttribute('green')) << 8) | num(c?.getAttribute('blue')),
+      alpha: num(c?.getAttribute('alpha'), 255) / 255,
+    });
+    const items = (k: string) => Array.from(child(k)?.children ?? []);
+    const numbers = (k: string) => items(k).map((i) => num(i.textContent));
+    const deg = (rad: number) => rad * 180 / Math.PI;
+    const placement = (): FilterPlacement => (b('onTop') ? 'full' : b('innerShadow') ? 'inner' : 'outer');
+    const blur = { blurX: n('blurX'), blurY: n('blurY') };
+    switch (t) {
+      case 'DROPSHADOWFILTER': {
+        const c = rgba(child('dropShadowColor'));
+        out.push({ kind: 'dropShadow', color: c.color, alpha: c.alpha, ...blur, angle: deg(n('angle')), distance: n('distance'),
+          strength: n('strength', 1), quality: n('passes', 1), inner: b('innerShadow'), knockout: b('knockout'), hideObject: !b('compositeSource') });
+        break;
+      }
+      case 'BLURFILTER': out.push({ kind: 'blur', ...blur, quality: n('passes', 1) }); break;
+      case 'GLOWFILTER': {
+        const c = rgba(child('glowColor'));
+        out.push({ kind: 'glow', color: c.color, alpha: c.alpha, ...blur, strength: n('strength', 1), quality: n('passes', 1),
+          inner: b('innerGlow'), knockout: b('knockout') });
+        break;
+      }
+      case 'BEVELFILTER': {
+        const hi = rgba(child('highlightColor')), sh = rgba(child('shadowColor'));
+        out.push({ kind: 'bevel', highlightColor: hi.color, highlightAlpha: hi.alpha, shadowColor: sh.color, shadowAlpha: sh.alpha,
+          ...blur, angle: deg(n('angle')), distance: n('distance'), strength: n('strength', 1), quality: n('passes', 1),
+          knockout: b('knockout'), type: placement() });
+        break;
+      }
+      case 'GRADIENTGLOWFILTER': case 'GRADIENTBEVELFILTER': {
+        const stops = items('gradientColors').map(rgba);
+        out.push({ kind: t === 'GRADIENTGLOWFILTER' ? 'gradientGlow' : 'gradientBevel',
+          colors: stops.map((c) => c.color), alphas: stops.map((c) => c.alpha), ratios: numbers('gradientRatio'),
+          ...blur, angle: deg(n('angle')), distance: n('distance'), strength: n('strength', 1), quality: n('passes', 1),
+          knockout: b('knockout'), type: placement() });
+        break;
+      }
+      case 'CONVOLUTIONFILTER': {
+        const c = rgba(child('defaultColor'));
+        out.push({ kind: 'convolution', matrixX: n('matrixX'), matrixY: n('matrixY'), matrix: numbers('matrix'),
+          divisor: n('divisor', 1), bias: n('bias'), clamp: b('clamp'), preserveAlpha: b('preserveAlpha'), color: c.color, alpha: c.alpha });
+        break;
+      }
+      case 'COLORMATRIXFILTER': out.push({ kind: 'colorMatrix', matrix: numbers('matrix') }); break;
+      default: break;
+    }
+  }
+  return out;
+}
+
 /** search data (non-tag) descendants of a tag element */
 function findData(el: Element, pred: (e: Element) => boolean): Element | null {
   const stack: Element[] = Array.from(el.children);
@@ -83,6 +153,32 @@ function num(v: string | null | undefined, dflt = 0): number {
 
 function bool(v: string | null | undefined): boolean {
   return v === 'true' || v === '1';
+}
+
+/** An FFDec SOUNDINFO element; each optional field counts only when its has* flag is set. */
+function soundInfoOf(el: Element): SoundInfo {
+  const info: SoundInfo = { syncStop: bool(el.getAttribute('syncStop')), syncNoMultiple: bool(el.getAttribute('syncNoMultiple')) };
+  if (bool(el.getAttribute('hasInPoint'))) info.inPoint = num(el.getAttribute('inPoint'));
+  if (bool(el.getAttribute('hasOutPoint'))) info.outPoint = num(el.getAttribute('outPoint'));
+  if (bool(el.getAttribute('hasLoops'))) info.loopCount = num(el.getAttribute('loopCount'));
+  if (bool(el.getAttribute('hasEnvelope'))) {
+    const records = Array.from(el.children).find((c) => c.tagName === 'envelopeRecords');
+    info.envelope = Array.from(records?.children ?? []).map((r) => ({
+      pos44: num(r.getAttribute('pos44')), left: num(r.getAttribute('leftLevel')), right: num(r.getAttribute('rightLevel')),
+    }));
+  }
+  return info;
+}
+
+/** DefineButtonSoundTag: buttonSoundChar0..3 with a buttonSoundInfo0..3 child for each nonzero one. */
+function buttonSoundsOf(el: Element): (ButtonSound | null)[] {
+  const out: (ButtonSound | null)[] = [];
+  for (let i = 0; i < 4; i++) {
+    const soundId = num(el.getAttribute(`buttonSoundChar${i}`));
+    const infoEl = Array.from(el.children).find((c) => c.tagName === `buttonSoundInfo${i}`);
+    out.push(soundId ? { soundId, info: infoEl ? soundInfoOf(infoEl) : { syncStop: false, syncNoMultiple: false } } : null);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +228,8 @@ class Parser {
   }
 
   matrixOf(el: Element): Matrix | undefined {
-    const m = findData(el, isType('MATRIX')) ?? findData(el, (e) => e.tagName === 'matrix');
+    // (a ColorMatrix / Convolution filter's `matrix` list is not a placement matrix)
+    const m = findData(el, (e) => isType('MATRIX')(e) && !inFilter(e, el));
     if (!m) return undefined;
     return this.readMatrix(m);
   }
@@ -213,7 +310,8 @@ export function kindOfTag(type: string): CharacterKind | null {
   if (/^DefineSprite/.test(type)) return 'sprite';
   if (/^DefineMorphShape/.test(type)) return 'morphshape';
   if (/^DefineShape/.test(type)) return 'shape';
-  if (/^DefineButton/.test(type)) return 'button';
+  // DefineButtonSound / DefineButtonCxform add to a button; they define no character.
+  if (/^DefineButton(?!Sound|Cxform)/.test(type)) return 'button';
   if (/^(DefineBits|DefineBitsJPEG|DefineBitsLossless)/.test(type)) return 'bitmap';
   if (/^DefineEditText/.test(type)) return 'edittext';
   if (/^DefineText/.test(type)) return 'text';
@@ -228,7 +326,7 @@ const PLACE_RE = /^PlaceObject(2|3|4)?Tag$/;
 const REMOVE_RE = /^RemoveObject(2)?Tag$/;
 
 export function classify(type: string): EventKind {
-  if (/^(DoAction|DoInitAction|DoABC|RawABC|DefineButtonCxform)/.test(type)) return 'action';
+  if (/^(DoAction|DoInitAction|DoABC|RawABC)/.test(type)) return 'action';
   if (/^(StartSound|SoundStreamHead|SoundStreamBlock|DefineSound)/.test(type)) return 'sound';
   if (/^FrameLabel/.test(type)) return 'label';
   if (/^(Define|JPEGTables|SymbolClass|ExportAssets|ImportAssets)/.test(type)) return 'define';
@@ -239,7 +337,8 @@ export function classify(type: string): EventKind {
 
 /** everything the user asked to be emphasised */
 export function isSpecialTag(type: string): boolean {
-  return type !== 'PlaceObject2Tag' && type !== 'RemoveObject2Tag' &&
+  return type !== 'PlaceObjectTag' && type !== 'PlaceObject2Tag' &&
+    type !== 'RemoveObjectTag' && type !== 'RemoveObject2Tag' &&
     type !== 'ShowFrameTag' && type !== 'EndTag' && !/^Define/.test(type) &&
     type !== 'JPEGTablesTag';
 }
@@ -612,6 +711,8 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
   markTagOrder(rootTags);
 
   const spriteQueue: { id: number; el: Element }[] = [];
+  const buttonSoundTags: Element[] = [];
+  let fileAttributes: { as3: boolean; useNetwork: boolean; hasMetadata: boolean } | undefined;
 
   const registerCharacter = (el: Element, type: string) => {
     const kind = kindOfTag(type);
@@ -656,6 +757,14 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
       const type = tagTypeOf(t)!;
       P.tagCount++;
       registerCharacter(t, type);
+      if (type === 'DefineButtonSoundTag') buttonSoundTags.push(t);
+      if (type === 'FileAttributesTag' && depthGuard === 0 && !fileAttributes) {
+        fileAttributes = {
+          as3: bool(t.getAttribute('actionScript3')),
+          useNetwork: bool(t.getAttribute('useNetwork')),
+          hasMetadata: bool(t.getAttribute('hasMetadata')),
+        };
+      }
       if (type === 'SymbolClassTag' || type === 'ExportAssetsTag') {
         readSymbolClass(P, t, type === 'SymbolClassTag');
       }
@@ -669,6 +778,12 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
     }
   };
   walk(rootEl);
+  for (const el of buttonSoundTags) {
+    const id = num(el.getAttribute('buttonId'), -1);
+    const button = P.characters.get(id);
+    if (button?.kind === 'button') button.buttonSounds = buttonSoundsOf(el);
+    else P.warnings.push(`DefineButtonSound: button ${id} is not defined`);
+  }
 
   // --------------------------------------------------------- timelines ----
   const root = buildTimeline(P, 'root', 'root', undefined, 'Main Timeline', rootTags);
@@ -711,6 +826,8 @@ export function parseSwfXml(xmlText: string, opts: ParseOptions): SwfDocument {
       stage,
       fileName: opts.fileName,
       backgroundColor: P.backgroundColor,
+      source: 'xml',
+      ...fileAttributes,
     },
     // Full SymbolClass table, including id 0 (the document class), which
     // has no character to hang a className on.
@@ -821,8 +938,12 @@ function buildTimeline(
       const nm = el.getAttribute('name') || undefined;
       const clipDepth = el.hasAttribute('clipDepth') && num(el.getAttribute('clipDepth')) > 0
         ? num(el.getAttribute('clipDepth')) : undefined;
-      const blend = el.getAttribute('blendMode') || undefined;
-      const filters = !!findData(el, (e) => /Filter$/i.test(e.getAttribute('type') ?? e.tagName));
+      // FFDec writes blendMode / surfaceFilterList with their flags; a field without its flag is not there
+      const blendFlag = el.getAttribute('placeFlagHasBlendMode');
+      const blend = blendFlag == null || bool(blendFlag) ? toBlendMode(el.getAttribute('blendMode')) : undefined;
+      const filterFlag = el.getAttribute('placeFlagHasFilterList');
+      const filterList = filterFlag == null || bool(filterFlag) ? filtersOf(el) : undefined;
+      const filters = !!filterList || !!findData(el, (e) => /Filter$/i.test(e.getAttribute('type') ?? e.tagName));
 
       const prev = state.get(depth);
       const creating = (hasChar || !prev) && cid != null && cid > 0;
@@ -830,12 +951,15 @@ function buildTimeline(
         op: creating && !move ? 'place' : 'move',
         tagType: type, depth, characterId: cid, matrix, colorTransform: ct,
         ratio, name: nm, clipDepth, blendMode: blend, hasFilters: filters,
+        ...(filterList ? { filters: filterList } : {}),
       });
       if (creating) {
         state.set(depth, {
           depth, characterId: cid!, matrix: matrix ?? { ...IDENTITY },
           colorTransform: ct, ratio: ratio ?? 0, name: nm, clipDepth,
-          blendMode: blend, hasFilters: filters, startFrame: frameIndex,
+          hasFilters: filters, startFrame: frameIndex,
+          ...(filterList?.length ? { filters: filterList } : {}),
+          ...(blend && blend !== 'normal' ? { blendMode: blend } : {}),
         });
       } else if (prev) {
         const next: DisplayItem = { ...prev };
@@ -844,7 +968,9 @@ function buildTimeline(
         if (ratio != null) next.ratio = ratio;
         if (nm) next.name = nm;
         if (clipDepth != null) next.clipDepth = clipDepth;
-        if (blend) next.blendMode = blend;
+        // a move that carries a filter list / blend mode replaces the current one
+        if (blend) { if (blend !== 'normal') next.blendMode = blend; else delete next.blendMode; }
+        if (filterList) { if (filterList.length) next.filters = filterList; else delete next.filters; }
         if (filters) next.hasFilters = true;
         state.set(depth, next);
       }
@@ -924,6 +1050,18 @@ function summarizeAttrs(el: Element): string {
   return parts.join(' ');
 }
 
+/** BUTTONRECORD filterList / blendMode (only when their buttonHas* flags say they are present). */
+function buttonRecordEffects(r: Element): { filters?: SwfFilter[]; blendMode?: DisplayItem['blendMode'] } {
+  const out: { filters?: SwfFilter[]; blendMode?: DisplayItem['blendMode'] } = {};
+  const fFlag = r.getAttribute('buttonHasFilterList');
+  const filters = fFlag == null || bool(fFlag) ? filtersOf(r) : undefined;
+  if (filters?.length) out.filters = filters;
+  const bFlag = r.getAttribute('buttonHasBlendMode');
+  const blend = bFlag == null || bool(bFlag) ? toBlendMode(r.getAttribute('blendMode')) : undefined;
+  if (blend && blend !== 'normal') out.blendMode = blend;
+  return out;
+}
+
 /** DefineButton2 records → a synthetic 4 "frame" timeline (up/over/down/hit) */
 function buildButtonTimeline(P: Parser, id: number, el: Element) {
   const states = ['Up', 'Over', 'Down', 'HitTest'] as const;
@@ -945,6 +1083,7 @@ function buildButtonTimeline(P: Parser, id: number, el: Element) {
         // same filter detection the place records use: a FILTER child element
         hasFilters: !!findData(r, (e) => /Filter$/i.test(e.getAttribute('type') ?? e.tagName)),
         ratio: 0, startFrame: i,
+        ...buttonRecordEffects(r),
       });
     }
     display.sort((a, b) => a.depth - b.depth);

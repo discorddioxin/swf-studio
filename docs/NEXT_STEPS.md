@@ -27,12 +27,12 @@ All **6 Medium** (Phase 1) + **High/Critical** (23 CODE_INSPECTOR + 23 EXECUTE) 
 ## 2. Architecture you can rely on (one-way, testable seams)
 
 ```
-File[] → loadUploadedPackages / fetchBundledManifest → mergeBundledExternals
+File[] → loadUploadedPackages / loadGameIndex (optional) → mergeBundledExternals
        → installPackages → packages:SwfPackage[] {doc, cache:AssetCache, assets}
        → GameEngine / As2Execute / ExecuteTab
        → tick(dt) → enterFrame → advance → runQueue → guard → renderTo(ctx,scale*dpr) → canvas
        + debug/store (Map+activeId, never writes into SwfDocument)
-       + game-files/ only via the adapter's generate-bundled.mjs (explicit)
+       + game-files/ optional per deployment (none in the repo; generate-bundled.mjs makes one locally)
 ```
 
 | Seam | Env | Test without React? | Key file |
@@ -74,7 +74,7 @@ File[] → loadUploadedPackages / fetchBundledManifest → mergeBundledExternals
 
 - `EngineFlash` (`FlashPlayer 722 + loader 270`) is isolated from `EngineAS2`. `DoABC2` is currently alias-missing per SPEC — add `avm2` crate only if a bundled movie ever emits `DoABC` (the sample’s main movie doesn’t; it’s AVM1).
 - **Done:** the ABC reader + disassembler (`transcom/decompiler/swf/abc.ts`) pulls code out of `DoABC` tags per the AVM2 spec, so AS3 movies no longer depend on hand-supplied sources. Verified on the uploaded AS3 sets (pinball 435 classes / 3,690 bodies, towns2 762 / 8,372 — every body decodes to its exact length, every reachable jump lands on an instruction) and on a 4,916-SWF independent corpus.
-- **Done:** ABC → TypeScript (`transcom/transpiler/avm2/{lift,emit,index}.ts`). Lifts each method body (operand-stack simulation → expressions, branches → `if`/`while`/`?:`/`&&`, `dup`-join assignments → real statements/locals, traits → class members, `coerce` → imported types) and emits one module per class plus the script inits. All three uploaded AS3 movies **link through the real engine loader with 0 errors** and their SymbolClass tables resolve completely (pinball 311/311, tiles 35/35, towns2 192/192); 3,496/3,690 pinball bodies lift and a symbol class from each movie is constructible (`transcom/transpiler/avm2/transpile.test.ts` proves the standardDeck timeline class end to end; `docs/debug/tools/vitest/avm2emitter.dev.test.ts` is the whole-movie gate and `avm2game.dev.test.ts` boots the movies in `FlashPlayer`).
+- **Done:** ABC → TypeScript (`transcom/transpiler/avm2/{lift,emit,index}.ts`). Lifts each method body (operand-stack simulation → expressions, branches → `if`/`while`/`?:`/`&&`, `dup`-join assignments → real statements/locals, traits → class members, `coerce` → imported types) and emits one module per class plus the script inits. All three uploaded AS3 movies **link through the real engine loader with 0 errors** and their SymbolClass tables resolve completely (pinball 311/311, tiles 35/35, towns2 192/192); 3,496/3,690 pinball bodies lift and a symbol class from each movie is constructible (`transcom/transpiler/avm2/transpile.test.ts` proves the standardDeck timeline class end to end; `src/engine/flash/__tests__/avm2Games.corpus.test.ts` is the whole-movie gate and boots the movies in `FlashPlayer`; `avm2Fixture.test.ts` runs the same path on a committed fixture movie without the corpus).
 - **Done:** the app path — `src/engine/flash/abc.ts` reads the `DoABC` tags of the loaded document *and* its dependency SWFs, `transpileAbc` lifts them, the Execute tab compiles the result through the same loader, and the Program panel reports the payload/file/class counts.
 - **Left in the lifter:** 176 bodies that close over an activation (`newactivation`/`newfunction` — the last big feature, and what keeps `fl.managers.StyleManager` from running in pinball *and* towns2), 6 stack-underflow shapes, a few mixed-value `if`/`else` joins, `for-in`/`for-each`, E4X, `lookupswitch`. Each is a `Refuse` site in `lift.ts`, so the count only goes down.
 - **Left in the engine surface:** classes the movies reference that `src/engine/flash` does not provide yet (`flash.text.StyleSheet`, `flash.geom.Vector3D`, `flash.accessibility.*`, `flash.events.{HTTPStatusEvent,NetStatusEvent}`, `flash.system.IME`, `flash.xml.XMLDocument`, `setPropertyIsEnumerable` on the Array side). The emitter turns an unavailable `flash.*`/`fl.*` name into an explicit `unsupportedFlash(name)` stub, so a movie links and runs up to the first real use of something missing.
@@ -91,21 +91,21 @@ npm ci
 ./node_modules/.bin/vitest run src/components/__tests__/timelineResize.pointer.test.tsx  # FINAL-08 5 tests
 ./node_modules/.bin/vite build                               # 228 1,738.19kB
 npx madge --circular src/main.tsx --extensions ts,tsx        # 92 files 5 circulars 1 orphan
-node src/adapters/<game>/tools/generate-bundled.mjs && git diff --stat HEAD -- game-files  # 0 (manifest stable)
 ```
 
-- **AS3 corpus gate:** `npx vitest run docs/debug/tools/vitest/avm2emitter.dev.test.ts docs/debug/tools/vitest/avm2game.dev.test.ts` — needs the uploaded corpus at `/tmp/swf-forge2/games-swfs` (`SWF_CORPUS=` overrides); both skip without it. The emitter gate freezes each movie's refusal count (it may fall, never rise).
+- **Test corpus:** game SWFs are not in the repo. Tests that need real games read the uploaded corpus (`src/testing/corpusPaths.ts`: `SWF_CORPUS=`, else `/tmp/swf-forge2/games-swfs`, `../swf-forge/games-swfs`, `~/swf-forge/games-swfs`) and skip without it, naming the clone command — `vitest run` must pass both with and without it. FFDec exports are optional comparison data (`SWF_FFDEC=`); small real movies for unit tests come from `src/testing/movies.ts` / `swfWriter.ts`.
+- **AS3 corpus gate:** `npx vitest run avm2Games.corpus` — needs the corpus. The emitter gate freezes each movie's refusal count (it may fall, never rise).
 
 - **New test goes next to code:** `src/lib/foo.test.ts` (node) or `src/components/__tests__/foo.ui.test.tsx` (jsdom). The audit pinned every seam to a file that will fail first — add the test that would have caught FINAL-08 (`timelineResize.pointer.test.tsx` is the template for DOM gaps).
 - **No new `any`:** `grep -R "any" src/` is 373 + header `runtime/as2/index.ts:1` — narrow to `unknown`/`AS2Value` at value seam only.
 - **No new circular:** `engine/as2/constants.ts` is the one-way value export for `DEPTH_OFFSET/NODE/TWIPS`; `builtins.ts` imports only `type DisplayNode`.
-- **Game files:** `game-files/` is `publicDir` — only written by the sample adapter's `generate-bundled.mjs` explicitly; `vite build` never touches it.
+- **Game files:** bundled games are optional. When a `game-files/` folder exists it is Vite's `publicDir` (index `manifest.json` → `games/<id>.json`); without it the Loader shows no bundled section. The repo ships none; the sample adapter's `generate-bundled.mjs` writes one from the corpus on request.
 
 ---
 
 ## 5. Checklist before opening a PR (next phase)
 
-- [ ] `tsc --noEmit` 0, `vitest` 51/3·227/3, `vite` 228 modules, `madge` 5 circulars, `game-files` 0 diff after the adapter's `generate-bundled.mjs` (or `git add game-files/` if writer drift, like ASSET-10)
+- [ ] `tsc --noEmit` 0, `vitest` 51/3·227/3, `vite` 228 modules, `madge` 5 circulars, `vitest run` green both with and without the test corpus
 - [ ] Updated `docs/audits/archive/phases/PHASE-*-*.json` disposition if you fix a `Keep — shovel-ready` (and matching `*.md` table row)
 - [ ] No `madge --orphans` new file without citation; `import.meta.glob ?raw` is a known blind spot (ARCH-06): files reached only through it (`CodeWorkspace`'s engine view) are not orphans
 - [ ] One table per seam + one Mermaid diagram if you add a new seam (Phase docs §3+§4)

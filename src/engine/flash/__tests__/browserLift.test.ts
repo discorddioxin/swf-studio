@@ -2,7 +2,7 @@
 // Debug switches reading `process.env` once made every AVM2 movie (pinball's
 // game.swf and gameShell.swf) fail in the app with "process is not defined",
 // while every Node test passed. Lift here with `process` removed, as in a browser.
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseSwfBinary } from '@/lib/swf/binary';
 import { abcSources } from '../abc';
@@ -11,6 +11,7 @@ import { FlashPlayer, type LogEntry } from '../player';
 import { AssetCache, ingestFiles } from '@/lib/assets';
 import { swfFilesToFiles } from '@/lib/bundled';
 import { deckAbcPayload } from './abcFixture';
+import { CORPUS_CLONE, corpusFile } from '@/testing/corpus';
 
 function withoutProcess<T>(run: () => T): T {
   const g = globalThis as { process?: unknown };
@@ -24,8 +25,6 @@ function withoutProcess<T>(run: () => T): T {
   }
 }
 
-const CORPUS = process.env.SWF_CORPUS ?? '/tmp/swf-forge2/games-swfs';
-
 describe('lifting AVM2 code without Node globals', () => {
   it('lifts and compiles an ABC payload', () => {
     const lifted = withoutProcess(() => abcSources([deckAbcPayload()]));
@@ -35,9 +34,9 @@ describe('lifting AVM2 code without Node globals', () => {
   });
 
   for (const file of ['game.swf', 'gameShell.swf']) {
-    const path = `${CORPUS}/pinball-swfs/${file}`;
-    it.skipIf(!existsSync(path))(`lifts pinball's ${file}`, async () => {
-      const raw = readFileSync(path);
+    const path = corpusFile('pinball-swfs', file);
+    it.skipIf(!path)(path ? `lifts pinball's ${file}` : `lifts pinball's ${file} (skipped: no game corpus — ${CORPUS_CLONE})`, async () => {
+      const raw = readFileSync(path!);
       const { doc, files } = await parseSwfBinary(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer, file);
       // The Execute tab's whole path: lift, compile, link, boot and play 2 s.
       const logs: LogEntry[] = [];

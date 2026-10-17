@@ -12,13 +12,15 @@ import { RunningTimelinesSidebar } from './RunningTimelinesSidebar';
 import { buildWorkbenchTimelineMetadata } from '../engine/as2/workbenchMetadata';
 import { ExecutionConsole } from './ExecutionConsole';
 import { useExecutionDiagnostics } from './useExecutionDiagnostics';
-import { compileSources, expectedClasses, isCodeFile, linkProgram, mergeSources, type CompiledSources, type LinkedProgram, type SourceFile } from '../engine/flash/loader';
-import { abcSources } from '../engine/flash/abc';
+import { expectedClasses, isCodeFile, linkProgram, mergeSources, type CompiledSources, type LinkedProgram, type SourceFile } from '../engine/flash/loader';
+import { analyzeAs3Program, type As3Analysis } from '../engine/flash/analyze';
+import { abcSources, type AbcSources } from '../engine/flash/abc';
 import { FlashPlayer, HtmlAudioBackend, type LogEntry } from '../engine/flash/player';
 import type { AudioBackend } from '../engine/flash/media';
-import { DisplayObject, MovieClip } from '../engine/flash/display';
-import { As2Execute, isAs2Bundle } from './As2Execute';
-import { MissingDependenciesBanner, MissingDependenciesPanel, dependencyProblems, useMissingDependencies } from './MissingDependencies';
+import { MovieClip } from '../engine/flash/display';
+import { As2Execute } from './As2Execute';
+import { chooseRuntime, runtimeLogMessage, type RuntimeChoice } from './runtimeChoice';
+import { MissingDependenciesBanner, MissingDependenciesPanel, dependencyProblems, useMissingDependencies, type DependencyAdder } from './MissingDependencies';
 import type { DependencyFiles } from '../engine/flash/dependencies';
 import { useDebugger, useDebuggerState } from '../debug/store';
 import { DebugPanel } from '../debug/DebugPanel';
@@ -28,36 +30,42 @@ type CodeState =
   | { status: 'loading' }
   | { status: 'failed'; error: string }
   | {
-    status: 'ready'; compiled: CompiledSources; classes: LinkedProgram['classes'];
+    // Read from the compiled code without running it (`analyzeAs3Program`): the
+    // program is evaluated once, by the player (P-06).
+    status: 'ready'; compiled: CompiledSources; classes: As3Analysis['classes'];
     displayClasses: string[];
-    /** Module evaluation and import-resolution failures from the linker. */
-    linkErrors: LinkedProgram['errors'];
     /** dependency SWFs whose code was folded in because the main movie alone could not link */
     dependencies: string[];
     /** code lifted out of the movie's own DoABC tags, when it is an AVM2 movie */
-    abc: { payloads: number; files: number; classes: number; refusals: number; unsupported: string[] } | null;
+    abc: { payloads: number; files: number; classes: number; refusals: number; unsupported: string[]; unreadable: AbcSources['unreadable'] } | null;
   };
 
 const MAX_LOG = 500;
 
-export function ExecuteTab({ externals, project, gameSetId, adapterId, onAdapterChange, dependencyFiles, ...props }: {
+export function ExecuteTab({ externals, project, gameSetId, adapterId, onAdapterChange, dependencyFiles, dependencyAdder, ...props }: {
   doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
   /** non-SWF files uploaded with the movies (XML, CSS, MP3, …), which they may request at run time */
   dependencyFiles?: DependencyFiles | null;
+  /** "Add Dependency": puts missing files into the session for testing */
+  dependencyAdder?: DependencyAdder;
   /** bundled game set the session came from, if any (the adapter hint) */
   gameSetId?: string | null;
   /** game adapter pick: 'auto' (detect) or an id from src/adapters */
   adapterId?: string | null;
   onAdapterChange?: (id: string) => void;
 }) {
-  return isAs2Bundle(props.doc, props.assets)
-    ? <As2Execute {...props} project={project} externals={externals} gameSetId={gameSetId} adapterId={adapterId} onAdapterChange={onAdapterChange} dependencyFiles={dependencyFiles} />
-    : <As3Execute {...props} project={project} externals={externals} uploadedFiles={dependencyFiles ?? null} />;
+  const choice = useMemo(() => chooseRuntime(props.doc, props.assets), [props.doc, props.assets]);
+  return choice.runtime === 'as2'
+    ? <As2Execute {...props} project={project} externals={externals} gameSetId={gameSetId} adapterId={adapterId} onAdapterChange={onAdapterChange} dependencyFiles={dependencyFiles} dependencyAdder={dependencyAdder} runtimeChoice={choice} />
+    : <As3Execute {...props} project={project} externals={externals} uploadedFiles={dependencyFiles ?? null} dependencyAdder={dependencyAdder} runtimeChoice={choice} />;
 }
 
-function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles = null }: {
+function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles = null, dependencyAdder, runtimeChoice }: {
   doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
   uploadedFiles?: DependencyFiles | null;
+  dependencyAdder?: DependencyAdder;
+  /** why this movie runs on AVM2 (logged when the player starts) */
+  runtimeChoice: RuntimeChoice;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -65,6 +73,9 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
   const playingRef = useRef(true);
   const mutedRef = useRef(false);
   const [code, setCode] = useState<CodeState>({ status: 'loading' });
+  const runtimeMessage = runtimeLogMessage(runtimeChoice);
+  /** Module evaluation and import-resolution failures, from the player's link of the program. */
+  const [linkErrors, setLinkErrors] = useState<LinkedProgram['errors']>([]);
   const [session, setSession] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(false);
@@ -151,20 +162,18 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
       const mine = new Set(sources.map((f) => f.path.replace(/^\.\//, '')));
       return [...sources, ...ownAbc.sources.filter((f) => !mine.has(f.path.replace(/^\.\//, '')))];
     };
-    const abcSummary = ownAbc.payloads ? {
+    const abcSummary = ownAbc.payloads || ownAbc.unreadable.length ? {
       payloads: ownAbc.payloads, files: ownAbc.sources.length, classes: ownAbc.classes.length,
-      refusals: ownAbc.refusals.length, unsupported: ownAbc.unsupported,
+      refusals: ownAbc.refusals.length, unsupported: ownAbc.unsupported, unreadable: ownAbc.unreadable,
     } : null;
     Promise.all(files.map(read))
       .then(async (readFiles) => {
         if (cancelled) return;
         const mainSources = withAbc(readFiles);
-        let compiled = compileSources(mainSources);
-        let probe = linkProgram(compiled);
-        let dependencies: string[] = [];
         const wanted = expectedClasses(doc);
-        const unresolved = (linked: LinkedProgram) => wanted.filter((name) => !linked.getDefinition(name)).length;
-        if (dependencyFiles.length && (probe.errors.length > 0 || unresolved(probe) > 0)) {
+        let analysis = analyzeAs3Program(mainSources, wanted);
+        let dependencies: string[] = [];
+        if (dependencyFiles.length && (analysis.errors.length > 0 || analysis.unresolved.length > 0)) {
           const readDependencies = await Promise.all(dependencyFiles.map(async (dependency) => ({
             name: dependency.name,
             files: await Promise.all(dependency.files.map(read)),
@@ -176,19 +185,14 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
             ? withAbc([...withDependencies.sources, ...dependencyAbc.sources.filter((f) => !ownAbc.sources.some((mine) => mine.path === f.path))])
             : withDependencies.sources;
           if (withDependencies.used.length || dependencyAbc.sources.length) {
-            const retryCompiled = compileSources(retrySources);
-            const retry = linkProgram(retryCompiled);
-            if (retry.errors.length <= probe.errors.length && unresolved(retry) <= unresolved(probe)) {
-              compiled = retryCompiled;
-              probe = retry;
+            const retry = analyzeAs3Program(retrySources, wanted);
+            if (retry.errors.length <= analysis.errors.length && retry.unresolved.length <= analysis.unresolved.length) {
+              analysis = retry;
               dependencies = withDependencies.used.length ? withDependencies.used : dependencyAbc.payloads ? [`${dependencyAbc.payloads} DoABC payload(s)`] : [];
             }
           }
         }
-        const displayClasses = probe.classes
-          .filter((c) => { const d = probe.getDefinition(c.qualifiedName); return typeof d === 'function' && d.prototype instanceof DisplayObject; })
-          .map((c) => c.qualifiedName);
-        setCode({ status: 'ready', compiled, classes: probe.classes, displayClasses, dependencies, linkErrors: probe.errors, abc: abcSummary });
+        setCode({ status: 'ready', compiled: analysis.compiled, classes: analysis.classes, displayClasses: analysis.displayClasses, dependencies, abc: abcSummary });
       })
       .catch((e) => {
         if (!cancelled) setCode({ status: 'failed', error: `Could not read the code files: ${e instanceof Error ? e.message : String(e)}` });
@@ -203,6 +207,7 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
   useEffect(() => {
     if (code.status !== 'ready') return;
     executionFaultRef.current = false;
+    setLinkErrors([]);
     pendingLogs.current = [];
     setLogs([]);
     dbg.clearStack();
@@ -215,7 +220,8 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
       assets: cache,
       audio: gatedAudio,
       debugger: dbg,
-      program: code.compiled.modules.length ? () => linkProgram(code.compiled) : null,
+      // The one link of the program: module bodies (static initializers) run here.
+      program: code.compiled.modules.length ? () => { const linked = linkProgram(code.compiled); setLinkErrors(linked.errors); return linked; } : null,
       documentClass: docClass,
       dependencyFiles: uploadedFiles,
       externalSwfs: externalSwfNames ? externalSwfNames.split('\n') : [],
@@ -224,6 +230,7 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
         if (entry.level === 'error') console.error('[game]', entry.message, entry.detail ?? '');
       },
     });
+    pendingLogs.current.push({ level: 'info', message: runtimeMessage, time: 0 });
     if (code.dependencies.length) {
       pendingLogs.current.push({
         level: 'info',
@@ -237,7 +244,7 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
     player.start();
     canvasRef.current?.focus({ preventScroll: true });
     return () => { player.dispose(); if (playerRef.current === player) playerRef.current = null; };
-  }, [doc, cache, code, docClass, session, uploadedFiles, externalSwfNames]);
+  }, [doc, cache, code, docClass, session, uploadedFiles, externalSwfNames, runtimeMessage]);
 
   // ---- fit the canvas to the panel
   useEffect(() => {
@@ -322,6 +329,7 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
   }, []);
   const onKey = (down: boolean) => (e: React.KeyboardEvent) => {
     if (e.metaKey) return;
+    e.stopPropagation();   // the game's key: page-level shortcuts (the Workbench's) never see it
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab', 'Backspace'].includes(e.key)) e.preventDefault();
     const payload = { keyCode: e.keyCode, key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, location: e.location };
     if (down) playerRef.current?.keyDown(payload); else playerRef.current?.keyUp(payload);
@@ -347,7 +355,11 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
   const unlinked = linkage.filter((l) => !l.linked);
   const compileErrors = code.status === 'ready' ? code.compiled.modules.filter((m) => m.error) : [];
   const forgeProblems: LogEntry[] = code.status === 'ready' ? [
-    ...code.linkErrors.map((issue) => ({
+    ...(code.abc?.unreadable ?? []).map((u) => ({
+      level: 'error' as const, kind: 'problem' as const, source: 'forge' as const,
+      context: `DoABC payload ${u.index}`, message: `DoABC payload ${u.index} (${u.bytes} bytes) could not be read, so its code is missing: ${u.message}`, time: 0,
+    })),
+    ...linkErrors.map((issue) => ({
       level: 'error' as const, kind: 'problem' as const, source: 'forge' as const,
       context: issue.path, message: `${issue.path}: ${issue.message}`, time: 0,
     })),
@@ -410,7 +422,7 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
         </div>
       )}
 
-      <MissingDependenciesBanner list={dependencies} />
+      <MissingDependenciesBanner list={dependencies} adder={dependencyAdder} />
 
       {dbgState.paused && (
         <div className="flex shrink-0 items-center gap-2 border-b border-amber-900/40 bg-amber-950/30 px-3 py-1.5 text-xs text-amber-200">
@@ -473,6 +485,9 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
                     {code.abc.refusals > 0 && (
                       <span className="text-amber-300"> {code.abc.refusals} method body(ies) could not be lifted — they throw where they are called.</span>
                     )}
+                    {code.abc.unreadable.length > 0 && (
+                      <span className="text-rose-300"> {code.abc.unreadable.length} DoABC payload(s) could not be read, so their code is missing: {code.abc.unreadable.map((u) => `#${u.index} (${u.message})`).join('; ')}.</span>
+                    )}
                     {code.abc.unsupported.length > 0 && (
                       <span className="text-amber-300"> {code.abc.unsupported.length} engine API(s) missing: {code.abc.unsupported.slice(0, 4).join(', ')}{code.abc.unsupported.length > 4 ? ', …' : ''} (a call throws).</span>
                     )}
@@ -508,7 +523,7 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
                     ))}
                   </tbody>
                 </table>
-                <div className="mt-3"><MissingDependenciesPanel list={dependencies} /></div>
+                <div className="mt-3"><MissingDependenciesPanel list={dependencies} adder={dependencyAdder} /></div>
               </div>
             </div>
           )}

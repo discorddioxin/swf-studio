@@ -34,14 +34,15 @@ describe('abcSources', () => {
     expect(linkProgram(compileSources(result.sources)).errors).toEqual([]);
   });
 
-  it('ignores a payload that is not an ABC file instead of taking the rest down', () => {
+  it('reports a payload that is not an ABC file instead of taking the rest down', () => {
     const result = abcSources([new Uint8Array(8), deckAbcPayload()]);
     expect(result.payloads).toBe(1);
     expect(result.sources.map((f) => f.path)).toContain('deck.ts');
+    expect(result.unreadable).toEqual([{ index: 0, bytes: 8, message: expect.stringMatching(/no ABC file in a 8-byte DoABC payload/) }]);
   });
 
   it('reports nothing for a movie with no AVM2 code', () => {
     const result = abcSources([]);
-    expect(result).toMatchObject({ payloads: 0, classes: [], sources: [], refusals: [] });
+    expect(result).toMatchObject({ payloads: 0, classes: [], sources: [], refusals: [], unreadable: [] });
   });
 });

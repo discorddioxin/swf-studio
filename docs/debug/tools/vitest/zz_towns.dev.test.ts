@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { describe, it } from 'vitest';
 import { abcClassNames, parseAbc, type AbcFile } from '@/../transcom/decompiler/swf/abc';
 import { transpileAbc } from '@/../transcom/transpiler/avm2';
+import { corpusPath } from '@/testing/corpus';
 
 function payloads(file: string): Uint8Array[] {
   const raw = readFileSync(file);
@@ -35,11 +36,11 @@ function abcOf(p: Uint8Array): AbcFile {
 }
 
 /** SWF_SHOW=<substring>, SWF_FILE=<path> */
-const CORPUS_OK = existsSync(process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf');
+const CORPUS_OK = existsSync(process.env.SWF_FILE ?? corpusPath('pinball-swfs/game.swf'));
 
 describe.skipIf(!CORPUS_OK)('corpus harness', () => {
   it('prints one emitted module from any movie', () => {
-  const file = process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/towns2-swfs/towns2.swf';
+  const file = process.env.SWF_FILE ?? corpusPath('towns2-swfs/towns2.swf');
   const page = process.env.SWF_SHOW ?? 'GSIGateway';
   const result = transpileAbc({ abc: abcOf(payloads(file)[0]), projectClasses: new Set(abcClassNames(abcOf(payloads(file)[0]))) });
   const hit = result.files.filter((f) => f.path.includes(page));

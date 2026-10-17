@@ -44,9 +44,9 @@ mygame/external/scene/scene.xml, …               loadClip("scene.swf", _root.v
 mygame/external/chat/chat.xml, …                 loadMovie("../sharedsource/chat/chat.swf")
 ```
 
-The bundled sample is a game set under `game-files/games/`; anything specific to
-it (offline network, boot scripts, URL policy) lives in its adapter in
-`src/adapters/`, never here.
+The sample game is one of the uploaded game sets (the test corpus, see
+`src/testing/corpusPaths.ts`); anything specific to it (offline network, boot
+scripts, URL policy) lives in its adapter in `src/adapters/`, never here.
 
 - `createExternalResolver()` matches the file name of the requested URL (path and query ignored) to an export.
 - The export's scripts are transpiled with as2ts and linked the first time the game asks for them, after the player's runtime reset. Class bodies run then, like a SWF's class DoInitActions when it loads.

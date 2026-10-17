@@ -1,13 +1,13 @@
-// TrueType fonts built from the bundled SWFs' own DefineFont2/3 tags, read back
+// TrueType fonts built from the sample SWFs' own DefineFont2/3 tags, read back
 // with an independent reader: table checksums, glyph count, loca, the cmap from
 // the SWF code table and every glyph point against the SWF outline.
 // (The same fonts pass OTS, the sanitizer Chrome and Firefox apply to web fonts;
 // see docs/debug/tools/vitest/zz_fonts.dev.test.ts.)
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 import { parseSwfBinary } from './swf/binary';
 import { buildTrueType } from './swfFont';
-import { bundledSwfFile, bundledSwfNames } from './__tests__/bundledSet';
+import { bundledSwfFile, bundledSwfNames, describeSample } from './__tests__/bundledSet';
 import type { SwfCharacter } from '../types';
 
 function readFont(bytes: Uint8Array) {
@@ -63,8 +63,8 @@ function readFont(bytes: Uint8Array) {
   return { tags, tables, sum, numGlyphs, loca, cmap, glyph, whole: sum(0, bytes.length) };
 }
 
-describe('fonts built from the SWF itself', () => {
-  it('every embedded font of the bundled set reads back as a valid TrueType font with the SWF glyphs', async () => {
+describeSample('fonts built from the SWF itself', () => {
+  it('every embedded font of the sample set reads back as a valid TrueType font with the SWF glyphs', async () => {
     let checked = 0;
     for (const name of bundledSwfNames()) {
       const b = readFileSync(bundledSwfFile(name));

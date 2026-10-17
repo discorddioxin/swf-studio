@@ -1,17 +1,29 @@
 // @vitest-environment jsdom
-// Round-trip oracle: FFDec XML → xml2swf → binary bytes → parseSwfBinary,
-// then structurally compare with parseSwfXml for the same movie.
+// The SWF reader, the FFDec-XML reader and the SWF writer (tools/xml2swf)
+// checked against each other: FFDec XML → xml2swf → bytes → parseSwfBinary must
+// be the document parseSwfXml reads from the XML.
+//
+// Always: on the FFDec-format test movie (src/testing/movies.ts). With an FFDec
+// export folder (SWF_FFDEC, see src/testing/corpusPaths.ts): on every exported
+// movie, and the corpus SWF it was exported from against its XML. FFDec output is
+// a test oracle only; the app never reads it.
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { parseSwfXml } from '../parser';
 import { decodeDoInitAction, parseSwfBinary } from './binary';
 import { isLikelyActionStream } from './bitio';
 import { xmlToSwf } from '../../../tools/xml2swf/xml2swf.mjs';
-import { bundledExportedNames, bundledExternalDir, bundledSwfFile, bundledSwfNames } from '../__tests__/bundledSet';
+import { bundledSwfFile, bundledSwfNames, describeSample } from '../__tests__/bundledSet';
+import { corpusSwfs, FFDEC_EXPORT_HOWTO, ffdecExportNames, ffdecExports } from '@/testing/corpus';
+import { FFDEC_SAMPLE_XML, ffdecSampleSwf } from '@/testing/movies';
 
-const EXTERNAL = bundledExternalDir();
-const EXPORTS = bundledExportedNames();
+const EXTERNAL = ffdecExports() ?? '';
+const EXPORTS = ffdecExportNames();
+const ORACLE = EXTERNAL ? `FFDec exports in ${EXTERNAL}` : `FFDec exports (skipped: none — ${FFDEC_EXPORT_HOWTO})`;
+/** The corpus SWF an export was made from, by file name. */
+const corpusSwfOf = (name: string) => corpusSwfs().find((m) => m.name === `${name}.swf`)?.path;
+const buffer = (b: Uint8Array) => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
 
 /** deep-normalize: drop undefined, sort keys, unify null-ish matrices */
 function norm(v: unknown): unknown {
@@ -73,9 +85,11 @@ function expectSame(received: string, expected: string, ctx: string) {
 }
 
 function compareDocs(xmlDoc: any, binDoc: any, name: string) {
-  // header (compression differs by design: the writer always emits FWS)
-  const hdr = (h: any) => stable({ ...h, fileName: '', compression: '' });
+  // header (compression differs by design: the writer always emits FWS; source
+  // names the form that was read, so it differs by definition)
+  const hdr = (h: any) => stable({ ...h, fileName: '', compression: '', source: '' });
   expect(hdr(binDoc.header), `${name} header`).toBe(hdr(xmlDoc.header));
+  expect([binDoc.header.source, xmlDoc.header.source], `${name} source`).toEqual(['swf', 'xml']);
   expect(binDoc.header.fileName, `${name} fileName`).toBe(xmlDoc.header.fileName);
 
   // timelines (keyed — Map insertion order may differ)
@@ -159,46 +173,36 @@ describe('DoInitAction payload decoding', () => {
   });
 });
 
-// Provenance note. These six `.swf` files are byte-for-byte `xmlToSwf(<name>.xml)`
-// — they are *generated* fixtures, not the bytes FFDec read, so a field the writer
-// and the reader both get wrong stays invisible here (which is exactly how the
-// Name/ClipDepth order went unnoticed: the reader and the writer swapped it
-// together). The uncompressed originals that ship alongside them are
-// `bassken_game4.21.swf` and `OmnitureActionSource.swf`; those are checked against
-// real byte-level expectations in `bundled originals` below. Keep both kinds of
-// check: this one pins reader↔FFDec-XML agreement, the other pins raw layout.
-describe.each(EXPORTS)('bundled bytes ≡ xml: %s', (name) => {
-  const xmlPath = resolve(EXTERNAL, name, `${name}.xml`);
-  const xmlText = readFileSync(xmlPath, 'utf8');
+describe('FFDec-format test movie: xml ≡ xmlToSwf → parseSwfBinary', () => {
+  it('reads the same document from both forms', async () => {
+    const xmlDoc = parseSwfXml(FFDEC_SAMPLE_XML, { fileName: 'sample.xml' });
+    const { doc: binDoc, files } = await parseSwfBinary(buffer(ffdecSampleSwf()), 'sample.xml');
+    compareDocs(xmlDoc, binDoc, 'sample');
+    expect(binDoc.warnings).toEqual([]);
+    expect(files.filter((f) => f.targetSpriteId != null).map((f) => f.targetSpriteId)).toEqual([7]);
+  });
 
-  it('parseSwfBinary(bundled) ≡ parseSwfXml', async () => {
-    const xmlDoc = parseSwfXml(xmlText, { fileName: `${name}.xml` });
-    const bytes = readFileSync(bundledSwfFile(name));
-    const { doc: binDoc } = await parseSwfBinary(
-      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
-      `${name}.xml`,
-    );
-    compareDocs(xmlDoc, binDoc, name);
-  }, 60000);
+  it('keeps Name before ClipDepth in PlaceObject2', async () => {
+    const { doc } = await parseSwfBinary(buffer(ffdecSampleSwf()), 'sample.swf');
+    expect(doc.timelines.get('sprite:7')?.frames[0]?.display).toEqual([expect.objectContaining({ characterId: 42, depth: 1, name: 'mask', clipDepth: 3 })]);
+  });
 });
 
-describe('bundled originals (not regenerated)', () => {
-  const ORIGINALS = bundledSwfNames().filter((n) => {
-    const bytes = readFileSync(bundledSwfFile(n));
-    return bytes[0] === 0x43; // CWS — the writer only ever emits FWS
+describeSample('sample originals (not regenerated)', () => {
+  // Six SWFs of the sample are themselves `xmlToSwf(<FFDec export>)`, so a field
+  // the writer and the reader both get wrong cancels out there (which is how the
+  // Name/ClipDepth order once went unnoticed). These two were compiled by Flash.
+  const ORIGINALS = () => bundledSwfNames().filter((n) => readFileSync(bundledSwfFile(n))[0] === 0x43); // CWS: the writer only emits FWS
+
+  it('finds the compressed originals in the sample set', () => {
+    expect(ORIGINALS().length).toBeGreaterThan(0);
   });
 
-  it('finds the uncompressed originals in the bundled set', () => {
-    expect(ORIGINALS.length).toBeGreaterThan(0);
-  });
-
-  it.each(ORIGINALS)('%s decodes with no structural report', async (name) => {
-    const bytes = readFileSync(bundledSwfFile(name));
-    const { doc } = await parseSwfBinary(
-      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
-      `${name}.swf`,
-    );
-    expect(doc.warnings.filter((w) => /left after the last field|records end at byte/.test(w))).toEqual([]);
+  it('decode with no structural report', async () => {
+    for (const name of ORIGINALS()) {
+      const { doc } = await parseSwfBinary(buffer(readFileSync(bundledSwfFile(name))), `${name}.swf`);
+      expect(doc.warnings.filter((w) => /left after the last field|records end at byte/.test(w)), name).toEqual([]);
+    }
   });
 
   it('reads placed-record names and clip depths from real bytes', async () => {
@@ -206,11 +210,7 @@ describe('bundled originals (not regenerated)', () => {
     // both: `66 02 00 0a 00 00 | "mask" | 06 00` — Name then ClipDepth, consuming
     // the 13-byte tag exactly. Reading ClipDepth first yields clip depth 24941
     // (greater than every layer in the movie) and a name of "sk".
-    const bytes = readFileSync(bundledSwfFile('bassken_game4.21'));
-    const { doc } = await parseSwfBinary(
-      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
-      'bassken_game4.21.swf',
-    );
+    const { doc } = await parseSwfBinary(buffer(readFileSync(bundledSwfFile('bassken_game4.21'))), 'bassken_game4.21.swf');
     const display = doc.timelines.get('sprite:14')?.frames[0]?.display ?? [];
     const mask = display.find((d) => d.name === 'mask');
     expect(mask).toMatchObject({ characterId: 10, depth: 2, clipDepth: 6 });
@@ -220,44 +220,52 @@ describe('bundled originals (not regenerated)', () => {
   });
 });
 
-describe.each(EXPORTS)('swf round-trip: %s', (name) => {
-  const xmlPath = resolve(EXTERNAL, name, `${name}.xml`);
-  const xmlText = readFileSync(xmlPath, 'utf8');
+describe.skipIf(!EXTERNAL)(ORACLE, () => {
+  it('holds at least one export', () => {
+    expect(EXPORTS.length).toBeGreaterThan(0);
+  });
 
-  it('parseSwfXml ≡ xmlToSwf → parseSwfBinary', async () => {
-    const xmlDoc = parseSwfXml(xmlText, { fileName: `${name}.xml` });
-    const bytes = xmlToSwf(xmlText);
-    expect(bytes[0]).toBe(0x46); // FWS
-    expect(new DataView(bytes.buffer, bytes.byteOffset).getUint32(4, true)).toBe(bytes.length);
+  describe.each(EXPORTS)('%s', (name) => {
+    const xmlText = () => readFileSync(join(EXTERNAL, name, `${name}.xml`), 'utf8');
 
-    const { doc: binDoc, files } = await parseSwfBinary(
-      bytes.slice().buffer as ArrayBuffer,
-      `${name}.xml`,
-    );
-    compareDocs(xmlDoc, binDoc, name);
+    it.skipIf(!corpusSwfOf(name))('parseSwfBinary(corpus SWF) ≡ parseSwfXml(its export)', async () => {
+      const xmlDoc = parseSwfXml(xmlText(), { fileName: `${name}.xml` });
+      const { doc: binDoc } = await parseSwfBinary(buffer(readFileSync(corpusSwfOf(name)!)), `${name}.xml`);
+      compareDocs(xmlDoc, binDoc, name);
+    }, 60000);
 
-    // DoInitAction tags keep the export's tag order — the player runs them in
-    // that order — and the synthesized source files carry the same order.
-    const initTags = (document: typeof binDoc) => [...document.timelines.values()]
-      .flatMap((tl) => tl.frames.flatMap((frame) => frame.events))
-      .filter((event) => event.tagType === 'DoInitActionTag');
-    const binInit = initTags(binDoc);
-    expect(binInit.map((event) => event.targetSpriteId), `${name} init order`).toEqual(initTags(xmlDoc).map((event) => event.targetSpriteId));
-    for (let i = 1; i < binInit.length; i++) {
-      expect(binInit[i].tagOrder!, `${name} init tag order`).toBeGreaterThan(binInit[i - 1].tagOrder!);
-    }
-    expect(files.filter((f) => f.targetSpriteId != null).map((f) => f.targetSpriteId), `${name} init sources`)
-      .toEqual(binInit.map((event) => event.targetSpriteId));
+    it('parseSwfXml ≡ xmlToSwf → parseSwfBinary', async () => {
+      const text = xmlText();
+      const xmlDoc = parseSwfXml(text, { fileName: `${name}.xml` });
+      const bytes = Uint8Array.from(xmlToSwf(text));
+      expect(bytes[0]).toBe(0x46); // FWS
+      expect(new DataView(bytes.buffer, bytes.byteOffset).getUint32(4, true)).toBe(bytes.length);
 
-    // asset file parity by category + id (ext may differ: jpeg3 → png in FFDec)
-    for (const category of ['shapes', 'images', 'texts']) {
-      const exported = readdirIds(resolve(EXTERNAL, name, category)).sort((a, b) => a - b);
-      expect(fileIds(files, category), `${name} ${category} ids`).toEqual(exported);
-    }
-  }, 60000);
+      const { doc: binDoc, files } = await parseSwfBinary(buffer(bytes), `${name}.xml`);
+      compareDocs(xmlDoc, binDoc, name);
+
+      // DoInitAction tags keep the export's tag order — the player runs them in
+      // that order — and the synthesized source files carry the same order.
+      const initTags = (document: typeof binDoc) => [...document.timelines.values()]
+        .flatMap((tl) => tl.frames.flatMap((frame) => frame.events))
+        .filter((event) => event.tagType === 'DoInitActionTag');
+      const binInit = initTags(binDoc);
+      expect(binInit.map((event) => event.targetSpriteId), `${name} init order`).toEqual(initTags(xmlDoc).map((event) => event.targetSpriteId));
+      for (let i = 1; i < binInit.length; i++) {
+        expect(binInit[i].tagOrder!, `${name} init tag order`).toBeGreaterThan(binInit[i - 1].tagOrder!);
+      }
+      expect(files.filter((f) => f.targetSpriteId != null).map((f) => f.targetSpriteId), `${name} init sources`)
+        .toEqual(binInit.map((event) => event.targetSpriteId));
+
+      // asset file parity by category + id (ext may differ: jpeg3 → png in FFDec)
+      for (const category of ['shapes', 'images', 'texts']) {
+        const exported = readdirIds(resolve(EXTERNAL, name, category)).sort((a, b) => a - b);
+        expect(fileIds(files, category), `${name} ${category} ids`).toEqual(exported);
+      }
+    }, 60000);
+  });
 });
 
-import { readdirSync } from 'node:fs';
 /** ids of files committed in the FFDec export directory */
 function readdirIds(dir: string): number[] {
   try {

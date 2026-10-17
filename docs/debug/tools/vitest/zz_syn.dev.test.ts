@@ -4,6 +4,7 @@ import { it } from 'vitest';
 import { abcClassNames, parseAbc, type AbcFile } from '@/../transcom/decompiler/swf/abc';
 import { transpileAbc } from '@/../transcom/transpiler/avm2';
 import { compileSources, linkProgram } from '@/../src/engine/flash/loader';
+import { corpusPath } from '@/testing/corpus';
 
 function payloads(file: string): Uint8Array[] {
   const raw = readFileSync(file);
@@ -34,7 +35,7 @@ function abcOf(p: Uint8Array): AbcFile {
   throw last;
 }
 
-const FILE = process.env.PINBALL ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf';
+const FILE = process.env.PINBALL ?? corpusPath('pinball-swfs/game.swf');
 
 it('emitted pinball project: syntax + link detail', () => {
   const abc = abcOf(payloads(FILE)[0]);

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { it } from 'vitest';
 import { disassemble, parseAbc, type AbcFile } from '@/../transcom/decompiler/swf/abc';
+import { corpusPath } from '@/testing/corpus';
 
 function payloads(file: string): Uint8Array[] {
   const raw = readFileSync(file);
@@ -33,7 +34,7 @@ function abcOf(p: Uint8Array): AbcFile {
 }
 
 it('dumps one transition init body', () => {
-  const abc = abcOf(payloads('/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf')[0]);
+  const abc = abcOf(payloads(corpusPath('pinball-swfs/game.swf'))[0]);
   for (const cls of abc.classes) {
     if (!/FadeTransitionOut$/.test(cls.instance.name)) continue;
     console.log(`class ${cls.instance.name} extends ${cls.instance.superName}`);

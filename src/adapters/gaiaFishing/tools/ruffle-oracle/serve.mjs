@@ -8,11 +8,12 @@ import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gsiStubFetchText } from '../../gsi.ts';
-import { SAMPLE_MAIN, SAMPLE_ROOT, SAMPLE_SWF_DIR } from '../../sample.ts';
+import { SAMPLE_MAIN, sampleSwfDir } from '../../sample.ts';
+import { ffdecExports } from '../../../../testing/corpusPaths.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../../../../..'); // repo root (src/adapters/<game>/tools/ruffle-oracle)
-const SWFS = path.join(ROOT, SAMPLE_SWF_DIR);
+const SWFS = sampleSwfDir() ?? path.join(ROOT, 'no-corpus');
 const RUFFLE = path.join(HERE, 'node_modules/@ruffle-rs/ruffle');
 const PORT = Number(process.argv[process.argv.indexOf('--port') + 1]) || 8123;
 
@@ -64,7 +65,7 @@ const server = createServer(async (req, res) => {
   }
   if (p.startsWith('/ruffle/')) return file(res, path.join(RUFFLE, p.slice('/ruffle/'.length)));
   if (p.startsWith('/swfs/')) return file(res, path.join(SWFS, p.slice('/swfs/'.length)));
-  if (p.startsWith('/external/')) return file(res, path.join(ROOT, SAMPLE_ROOT, p.slice(1)));
+  if (p.startsWith('/external/')) return file(res, path.join(ffdecExports() ?? path.join(ROOT, 'no-ffdec-exports'), p.slice('/external/'.length)));
   return file(res, path.join(HERE, p.slice(1)));
 });
 

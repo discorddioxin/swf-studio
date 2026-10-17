@@ -5,35 +5,38 @@
 
 import type {
   ColorTransform, DisplayItem, EventKind, Frame, FrameEvent, Matrix, PlaceOp,
-  GlyphPoint, Rect, SwfCharacter, SwfDocument, SwfFontOutline, SwfHeader, TextRecord, Timeline,
+  BlendMode, ButtonSound, FilterPlacement, GlyphPoint, Rect, SoundInfo, SwfCharacter, SwfFilter, SwfDocument, SwfFontOutline, SwfHeader, TextRecord, Timeline,
 } from '../../../src/types';
+import { toBlendMode } from '../../../src/types';
 import { classify, kindOfTag, isSpecialTag, actionFileCandidates } from '../parser';
 import { BitReader, avm1ActionSource, isLikelyActionStream, latin1 } from './bitio';
 import { buildTrueType } from '../../../src/lib/swfFont';
 import { decodeAdpcm, encodeWav } from '../../../src/engine/as2/adpcm';
 import { shapeToSvg, type SvgBitmapInfo, type SvgFillStyle, type SvgLineStyle, type SvgShapeRecord } from './shapeSvg';
 
-/** SWF tag codes → JPEXS FFDec type names (the XML "type" attribute). */
+/** SWF tag codes → JPEXS FFDec type names (the XML "type" attribute; FFDec's
+ *  tag class names, e.g. `tags/PlaceObjectTag.java` ID 4). */
 export const TAG_NAMES: Record<number, string> = {
-  0: 'EndTag', 1: 'ShowFrameTag', 2: 'DefineShapeTag', 5: 'RemoveObjectTag',
+  0: 'EndTag', 1: 'ShowFrameTag', 2: 'DefineShapeTag', 4: 'PlaceObjectTag', 5: 'RemoveObjectTag',
   6: 'DefineBitsTag', 7: 'DefineButtonTag', 8: 'JPEGTablesTag', 9: 'SetBackgroundColorTag',
-  10: 'DefineFontTag', 11: 'DefineTextTag', 12: 'DoActionTag', 14: 'DefineSoundTag',
-  15: 'StartSoundTag', 17: 'DefineButtonCxformTag', 18: 'SoundStreamHeadTag',
+  10: 'DefineFontTag', 11: 'DefineTextTag', 12: 'DoActionTag', 13: 'DefineFontInfoTag', 14: 'DefineSoundTag',
+  15: 'StartSoundTag', 17: 'DefineButtonSoundTag', 18: 'SoundStreamHeadTag',
   19: 'SoundStreamBlockTag', 20: 'DefineBitsLosslessTag', 21: 'DefineBitsJPEG2Tag',
   22: 'DefineShape2Tag', 23: 'DefineButtonCxformTag', 24: 'ProtectTag',
   26: 'PlaceObject2Tag', 28: 'RemoveObject2Tag', 32: 'DefineShape3Tag',
   33: 'DefineText2Tag', 34: 'DefineButton2Tag', 35: 'DefineBitsJPEG3Tag',
   36: 'DefineBitsLossless2Tag', 37: 'DefineEditTextTag', 39: 'DefineSpriteTag',
-  43: 'FrameLabelTag', 45: 'SoundStreamHead2Tag', 46: 'DefineMorphShapeTag',
+  41: 'ProductInfoTag', 43: 'FrameLabelTag', 45: 'SoundStreamHead2Tag', 46: 'DefineMorphShapeTag',
   48: 'DefineFont2Tag', 56: 'ExportAssetsTag', 57: 'ImportAssetsTag',
   59: 'DoInitActionTag', 60: 'DefineVideoStreamTag', 61: 'VideoFrameTag',
-  64: 'EnableDebugger2Tag', 65: 'LimitDataTag', 69: 'FileAttributesTag',
-  70: 'PlaceObject3Tag', 73: 'DefineFontAlignZonesTag', 74: 'CSMTextSettingsTag',
+  62: 'DefineFontInfo2Tag', 63: 'DebugIDTag', 64: 'EnableDebugger2Tag', 65: 'LimitDataTag',
+  66: 'SetTabIndexTag', 69: 'FileAttributesTag', 70: 'PlaceObject3Tag', 71: 'ImportAssets2Tag',
+  72: 'DoABCTag', 73: 'DefineFontAlignZonesTag', 74: 'CSMTextSettingsTag',
   75: 'DefineFont3Tag', 76: 'SymbolClassTag', 77: 'MetadataTag',
-  78: 'EnableDebuggerTag', 82: 'DoABCTag', 83: 'DefineShape4Tag',
+  78: 'EnableDebuggerTag', 82: 'DoABC2Tag', 83: 'DefineShape4Tag',
   84: 'DefineMorphShape2Tag', 86: 'DefineSceneAndFrameLabelDataTag',
   87: 'DefineBinaryDataTag', 88: 'DefineFontNameTag', 89: 'StartSound2Tag',
-  90: 'DefineBitsJPEG4Tag',
+  90: 'DefineBitsJPEG4Tag', 91: 'DefineFont4Tag',
 };
 
 export interface SwfFile {
@@ -456,14 +459,20 @@ async function decodeLossless(data: Uint8Array, is2: boolean): Promise<{ id: num
   const raw = await inflate(compressed);
   const rgba = new Uint8Array(w * h * 4);
   if (format === 3) {
+    // COLORMAPDATA: ctSize + 1 colours — RGB (3 bytes) in DefineBitsLossless, RGBA
+    // (4 bytes) in DefineBitsLossless2 — then one index byte per pixel, each row
+    // padded to 32 bits. An index with no colour shows transparent (v2) / black (v1).
+    const entry = is2 ? 4 : 3;
+    const colours = ctSize + 1;
     const stride = (w + 3) & ~3;
-    const off = (ctSize + 1) * 4;
+    const off = colours * entry;
     for (let y = 0; y < h; y++) {
       const row = off + y * stride;
       for (let x = 0; x < w; x++) {
         const idx = raw[row + x];
-        const p = idx * 4;
         const di = (y * w + x) * 4;
+        if (idx >= colours) { rgba[di + 3] = is2 ? 0 : 255; continue; }
+        const p = idx * entry;
         rgba[di] = raw[p];
         rgba[di + 1] = raw[p + 1];
         rgba[di + 2] = raw[p + 2];
@@ -471,11 +480,13 @@ async function decodeLossless(data: Uint8Array, is2: boolean): Promise<{ id: num
       }
     }
   } else if (format === 4) {
+    // PIX15: UB[1] reserved, UB[5] red, green, blue — a big-endian 16-bit value;
+    // rows padded to 32 bits.
     const stride = (w * 2 + 3) & ~3;
     for (let y = 0; y < h; y++) {
       const row = y * stride;
       for (let x = 0; x < w; x++) {
-        const v = raw[row + x * 2] | (raw[row + x * 2 + 1] << 8);
+        const v = (raw[row + x * 2] << 8) | raw[row + x * 2 + 1];
         const di = (y * w + x) * 4;
         rgba[di] = Math.round(((v >> 10) & 31) * 255 / 31);
         rgba[di + 1] = Math.round(((v >> 5) & 31) * 255 / 31);
@@ -801,7 +812,7 @@ function parseDefineText(tag: RawTag, is2: boolean): {
   return { id, bounds, matrix, records };
 }
 
-function parseEditText(tag: RawTag): {
+function parseEditText(tag: RawTag, version = 8): {
   id: number; charId: number; bounds: Rect; attrs: Record<string, string>; initialText: string;
 } {
   // DefineEditText layout (SWF spec / Ruffle read_define_edit_text):
@@ -851,7 +862,14 @@ function parseEditText(tag: RawTag): {
   }
   const variableName = br.str();
   let initialText = '';
-  if (hasText) initialText = latin1(br.bytes(br.remaining));
+  // InitialText is a STRING: it ends at its NUL (which is not part of the text),
+  // and from SWF 6 on it is UTF-8 — latin-1 before
+  if (hasText) {
+    const rest = br.bytes(br.remaining);
+    const end = rest.indexOf(0);
+    const bytes = end < 0 ? rest : rest.subarray(0, end);
+    initialText = version >= 6 ? new TextDecoder('utf-8').decode(bytes) : latin1(bytes);
+  }
 
   const attrs: Record<string, string> = {
     characterID: String(id),
@@ -890,6 +908,7 @@ interface Place2Info {
   depth: number; hasChar: boolean; move: boolean; characterId: number;
   matrix?: Matrix; ct?: ColorTransform; ratio?: number; name?: string;
   clipDepth?: number; hasFilters: boolean; clipActions?: ClipActionRec[];
+  filters?: SwfFilter[]; blendMode?: BlendMode;
   /** bytes left in the tag body after every field — 0 for a well-formed record.
    *  Anything else means a field was misread (wrong size/order/flag handling). */
   leftover: number;
@@ -925,6 +944,17 @@ const CLIP_EVENT_BITS: [number, string, 'clip' | 'button'][] = [
   [16, 'dragOut', 'button'],
   [18, 'construct', 'clip'],
 ];
+
+/** PlaceObject (tag 4): CharacterId u16, Depth u16, MATRIX, then a CXFORM (no alpha) if bytes remain. */
+function parsePlace1(data: Uint8Array): Place2Info {
+  const br = new BitReader(data);
+  const characterId = br.u16();
+  const depth = br.u16();
+  const matrix = readMatrix(br);
+  const ct = br.remaining > 0 ? normalizeCt(readCxform(br, false)) : undefined;
+  br.align();
+  return { depth, characterId, hasChar: true, move: false, matrix, ct, hasFilters: false, leftover: br.remaining };
+}
 
 function parsePlace2(
   data: Uint8Array, isPlace3 = false, version = 8,
@@ -970,8 +1000,8 @@ function parsePlace2(
     const v = br.u16();
     if (v > 0) clipDepth = v;
   }
-  if (hasFilterList) skipFilterList(br, `PlaceObject${isPlace3 ? 3 : 2} depth ${depth}`);
-  if (hasBlendMode) br.u8();
+  const filters = hasFilterList ? readFilterList(br, `PlaceObject${isPlace3 ? 3 : 2} depth ${depth}`) : undefined;
+  const blendMode = hasBlendMode ? readBlendMode(br, warn, `PlaceObject3 depth ${depth}`) : undefined;
   if (hasCacheAsBitmap) br.u8();
   if (hasVisibility) br.u8();
   if (hasBackgroundColor) br.skip(4); // RGBA — not modelled
@@ -1017,7 +1047,7 @@ function parsePlace2(
   return {
     depth, hasChar, move, characterId, matrix,
     ct: ct ? normalizeCt(ct) : undefined, ratio, name, clipDepth, hasFilters: hasFilterList, clipActions,
-    leftover,
+    filters, blendMode, leftover,
   };
 }
 
@@ -1026,12 +1056,47 @@ function parsePlace2(
 interface ButtonRec {
   up: boolean; over: boolean; down: boolean; hit: boolean;
   characterId: number; placeDepth: number; matrix: Matrix; ct?: ColorTransform;
-  hasFilters: boolean;
+  hasFilters: boolean; filters?: SwfFilter[]; blendMode?: BlendMode;
 }
 
 interface ButtonCondAction {
   events: string[];
   actionBytes: Uint8Array;
+}
+
+/**
+ * FileAttributes as the XML parser summarizes FFDec's export of it: the fields
+ * in FFDec's (alphabetical) attribute order, false ones left out, at most four.
+ */
+function fileAttributesDetail(data: Uint8Array): string {
+  const f = data[0] ?? 0;
+  const reservedB = ((data[1] ?? 0) << 16) | ((data[2] ?? 0) << 8) | (data[3] ?? 0);
+  const fields: [string, boolean | number][] = [
+    ['actionScript3', !!(f & 0x08)], ['hasMetadata', !!(f & 0x10)], ['noCrossDomainCache', !!(f & 0x04)],
+    ['reservedA', !!(f & 0x80)], ['reservedB', reservedB], ['swfRelativeUrls', !!(f & 0x02)],
+    ['useDirectBlit', !!(f & 0x40)], ['useGPU', !!(f & 0x20)], ['useNetwork', !!(f & 0x01)],
+  ];
+  return fields.filter(([, v]) => v !== false).slice(0, 4).map(([k, v]) => `${k}=${v}`).join(' ');
+}
+
+/**
+ * SOUNDINFO (SWF 19): a flags byte — reserved(2) SyncStop SyncNoMultiple HasEnvelope
+ * HasLoops HasOutPoint HasInPoint — then InPoint u32, OutPoint u32, LoopCount u16 and
+ * EnvPoints u8 followed by that many SOUNDENVELOPE records (Pos44 u32, Left u16, Right u16),
+ * each only when its flag is set.
+ */
+export function readSoundInfo(br: BitReader): SoundInfo {
+  const flags = br.u8();
+  const info: SoundInfo = { syncStop: !!(flags & 0x20), syncNoMultiple: !!(flags & 0x10) };
+  if (flags & 0x01) info.inPoint = br.u32();
+  if (flags & 0x02) info.outPoint = br.u32();
+  if (flags & 0x04) info.loopCount = br.u16();
+  if (flags & 0x08) {
+    const n = br.u8();
+    info.envelope = [];
+    for (let i = 0; i < n; i++) info.envelope.push({ pos44: br.u32(), left: br.u16(), right: br.u16() });
+  }
+  return info;
 }
 
 function parseButton2(
@@ -1060,9 +1125,9 @@ function parseButton2(
     const placeDepth = br.u16();
     const matrix = readMatrix(br);
     const ct = normalizeCt(readCxform(br, true));
-    if (hasFilters) skipFilterList(br, `DefineButton2 #${id}`);
-    if (hasBlend) br.u8();
-    records.push({ up, over, down, hit, characterId, placeDepth, matrix, ct, hasFilters });
+    const filters = hasFilters ? readFilterList(br, `DefineButton2 #${id}`) : undefined;
+    const blendMode = hasBlend ? readBlendMode(br, warn, `DefineButton2 #${id}`) : undefined;
+    records.push({ up, over, down, hit, characterId, placeDepth, matrix, ct, hasFilters, filters, blendMode });
     void recReserved;
   }
   br.align();
@@ -1123,26 +1188,89 @@ function parseButton2(
  *                        + defaultColor(4) + flags(1)                                      = 15 + 4wh
  *   6 colour matrix   20 × FLOAT(80)                                                      = 80
  */
-function skipFilterList(br: BitReader, context: string) {
+function readFilterList(br: BitReader, context: string): SwfFilter[] {
   const start = br.offsetBytes;
   const count = br.u8();
+  const out: SwfFilter[] = [];
+  // FIXED is 16.16 signed, FIXED8 8.8 (strength), FLOAT an IEEE single; angles are radians.
+  const fixed = () => br.s32() / 65536;
+  const fixed8 = () => br.u16() / 256;
+  const f32 = () => { const v = new DataView(new ArrayBuffer(4)); v.setUint32(0, br.u32()); return v.getFloat32(0); };
+  const rgba = () => { const r = br.u8(), g = br.u8(), b = br.u8(), a = br.u8(); return { color: (r << 16) | (g << 8) | b, alpha: a / 255 }; };
+  const deg = (rad: number) => rad * 180 / Math.PI;
+  const placement = (inner: boolean, onTop: boolean): FilterPlacement => (onTop ? 'full' : inner ? 'inner' : 'outer');
   for (let i = 0; i < count; i++) {
     const at = br.offsetBytes - start;
     const id = br.u8();
     switch (id) {
-      case 0: br.skip(4 + 16 + 2 + 1); break;
-      case 1: br.skip(8 + 1); break;
-      case 2: br.skip(4 + 8 + 2 + 1); break;
-      case 3: br.skip(8 + 16 + 2 + 1); break;
-      case 4: case 7: { const n = br.u8(); br.skip(n * 4 + n + 16 + 2 + 1); break; }
-      case 5: { const w = br.u8(); const h = br.u8(); br.skip(4 + 4 + w * h * 4 + 4 + 1); break; }
-      case 6: br.skip(20 * 4); break;
+      case 0: { // DropShadow: RGBA, BlurX, BlurY, Angle, Distance, Strength, flags
+        const c = rgba();
+        const blurX = fixed(), blurY = fixed(), angle = deg(fixed()), distance = fixed(), strength = fixed8();
+        const f = br.u8(); // InnerShadow, Knockout, CompositeSource, Passes(5)
+        out.push({ kind: 'dropShadow', color: c.color, alpha: c.alpha, blurX, blurY, angle, distance, strength,
+          quality: f & 0x1f, inner: !!(f & 0x80), knockout: !!(f & 0x40), hideObject: !(f & 0x20) });
+        break;
+      }
+      case 1: { // Blur: BlurX, BlurY, Passes(5), reserved(3)
+        const blurX = fixed(), blurY = fixed();
+        out.push({ kind: 'blur', blurX, blurY, quality: br.u8() >> 3 });
+        break;
+      }
+      case 2: { // Glow: RGBA, BlurX, BlurY, Strength, flags
+        const c = rgba();
+        const blurX = fixed(), blurY = fixed(), strength = fixed8();
+        const f = br.u8(); // InnerGlow, Knockout, CompositeSource, Passes(5)
+        out.push({ kind: 'glow', color: c.color, alpha: c.alpha, blurX, blurY, strength,
+          quality: f & 0x1f, inner: !!(f & 0x80), knockout: !!(f & 0x40) });
+        break;
+      }
+      case 3: { // Bevel: highlight RGBA then shadow RGBA (the spec lists them the other way round)
+        const hi = rgba(), sh = rgba();
+        const blurX = fixed(), blurY = fixed(), angle = deg(fixed()), distance = fixed(), strength = fixed8();
+        const f = br.u8(); // InnerShadow, Knockout, CompositeSource, OnTop, Passes(4)
+        out.push({ kind: 'bevel', highlightColor: hi.color, highlightAlpha: hi.alpha, shadowColor: sh.color, shadowAlpha: sh.alpha,
+          blurX, blurY, angle, distance, strength, quality: f & 0x0f, knockout: !!(f & 0x40), type: placement(!!(f & 0x80), !!(f & 0x10)) });
+        break;
+      }
+      case 4: case 7: { // GradientGlow / GradientBevel: NumColors, colours, ratios, …
+        const n = br.u8();
+        const stops = Array.from({ length: n }, rgba);
+        const ratios = Array.from({ length: n }, () => br.u8());
+        const blurX = fixed(), blurY = fixed(), angle = deg(fixed()), distance = fixed(), strength = fixed8();
+        const f = br.u8();
+        out.push({ kind: id === 4 ? 'gradientGlow' : 'gradientBevel',
+          colors: stops.map((c) => c.color), alphas: stops.map((c) => c.alpha), ratios,
+          blurX, blurY, angle, distance, strength, quality: f & 0x0f, knockout: !!(f & 0x40), type: placement(!!(f & 0x80), !!(f & 0x10)) });
+        break;
+      }
+      case 5: { // Convolution: MatrixX, MatrixY, Divisor, Bias, Matrix, DefaultColor, reserved(6) Clamp PreserveAlpha
+        const matrixX = br.u8(), matrixY = br.u8();
+        const divisor = f32(), bias = f32();
+        const matrix = Array.from({ length: matrixX * matrixY }, f32);
+        const c = rgba();
+        const f = br.u8();
+        out.push({ kind: 'convolution', matrixX, matrixY, matrix, divisor, bias,
+          clamp: !!(f & 0x02), preserveAlpha: !!(f & 0x01), color: c.color, alpha: c.alpha });
+        break;
+      }
+      case 6: // ColorMatrix: 20 FLOATs
+        out.push({ kind: 'colorMatrix', matrix: Array.from({ length: 20 }, f32) });
+        break;
       default:
         throw new Error(
           `unknown filter ${id} (${context}, filter ${i + 1}/${count}, +${at} bytes into the list)`,
         );
     }
   }
+  return out;
+}
+
+/** BlendMode byte; values past 14 are reported and read as normal. */
+function readBlendMode(br: BitReader, warn: (m: string) => void, context: string): BlendMode {
+  const v = br.u8();
+  const mode = toBlendMode(v);
+  if (!mode) warn(`${context}: unknown blend mode ${v}`);
+  return mode ?? 'normal';
 }
 
 // main parse ---------------------------------------------------------------
@@ -1195,6 +1323,8 @@ export async function parseSwfBinary(
   const symbolClasses = new Map<number, string>();
   let backgroundColor: number | undefined;
   let jpegTables: Uint8Array | undefined;
+  /** FileAttributes flags: reserved, UseDirectBlit, UseGPU, HasMetadata, ActionScript3, NoCrossDomainCache, SWFRelativeUrls, UseNetwork. */
+  let fileAttributes: number | undefined;
 
   const addChar = (id: number, tagType: string, kind: NonNullable<ReturnType<typeof kindOfTag>>, init: Partial<SwfCharacter>) => {
     const existing = characters.get(id);
@@ -1224,6 +1354,9 @@ export async function parseSwfBinary(
       const kind = kindOfTag(type);
       try {
         switch (tag.type) {
+          case 69: // FileAttributes: the flags byte (SWF 19)
+            fileAttributes ??= tag.data[0] ?? 0;
+            break;
           case 9: { // SetBackgroundColor
             const br2 = new BitReader(tag.data);
             backgroundColor = (br2.u8() << 16) | (br2.u8() << 8) | br2.u8();
@@ -1268,6 +1401,19 @@ export async function parseSwfBinary(
               attrs: { spriteId: String(id), frameCount: String(fc), hasEndTag: 'true' },
             });
             await registerTags(tag.children ?? []);
+            break;
+          }
+          case 17: { // DefineButtonSound: sounds for the button's state transitions
+            const br2 = new BitReader(tag.data);
+            const buttonId = br2.u16();
+            const sounds: (ButtonSound | null)[] = [];
+            for (let i = 0; i < 4; i++) {
+              const soundId = br2.u16();
+              sounds.push(soundId ? { soundId, info: readSoundInfo(br2) } : null);
+            }
+            const button = characters.get(buttonId);
+            if (button?.kind === 'button') button.buttonSounds = sounds;
+            else warnStructural(`DefineButtonSound: button ${buttonId} is not defined before it`);
             break;
           }
           case 34: { // DefineButton2
@@ -1338,7 +1484,7 @@ export async function parseSwfBinary(
             break;
           }
           case 37: {
-            const et = parseEditText(tag);
+            const et = parseEditText(tag, version);
             // DefineEditText's own id is characterID; `fontId` is only the font it
             // references. Registering it under the font id (as an earlier revision did,
             // to match parseSwfXml's fontId-first charIdOf) collided with the font
@@ -1433,7 +1579,7 @@ export async function parseSwfBinary(
       case 9: return '';                 // SetBackgroundColor: only forceWriteAsLong=false
       case 56: return 'forceWriteAsLong=true';
       case 24: return 'reserved=0';      // Protect
-      case 69: return 'reservedB=0 useNetwork=true';
+      case 69: return fileAttributesDetail(tag.data);
       case 74: {
         // CSMTextSettings: textID, flags (useFlashType bit 6, gridFit bits 3-4,
         // rest reserved), thickness FLOAT, sharpness FLOAT, reserved byte.
@@ -1489,7 +1635,7 @@ export async function parseSwfBinary(
       kinds.add(k);
 
       if (k === 'place') {
-        const info = parsePlace2(tag.data, tag.type === 70, version,
+        const info = tag.type === 4 ? parsePlace1(tag.data) : parsePlace2(tag.data, tag.type === 70, version,
           (m) => warnStructural(`${m} (${characterId != null ? `sprite ${characterId}` : 'root timeline'}, tag ${tag.type})`));
         if (info.depth < 0) continue;
         const prev = state.get(info.depth);
@@ -1501,6 +1647,8 @@ export async function parseSwfBinary(
           matrix: info.matrix, colorTransform: info.ct,
           ratio: info.ratio, name: info.name, clipDepth: info.clipDepth,
           hasFilters: info.hasFilters,
+          ...(info.filters ? { filters: info.filters } : {}),
+          ...(info.blendMode ? { blendMode: info.blendMode } : {}),
         });
         if (info.clipActions?.length) {
           const effCid = cid || prev?.characterId || 0;
@@ -1529,6 +1677,8 @@ export async function parseSwfBinary(
             matrix: info.matrix ?? { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 },
             colorTransform: info.ct, ratio: info.ratio ?? 0, name: info.name,
             clipDepth: info.clipDepth, hasFilters: info.hasFilters, startFrame: frameIndex,
+            ...(info.filters?.length ? { filters: info.filters } : {}),
+            ...(info.blendMode && info.blendMode !== 'normal' ? { blendMode: info.blendMode } : {}),
           });
         } else if (prev) {
           const next: DisplayItem = { ...prev };
@@ -1537,13 +1687,18 @@ export async function parseSwfBinary(
           if (info.ratio != null) next.ratio = info.ratio;
           if (info.name) next.name = info.name;
           if (info.clipDepth != null) next.clipDepth = info.clipDepth;
+          // a move that carries a filter list / blend mode replaces the current one
+          if (info.filters) { if (info.filters.length) next.filters = info.filters; else delete next.filters; next.hasFilters = true; }
+          if (info.blendMode) { if (info.blendMode !== 'normal') next.blendMode = info.blendMode; else delete next.blendMode; }
           state.set(info.depth, next);
         }
         events.push({ kind: 'place', tagType: type, detail: `depth ${info.depth}`, characterId: cid });
         continue;
       }
       if (k === 'remove') {
+        // RemoveObject (5): CharacterId u16, Depth u16. RemoveObject2 (28): Depth u16.
         const br2 = new BitReader(tag.data);
+        if (tag.type === 5) br2.u16();
         const depth = br2.u16();
         const gone = state.get(depth);
         ops.push({ op: 'remove', tagType: type, depth, characterId: gone?.characterId });
@@ -1579,22 +1734,7 @@ export async function parseSwfBinary(
       if (/^StartSound/.test(type)) {
         const br2 = new BitReader(tag.data);
         const sid = br2.u16();
-        const flags = br2.u8();
-        // SOUNDINFO: reserved(2) syncStop syncNoMultiple hasEnvelope hasLoops hasOutPoint hasInPoint
-        const syncStop = !!(flags & 0x20);
-        const syncNoMultiple = !!(flags & 0x10);
-        const hasEnvelope = !!(flags & 0x08);
-        const hasLoops = !!(flags & 0x04);
-        const hasOut = !!(flags & 0x02);
-        const hasIn = !!(flags & 0x01);
-        if (hasIn) br2.u32();
-        if (hasOut) br2.u32();
-        let loopCount = 0;
-        if (hasLoops) loopCount = br2.u16();
-        if (hasEnvelope) {
-          const n = br2.u16();
-          br2.skip(n * 7 * 4);
-        }
+        const { syncStop, syncNoMultiple, loopCount = 0 } = readSoundInfo(br2);
         const bits: string[] = [];
         if (syncStop) bits.push('stop');
         if (syncNoMultiple) bits.push('noMultiple');
@@ -1674,6 +1814,8 @@ export async function parseSwfBinary(
         display.push({
           depth: r.placeDepth, characterId: r.characterId, matrix: r.matrix,
           colorTransform: r.ct, ratio: 0, hasFilters: r.hasFilters, startFrame: i,
+          ...(r.filters?.length ? { filters: r.filters } : {}),
+          ...(r.blendMode && r.blendMode !== 'normal' ? { blendMode: r.blendMode } : {}),
         });
       }
       display.sort((a, b) => a.depth - b.depth);
@@ -1705,6 +1847,12 @@ export async function parseSwfBinary(
     compression: compression === 'CWS' ? 'ZLIB' : 'UNCOMPRESSED',
     fileName,
     backgroundColor,
+    source: 'swf',
+    ...(fileAttributes != null ? {
+      as3: (fileAttributes & 0x08) !== 0,
+      useNetwork: (fileAttributes & 0x01) !== 0,
+      hasMetadata: (fileAttributes & 0x10) !== 0,
+    } : {}),
   };
 
   // Synthesize scripts/*.as sources (FFDec export layout) from the decoded

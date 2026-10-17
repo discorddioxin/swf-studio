@@ -138,6 +138,38 @@ describe('Loader', () => {
     }
   });
 
+  // Most deployments ship no bundled games: no section, and nothing called an error.
+  it.each([
+    ['a 404', () => new Response('not found', { status: 404 })],
+    ['the dev server\'s HTML fallback', () => new Response('<!doctype html><html></html>', { status: 200, headers: { 'content-type': 'text/html' } })],
+  ])('offers no bundled games when the root has no index (%s)', async (_label, answer) => {
+    const realFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async () => answer());
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    try {
+      render(<Loader onFiles={vi.fn()} onBundled={vi.fn()} />);
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r, 20));
+      expect(screen.queryByText('Use bundled SWFs')).toBeNull();
+      expect(screen.queryByRole('alert')).toBeNull();
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it('shows a broken bundled index as an error instead of hiding it', async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => new Response('{ "games": [', { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof fetch;
+    try {
+      render(<Loader onFiles={vi.fn()} onBundled={vi.fn()} />);
+      const alert = await waitFor(() => screen.getByRole('alert'));
+      expect(alert.textContent).toMatch(/Bundled games are unavailable: manifest\.json is not JSON/);
+      expect(screen.queryByText('Use bundled SWFs')).toBeNull();
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
   it('says when a selection holds no SWF', async () => {
     render(<Loader onFiles={vi.fn()} />);
     queue([file('game/notes.txt')]);

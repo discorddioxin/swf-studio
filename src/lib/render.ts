@@ -1,4 +1,5 @@
 import { AssetCache } from './assets';
+import { composite, needsComposite } from './compositor';
 import {
   type ColorTransform, type DisplayItem, type Matrix, type Rect, type RunActor, type SwfDocument,
   type FlattenedFrame, type FlattenedSprite, type Timeline, IDENTITY, mul, mulColor, TWIPS,
@@ -17,6 +18,8 @@ export interface RenderOpts {
   background: string;
   selectedPath?: string;
   onlyDepth?: number | null;
+  /** device pixels per stage pixel, for filter sizes (default: zoom × devicePixelRatio) */
+  filterScale?: number;
 }
 
 export interface FlatItem {
@@ -266,25 +269,78 @@ export function drawTimeline(
       continue;
     }
 
-    ctx.save();
     const m = item.matrix;
-    ctx.transform(m.a, m.b, m.c, m.d, m.tx, m.ty);
-    ctx.globalAlpha = Math.max(0, Math.min(1, (color?.am ?? 1) + (color?.aa ?? 0) / 255));
-
-    if (ch?.kind === 'sprite' || ch?.kind === 'button') {
-      const child = ch.timelineId ? o.doc.timelines.get(ch.timelineId) : undefined;
-      if (child) {
-        const lf = child.kind === 'button' ? 0 : localFrameOf(item, frame, child.frameCount);
-        drawTimeline(ctx, o, child, lf, color, level + 1);
+    const drawItem = (c: CanvasRenderingContext2D, col: ColorTransform | undefined) => {
+      c.save();
+      c.transform(m.a, m.b, m.c, m.d, m.tx, m.ty);
+      c.globalAlpha = Math.max(0, Math.min(1, (col?.am ?? 1) + (col?.aa ?? 0) / 255));
+      if (ch?.kind === 'sprite' || ch?.kind === 'button') {
+        const child = ch.timelineId ? o.doc.timelines.get(ch.timelineId) : undefined;
+        if (child) {
+          const lf = child.kind === 'button' ? 0 : localFrameOf(item, frame, child.frameCount);
+          drawTimeline(c, o, child, lf, col, level + 1);
+        } else {
+          placeholder(c, ch?.bounds, '#a78bfa');
+        }
       } else {
-        placeholder(ctx, ch?.bounds, '#a78bfa');
+        drawCharacter(c, o, item, level);
       }
+      c.restore();
+    };
+
+    if (needsComposite(item.filters, item.blendMode)) {
+      // through a layer: the subtree with its own alpha only — the parent's (ctx.globalAlpha
+      // here) applies when the layer is drawn back, after the filters
+      const own = mulColor(parentColor ? { ...parentColor, am: 1, aa: 0 } : undefined, item.colorTransform);
+      const local = itemBounds(o, item, frame, level);
+      // what the subtree draws follows from the character and its local frame
+      const child = ch?.timelineId ? o.doc.timelines.get(ch.timelineId) : undefined;
+      const lf = child ? (child.kind === 'button' ? 0 : localFrameOf(item, frame, child.frameCount)) : 0;
+      composite(ctx, {
+        filters: item.filters, blendMode: item.blendMode, filterScale: filterScaleOf(o),
+        bounds: local ? transformRect(m, local) : null,
+        paint: (layer) => drawItem(layer, own),
+        cache: {
+          owner: item,
+          key: `${item.characterId}:${lf}:${item.ratio ?? ''}:${level}:${JSON.stringify(own ?? null)}:${o.showOutlines}:${o.showMasks}:${o.selectedPath ?? ''}:${o.onlyDepth ?? ''}`,
+        },
+      });
     } else {
-      drawCharacter(ctx, o, item, level);
+      drawItem(ctx, color);
     }
-    ctx.restore();
   }
   while (clips.length) { clips.pop(); ctx.restore(); }
+}
+
+function filterScaleOf(o: RenderOpts): number {
+  if (o.filterScale) return o.filterScale;
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+  return o.view.zoom * dpr;
+}
+
+/**
+ * The bounds of what `item` draws on `frame`, in its own space (twips): its
+ * character's bounds, or the union of a sprite's children on the frame shown.
+ * null when unknown — the layer then covers the whole canvas.
+ */
+function itemBounds(o: RenderOpts, item: DisplayItem, frame: number, level: number): Rect | null {
+  const ch = o.doc.characters.get(item.characterId);
+  if (!ch) return null;
+  if (ch.kind !== 'sprite' && ch.kind !== 'button') return ch.bounds ?? null;
+  const child = ch.timelineId ? o.doc.timelines.get(ch.timelineId) : undefined;
+  if (!child || level > MAX_LEVEL) return null;
+  const lf = child.kind === 'button' ? 0 : localFrameOf(item, frame, child.frameCount);
+  const fr = child.frames[Math.min(Math.max(lf, 0), child.frames.length - 1)];
+  if (!fr) return null;
+  let out: Rect | null = null;
+  for (const d of fr.display) {
+    if (d.clipDepth != null && d.clipDepth > d.depth) continue;
+    const b = itemBounds(o, d, lf, level + 1);
+    if (!b) return null; // one unknown child: unknown
+    const r = transformRect(d.matrix, b);
+    out = out ? { xMin: Math.min(out.xMin, r.xMin), yMin: Math.min(out.yMin, r.yMin), xMax: Math.max(out.xMax, r.xMax), yMax: Math.max(out.yMax, r.yMax) } : r;
+  }
+  return out ?? { xMin: 0, yMin: 0, xMax: 0, yMax: 0 };
 }
 
 function drawCharacter(ctx: CanvasRenderingContext2D, o: RenderOpts, item: DisplayItem, _level: number) {

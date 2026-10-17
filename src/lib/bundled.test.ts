@@ -1,46 +1,100 @@
 // @vitest-environment jsdom
-// Bundled game sets: the public index (manifest.json) → one JSON per game →
-// the .swf files of that game, each parsed into everything it carries (scripts,
-// shapes, bitmaps, fonts, sounds). The shipped data is the fixture and the
-// subject: nothing here knows a game's name.
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+// Bundled game sets: an optional public index (manifest.json) → one JSON per
+// game → the .swf files of that game, each parsed into everything it carries.
+// The repo ships none, so the index here is served by a stub `fetch`: every
+// answer a root can give (none, an index, a broken index), then the sample set
+// served through it end to end when the corpus is checked out.
+import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { fetchBundledManifest, fetchBundledSwf, fetchGameIndex } from './bundled';
+import { fetchBundledManifest, fetchBundledSwf, fetchGameIndex, loadGameIndex } from './bundled';
 import { ingestFiles } from './assets';
-import { BUNDLED_DIR, bundledSet, bundledSwfNames } from './__tests__/bundledSet';
+import { bundledSet, bundledSwfNames, describeSample } from './__tests__/bundledSet';
 
-const ROOT = BUNDLED_DIR;
 const realFetch = globalThis.fetch;
+afterEach(() => { globalThis.fetch = realFetch; });
 
-/** Serve game-files/** from disk so the bundled loader runs unmodified. */
-function fsFetch(input: RequestInfo | URL): Promise<Response> {
-  const url = String(input).replace(/[?#].*$/, '');
-  const path = resolve(ROOT, url.replace(/^\//, ''));
-  try {
-    const bytes = readFileSync(path);
-    return Promise.resolve(new Response(bytes, { status: 200 }));
-  } catch {
-    return Promise.resolve(new Response('not found', { status: 404 }));
-  }
+type Answer = Response | (() => Response) | Error;
+/** Serve `routes` (path → answer); anything else is a 404. */
+function serve(routes: Record<string, Answer>) {
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const answer = routes[String(input).replace(/[?#].*$/, '').replace(/^\//, '')];
+    if (answer instanceof Error) throw answer;
+    if (!answer) return new Response('not found', { status: 404 });
+    return typeof answer === 'function' ? answer() : answer.clone();
+  }) as typeof fetch;
 }
+const json = (body: unknown) => () => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
 
-describe('bundled game sets', () => {
-  beforeAll(() => { globalThis.fetch = fsFetch as typeof fetch; });
-  afterAll(() => { globalThis.fetch = realFetch; });
+describe('the bundled index', () => {
+  it('is "none" when the root has no manifest.json (404)', async () => {
+    serve({});
+    expect(await loadGameIndex()).toEqual({ status: 'none' });
+    await expect(fetchGameIndex()).rejects.toThrow('No bundled game sets are available.');
+  });
 
-  it('resolves the index to the default game set, whose entries are the shipped files', async () => {
+  it('is "none" when the server answers with its HTML page (SPA fallback)', async () => {
+    serve({ 'manifest.json': () => new Response('<!doctype html><html><body>app</body></html>', { status: 200, headers: { 'content-type': 'text/html' } }) });
+    expect(await loadGameIndex()).toEqual({ status: 'none' });
+  });
+
+  it('is "broken", saying why, for anything else that is not a usable index', async () => {
+    const cases: [Answer, RegExp][] = [
+      [() => new Response('{ "games": [', { status: 200 }), /manifest\.json is not JSON/],
+      [() => new Response('oops', { status: 500 }), /manifest\.json: HTTP 500/],
+      [new TypeError('Failed to fetch'), /manifest\.json: Failed to fetch/],
+      [json({ games: ['games/missing.json'] }), /lists no readable game sets/],
+      [json({ swfs: [] }), /lists no swfs/],
+      [json({ hello: 1 }), /neither "games" nor "swfs"/],
+    ];
+    for (const [answer, why] of cases) {
+      serve({ 'manifest.json': answer });
+      const state = await loadGameIndex();
+      expect(state.status).toBe('broken');
+      expect(state.status === 'broken' && state.error).toMatch(why);
+    }
+  });
+
+  it('reads an index of game sets, skipping a set that cannot be read', async () => {
+    serve({
+      'manifest.json': json({ default: 'alpha', games: ['games/alpha.json', 'games/gone.json'] }),
+      'games/alpha.json': json({ id: 'alpha', label: 'Alpha', adapter: 'alpha-adapter', main: 'b', swfs: ['alpha/a.swf', { name: 'b', path: 'alpha/b.swf' }] }),
+    });
+    expect(await loadGameIndex()).toEqual({
+      status: 'ready',
+      games: [{ id: 'alpha', label: 'Alpha', adapter: 'alpha-adapter', main: 'b', swfs: [{ name: 'a', path: 'alpha/a.swf' }, { name: 'b', path: 'alpha/b.swf' }] }],
+    });
+  });
+
+  it('reads a legacy flat list as one anonymous set', async () => {
+    serve({ 'manifest.json': json({ swfs: ['x/one.swf'] }) });
+    expect(await fetchGameIndex()).toEqual([{ id: 'bundled', label: 'Bundled SWFs', swfs: [{ name: 'one', path: 'x/one.swf' }] }]);
+  });
+});
+
+describeSample('a bundled game set (the sample, served from the corpus)', () => {
+  /** A root shipping the sample: index → set JSON → `swfs/<name>.swf`, read from the corpus. */
+  function serveSample() {
+    const set = bundledSet();
+    const routes: Record<string, Answer> = {
+      'manifest.json': json({ default: set.id, games: [`games/${set.id}.json`] }),
+      [`games/${set.id}.json`]: json({ ...set, swfs: set.swfs.map((e) => ({ name: e.name, path: `swfs/${e.name}.swf` })) }),
+    };
+    for (const e of set.swfs) routes[`swfs/${e.name}.swf`] = () => new Response(readFileSync(e.path), { status: 200 });
+    serve(routes);
+  }
+
+  it('resolves the index to the default game set, whose entries are its files', async () => {
+    serveSample();
     const games = await fetchGameIndex();
-    expect(games.length).toBeGreaterThan(0);
     const set = games.find((g) => g.id === bundledSet().id);
     expect(set, 'the default game set is listed').toBeTruthy();
     expect(set!.main).toBe(bundledSet().main);
     expect(set!.swfs.map((e) => e.name)).toEqual(bundledSwfNames());
-    // …and every SWF of the set is reachable from the public root
     for (const entry of set!.swfs) expect(entry.path.split('/').pop()).toBe(`${entry.name}.swf`);
   });
 
   it('parses every SWF of the set into its scripts, fonts and sounds, and ingests it', async () => {
+    serveSample();
     const entries = await fetchBundledManifest();
     expect(entries.length).toBe(bundledSwfNames().length);
 

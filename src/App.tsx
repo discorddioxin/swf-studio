@@ -12,7 +12,8 @@ import { GameEngine } from './components/GameEngine';
 import { Button } from './components/ui';
 import type { AssetCache, SwfPackage } from './lib/assets';
 import { buildPackage as buildPackageIn, loadUploadedPackages } from './lib/swfLoading';
-import { fetchBundledSwf, fetchGameIndex, type GameSet } from './lib/bundled';
+import { useSessionDependencies } from './components/useSessionDependencies';
+import { fetchBundledSwf, fetchGameIndex, loadGameIndex, type GameSet } from './lib/bundled';
 import { useProject } from './lib/project';
 import type { AssetBundle, FlattenedSprite, SwfDocument } from './types';
 import { flattenSpriteToPng } from './lib/render';
@@ -70,7 +71,15 @@ export default function App() {
   /** every loaded FFDec export (index = loadedDocs index); [0] is the main movie */
   const [packages, setPackages] = useState<SwfPackage[]>([]);
   const externalPackages = useMemo(() => packages.filter((_, i) => i !== activeSwfIndex), [packages, activeSwfIndex]);
-  useEffect(() => () => { packages.forEach((p) => p.cache.dispose()); }, [packages]);
+  // A cache is disposed when its package leaves the session — not whenever the
+  // list changes: an added dependency SWF joins a session whose caches are in use.
+  const liveCachesRef = useRef(new Set<AssetCache>());
+  useEffect(() => {
+    const now = new Set(packages.map((p) => p.cache));
+    for (const cache of liveCachesRef.current) if (!now.has(cache)) cache.dispose();
+    liveCachesRef.current = now;
+  }, [packages]);
+  useEffect(() => () => { for (const cache of liveCachesRef.current) cache.dispose(); }, []);
 
   const [timelineId, setTimelineId] = useState('root');
   const [frame, setFrame] = useState(0);
@@ -115,6 +124,17 @@ export default function App() {
 
   const api = useProject(doc?.header.fileName ?? '');
 
+  // The session's run-time files (the upload's non-SWF files) and the Execute
+  // tab's "Add Dependency": an added SWF joins the loaded movies.
+  const { files: sessionFiles, adder: dependencyAdder, reset: resetDependencies } = useSessionDependencies({
+    generation: () => cacheGenerationRef.current,
+    onPackages: (added) => {
+      setPackages((current) => [...current, ...added]);
+      setLoadedDocs((current) => [...current, ...added.map((p) => p.doc)]);
+    },
+    onChange: () => setTick((t) => t + 1),
+  });
+
   /** bundle + cache one parsed document into a SwfPackage (shared by uploads and bundled SWFs) */
   const buildPackage = useCallback(
     (files: File[], parsedDoc: SwfDocument) => {
@@ -127,27 +147,47 @@ export default function App() {
     [],
   );
 
-  const installPackages = useCallback((loaded: SwfPackage[]) => {
+  /**
+   * Forget everything that belonged to the previous game: its adapter pick and
+   * game set, filters, timeline position and playback, selections, flattened
+   * sprites and error. "New folder" and every load start from here, so nothing
+   * chosen for one game applies to the next.
+   */
+  const resetSession = useCallback(() => {
+    setAdapterId('auto');
+    setGameSetId(null);
+    setFilters(defaultFilters);
+    setTimelineId('root');
+    setFrame(0);
+    setPlaying(false);
+    setLoopRange(null);
+    setSelectedId(null);
+    setSelectedPath(undefined);
+    setSelectedActorId(null);
+    flattenRequestRef.current?.abort();
+    disposeFlattenedSprites(flattenedResourcesRef.current);
+    setFlattenedSprites([]);
+    setFlatteningId(null);
+    setError(null);
+  }, []);
+
+  /** Open `loaded` ([0] = the main movie) as a new session; `setId` is the bundled game set it came from. */
+  const installPackages = useCallback((loaded: SwfPackage[], setId: string | null) => {
     const parsed = loaded[0]?.doc;
     if (!parsed) throw new Error('No readable SWF packages to open.');
+    resetSession();
+    setGameSetId(setId);
     cacheGenerationRef.current++;
     setPackages(loaded);
+    resetDependencies(loaded[0].dependencyFiles ?? null);
     cacheRef.current = loaded[0].cache;
     setAssets(loaded[0].bundle);
     setLoadedDocs(loaded.map((p) => p.doc));
     setActiveSwfIndex(0);
     setDoc(parsed);
-    flattenRequestRef.current?.abort();
-    disposeFlattenedSprites(flattenedResourcesRef.current);
-    setFlattenedSprites([]);
-    setFlatteningId(null);
     setFps(parsed.header.frameRate);
-    setTimelineId('root');
-    setFrame(0);
-    setSelectedId(null);
-    setSelectedPath(undefined);
     setBusy(null);
-  }, []);
+  }, [resetSession, resetDependencies]);
 
   /** Names already loaded (basename of the document, without .xml/.swf). */
   const packageLabels = useCallback((loaded: SwfPackage[]) => new Set(
@@ -173,14 +213,20 @@ export default function App() {
   /**
    * Fill in the SWFs of the *matching* game set that the current load does not
    * already contain (an upload that carries the game's main movie but not all
-   * of its externals). Fails soft: no index / offline dev server ⇒ the upload
-   * alone is used unchanged. Never adds another game's movies.
+   * of its externals). No bundled games (the usual deployment) ⇒ the upload is
+   * used unchanged, silently; a broken index ⇒ the same, with a warning saying
+   * why. Never adds another game's movies.
    */
   const mergeBundledExternals = useCallback(async (loaded: SwfPackage[]): Promise<{ packages: SwfPackage[]; gameSetId: string | null }> => {
+    const index = await loadGameIndex();
+    if (index.status === 'none') return { packages: loaded, gameSetId: null };
+    if (index.status === 'broken') {
+      console.warn(`bundled externals unavailable: ${index.error}`);
+      return { packages: loaded, gameSetId: null };
+    }
     const merged = [...loaded];
     try {
-      const games = await fetchGameIndex();
-      const game = matchingGameSet(loaded, games);
+      const game = matchingGameSet(loaded, index.games);
       if (!game) return { packages: loaded, gameSetId: null };
       const have = packageLabels(loaded);
       for (const entry of game.swfs) {
@@ -213,8 +259,7 @@ export default function App() {
       });
       setBusy('Merging bundled externals…');
       const { packages: complete, gameSetId: setId } = await mergeBundledExternals(loaded);
-      setGameSetId(setId);
-      installPackages(complete);
+      installPackages(complete, setId);
     } catch (e) {
       setBusy(null);
       setError(e instanceof Error ? e.message : String(e));
@@ -243,8 +288,7 @@ export default function App() {
         const { doc, files } = await fetchBundledSwf(entry);
         loaded.push(await buildPackage(files, doc));
       }
-      setGameSetId(game.id);
-      installPackages(loaded);
+      installPackages(loaded, game.id);
     } catch (e) {
       loaded.forEach((p) => p.cache.dispose());
       setBusy(null);
@@ -287,8 +331,14 @@ export default function App() {
   const count = timeline?.frameCount ?? 1;
 
   // ------------------------------------------------------------ playback --
+  // Workbench playback belongs to the Workbench: it stops when another
+  // workspace is opened, so a hidden timeline never re-renders the app.
   useEffect(() => {
-    if (!playing || !timeline) return;
+    if (workspace !== 'workbench') setPlaying(false);
+  }, [workspace]);
+
+  useEffect(() => {
+    if (!playing || !timeline || workspace !== 'workbench') return;
     let raf = 0;
     let last = performance.now();
     let acc = 0;
@@ -312,13 +362,13 @@ export default function App() {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [playing, fps, loopRange, count, timeline]);
+  }, [playing, fps, loopRange, count, timeline, workspace]);
 
   // frame audio triggers
   const lastAudioTrigger = useRef<{ frame: number; time: number } | null>(null);
 
   useEffect(() => {
-    if (!audio || !doc || !timeline || !cacheRef.current) return;
+    if (!audio || !doc || !timeline || !cacheRef.current || workspace !== 'workbench') return;
     const f = timeline.frames[frame];
     if (!f) return;
     const now = performance.now();
@@ -336,11 +386,14 @@ export default function App() {
       a.volume = 0.7;
       void a.play().catch(() => {});
     }
-  }, [frame, audio, doc, timeline]);
+  }, [frame, audio, doc, timeline, workspace]);
 
-  // keyboard
+  // keyboard: the Workbench's timeline keys, only while the Workbench is open,
+  // and never for a key something else (a game, a field) already handled
   useEffect(() => {
+    if (workspace !== 'workbench') return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       const t = e.target as HTMLElement;
       if (t && /INPUT|TEXTAREA|SELECT/.test(t.tagName)) return;
       if (e.code === 'Space') { e.preventDefault(); setPlaying((p) => !p); }
@@ -351,7 +404,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [count]);
+  }, [count, workspace]);
 
   const openTimeline = useCallback((id: string) => {
     setTimelineId(id);
@@ -489,8 +542,10 @@ export default function App() {
           )}
           <Button variant="ghost" className="px-2 py-1 text-[10px]" onClick={() => {
             packages.forEach((p) => p.cache.dispose()); setPackages([]); cacheRef.current = null;
-            flattenRequestRef.current?.abort(); disposeFlattenedSprites(flattenedResourcesRef.current);
-            setFlatteningId(null); setFlattenedSprites([]); setLoadedDocs([]); setActiveSwfIndex(0); setDoc(null); setAssets(null);
+            cacheGenerationRef.current++;
+            resetDependencies(null);
+            resetSession();
+            setLoadedDocs([]); setActiveSwfIndex(0); setDoc(null); setAssets(null);
           }}>
             New folder
           </Button>
@@ -505,7 +560,8 @@ export default function App() {
           assets={assets}
           project={api.project}
           externals={externalPackages}
-          dependencyFiles={packages[0]?.dependencyFiles ?? null}
+          dependencyFiles={sessionFiles}
+          dependencyAdder={dependencyAdder}
           gameSetId={gameSetId}
           adapterId={adapterId}
           onAdapterChange={setAdapterId}

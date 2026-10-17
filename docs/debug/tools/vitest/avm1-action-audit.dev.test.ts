@@ -4,10 +4,10 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { decodeActionBytes } from '../../../../transcom/decompiler/parser';
 import { parseSwfBinary } from '../../../../transcom/decompiler/swf/binary';
-import { SAMPLE_SWF_DIR, SAMPLE_TRACKING } from '@/adapters/gaiaFishing/sample';
+import { sampleSwfDir, SAMPLE_TRACKING } from '@/adapters/gaiaFishing/sample';
 
 const root = process.cwd();
-const swfDir = path.join(root, SAMPLE_SWF_DIR);
+const swfDir = sampleSwfDir() ?? path.join(root, 'no-corpus');
 const outDir = path.join(root, 'docs/debug/tools/e2e-output/avm1-action-audit');
 
 function actionBytes(source: string): Uint8Array[] {

@@ -196,20 +196,13 @@ export class LoaderContext { constructor(public checkPolicyFile = false, public 
 export const fscommand = (_command: string, _args = '') => {};
 
 // ------------------------------------------------------------- filters --
-// Stored on DisplayObject.filters; not rendered (canvas filter support
-// differs per browser), so they never break game logic.
+// Shared with the AS2 runtime; DisplayObject.filters turns them into the
+// compositor's model (src/lib/compositor.ts), which the player draws.
 
-export class BitmapFilter { clone() { return Object.assign(Object.create(Object.getPrototypeOf(this)), this); } }
-export class GlowFilter extends BitmapFilter { constructor(public color = 0xff0000, public alpha = 1, public blurX = 6, public blurY = 6, public strength = 2, public quality = 1, public inner = false, public knockout = false) { super(); } }
-export class DropShadowFilter extends BitmapFilter { constructor(public distance = 4, public angle = 45, public color = 0, public alpha = 1, public blurX = 4, public blurY = 4, public strength = 1, public quality = 1, public inner = false, public knockout = false, public hideObject = false) { super(); } }
-export class BlurFilter extends BitmapFilter { constructor(public blurX = 4, public blurY = 4, public quality = 1) { super(); } }
-export class ColorMatrixFilter extends BitmapFilter { constructor(public matrix: number[] = []) { super(); } }
-export class BevelFilter extends BitmapFilter {}
-export class GradientGlowFilter extends BitmapFilter {}
-export class GradientBevelFilter extends BitmapFilter {}
-export class ConvolutionFilter extends BitmapFilter {}
-export class DisplacementMapFilter extends BitmapFilter {}
-export const BitmapFilterQuality = { LOW: 1, MEDIUM: 2, HIGH: 3 } as const;
+export {
+  BitmapFilter, GlowFilter, DropShadowFilter, BlurFilter, ColorMatrixFilter, BevelFilter, GradientGlowFilter,
+  GradientBevelFilter, ConvolutionFilter, DisplacementMapFilter, BitmapFilterQuality, BitmapFilterType,
+} from '../../runtime/shared/filters';
 
 // ------------------------------------------------------------ external --
 

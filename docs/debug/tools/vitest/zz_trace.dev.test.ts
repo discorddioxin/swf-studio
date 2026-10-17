@@ -6,8 +6,9 @@ import { describe, it } from 'vitest';
 import { parseSwfBinary } from '@/../transcom/decompiler/swf/binary';
 import { parseAbc, type AbcFile } from '@/../transcom/decompiler/swf/abc';
 import { liftMethod } from '@/../transcom/transpiler/avm2/lift';
+import { corpusPath } from '@/testing/corpus';
 
-const FILE = process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf';
+const FILE = process.env.SWF_FILE ?? corpusPath('pinball-swfs/game.swf');
 describe.skipIf(!existsSync(FILE) || !process.env.SWF_NAME)('lift trace', () => {
   it('lifts one method with tracing', async () => {
     const raw = readFileSync(FILE);

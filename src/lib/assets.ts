@@ -1,5 +1,6 @@
 import type { DependencyFiles } from '../engine/flash/dependencies';
 import JSZip from 'jszip';
+import { invalidateLayers } from './compositor';
 import { type AssetBundle, type AssetCategory, type AssetFile, type Rect, TWIPS, type SwfDocument, type Timeline } from '../types';
 
 const CATEGORY_BY_DIR: Record<string, AssetCategory> = {
@@ -516,6 +517,7 @@ export class AssetCache {
   private finish(key: string, v: LoadedAsset) {
     if (this.disposed) return;
     this.map.set(key, v);
+    invalidateLayers();
     this.onChange();
   }
 

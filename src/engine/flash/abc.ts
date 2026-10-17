@@ -26,6 +26,8 @@ export interface AbcSources {
   unsupported: string[];
   /** How many ABC files were read. */
   payloads: number;
+  /** DoABC payloads with no readable ABC file in them (their code is missing from the program). */
+  unreadable: { index: number; bytes: number; message: string }[];
 }
 
 /** The ABC file inside a DoABC payload: flags(u32), a name, then the ABC. */
@@ -77,13 +79,17 @@ function abcOf(payload: Uint8Array): AbcFile {
  */
 export function abcSources(payloads: Iterable<Uint8Array>): AbcSources {
   const abcFiles: AbcFile[] = [];
+  const unreadable: AbcSources['unreadable'] = [];
+  let index = 0;
   for (const payload of payloads) {
     try {
       abcFiles.push(abcOf(payload));
-    } catch {
-      // A payload we cannot read at all is reported by the caller as "no code";
-      // an unreadable one must not take the readable ones down with it.
+    } catch (e) {
+      // An unreadable payload must not take the readable ones down with it, and
+      // it must not vanish either: its classes are missing from the program.
+      unreadable.push({ index, bytes: payload.length, message: e instanceof Error ? e.message : String(e) });
     }
+    index++;
   }
 
   // Classes are resolved against the whole project, not one movie: an AS3 game
@@ -107,5 +113,5 @@ export function abcSources(payloads: Iterable<Uint8Array>): AbcSources {
     }
     for (const name of result.unsupported) unsupported.add(name);
   }
-  return { sources, classes: [...projectClasses].sort(), refusals, unsupported: [...unsupported].sort(), payloads: abcFiles.length };
+  return { sources, classes: [...projectClasses].sort(), refusals, unsupported: [...unsupported].sort(), payloads: abcFiles.length, unreadable };
 }

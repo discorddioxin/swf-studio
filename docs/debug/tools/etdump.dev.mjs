@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import zlib from 'node:zlib';
+import { sampleSwfPath } from '../../../src/adapters/gaiaFishing/sample.ts';
+// a .swf path, or the name of a sample movie (found in the corpus; SWF_CORPUS=… overrides)
+const swfPath = (n) => (n.endsWith('.swf') ? n : sampleSwfPath(n));
 const [name, wantId] = process.argv.slice(2);
-const raw = fs.readFileSync(`game-files/fish-full/swfs/${name}.swf`);
+const raw = fs.readFileSync(swfPath(name));
 const body = raw[0] === 0x43 ? zlib.inflateSync(raw.subarray(8)) : raw.subarray(8);
 let p = Math.ceil((5 + (body[0] >> 3) * 4) / 8) + 4;
 const tags = [];

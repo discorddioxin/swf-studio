@@ -1,13 +1,14 @@
 import JSZip from 'jszip';
 import type { ProjectResult } from '../../transcom/transpiler/as2/project';
 
-const runtime = import.meta.glob<string>('../runtime/as2/*.ts', { eager: true, query: '?raw', import: 'default' });
+// the AS2 runtime and the shared modules it imports (../shared/*)
+const runtime = import.meta.glob<string>(['../runtime/as2/*.ts', '../runtime/shared/*.ts'], { eager: true, query: '?raw', import: 'default' });
 
 /** An editable source project, not a standalone replacement for the SWF renderer. */
 export async function createTypeScriptArchive(project: ProjectResult): Promise<Blob> {
   const zip = new JSZip();
   for (const [path, source] of project.files) zip.file(`game/${path}`, source);
-  for (const [path, source] of Object.entries(runtime)) zip.file(`runtime/as2/${path.split('/').pop()}`, source);
+  for (const [path, source] of Object.entries(runtime)) zip.file(path.replace(/^\.\.\//, ''), source);
   zip.file('tsconfig.json', JSON.stringify({
     compilerOptions: {
       target: 'ES2020', module: 'ESNext', moduleResolution: 'bundler', strict: true,

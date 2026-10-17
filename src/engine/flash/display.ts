@@ -17,11 +17,13 @@
 // constructor body runs, so `this.parent`, `this.stage`, `this.name` and
 // declared stage instances (`this.hero`) are usable inside constructors.
 
-import type { Frame, SwfDocument, Timeline } from '../../types';
+import type { BlendMode, Frame, SwfDocument, SwfFilter, Timeline } from '../../types';
+import { toBlendMode } from '../../types';
 import { runtime, type PlayerContext } from './context';
 import { Event, EventDispatcher } from './events';
 import { ColorTransform, Matrix, Point, Rectangle, Transform } from './geom';
 import { definesBehaviour } from './utils';
+import { readFilters, writeFilters, type BitmapFilter } from '../../runtime/shared/filters';
 
 const TWIPS = 20;
 /** Timeline depths sit below script depths, as in Flash (-16384 + depth). */
@@ -62,9 +64,29 @@ interface Pending {
   matrix?: { a: number; b: number; c: number; d: number; tx: number; ty: number };
   color?: Frame['display'][number]['colorTransform'];
   clipDepth?: number;
+  filters?: SwfFilter[];
+  blendMode?: BlendMode;
 }
 let pending: Pending | null = null;
 let instanceCounter = 1;
+
+/**
+ * @internal An instance of an engine class made outside the movie: no player sees
+ * it (no symbol lookup, no frame script queued) and the automatic instance names go
+ * on as if it had never been made. For reading which fields the engine keeps.
+ */
+export function constructDetached<T>(Cls: new () => T): T {
+  const saved = { counter: instanceCounter, pending, player: runtime.player };
+  pending = null;
+  runtime.player = null;
+  try {
+    return new Cls();
+  } finally {
+    instanceCounter = saved.counter;
+    pending = saved.pending;
+    runtime.player = saved.player;
+  }
+}
 
 /** Construct `Cls` as if the player placed it: parent/name/matrix are set before the class body runs. */
 export function constructPlaced<T>(Cls: new () => T, context: Pending): T | null {
@@ -144,8 +166,26 @@ export class DisplayObject extends EventDispatcher {
   private _visible = true;
   private _mask: DisplayObject | null = null;
   cacheAsBitmap = false;
-  filters: unknown[] = [];
-  blendMode = 'normal';
+  /** @internal surface filters in the compositor's model (timeline or `filters`) */ _filterData: SwfFilter[] | undefined;
+  /** @internal the filter objects a script assigned (undefined: the timeline's) */ _filterObjects: BitmapFilter[] | undefined;
+  /** Copies of the filters; assigning copies the array (flash.display.DisplayObject.filters). */
+  get filters(): unknown[] { return readFilters({ data: this._filterData, objects: this._filterObjects }); }
+  set filters(v: unknown[]) {
+    const state = writeFilters(v);
+    this._filterData = state.data;
+    this._filterObjects = state.objects;
+    this._scriptEffects = true;
+  }
+  /** @internal */ _blend: BlendMode = 'normal';
+  /** @internal a script set `filters` / `blendMode`: the timeline's no longer apply */ _scriptEffects = false;
+  get blendMode(): string { return this._blend; }
+  set blendMode(v: string) {
+    const mode = toBlendMode(String(v));
+    // flash.display.BlendMode names only (lower case); anything else is ignored, as in Flash
+    if (!mode || String(v) !== mode) return;
+    this._blend = mode;
+    this._scriptEffects = true;
+  }
   opaqueBackground: number | null = null;
   scrollRect: Rectangle | null = null;
   scale9Grid: Rectangle | null = null;
@@ -164,6 +204,8 @@ export class DisplayObject extends EventDispatcher {
       if (p.matrix) this._setRawMatrix(p.matrix.a, p.matrix.b, p.matrix.c, p.matrix.d, p.matrix.tx / TWIPS, p.matrix.ty / TWIPS);
       if (p.color) this._color = toColorTransform(p.color);
       if (p.clipDepth != null) this._clipDepth = p.clipDepth + TIMELINE_DEPTH_OFFSET;
+      if (p.filters?.length) this._filterData = p.filters;
+      if (p.blendMode) this._blend = p.blendMode;
       if (p.parent) p.parent._attachAtDepth(this, (p.depth ?? 0) + TIMELINE_DEPTH_OFFSET);
     } else {
       this._name = `instance${instanceCounter++}`;
@@ -258,6 +300,7 @@ export class DisplayObject extends EventDispatcher {
 
   /** @internal timeline update for an existing placement */
   _applyTimeline(item: Frame['display'][number]) {
+    if (!this._scriptEffects) { this._filterData = item.filters; this._blend = item.blendMode ?? 'normal'; }
     if (this._scriptTransformed) return;
     const m = item.matrix;
     this._setRawMatrix(m.a, m.b, m.c, m.d, m.tx / TWIPS, m.ty / TWIPS);
@@ -290,6 +333,12 @@ export class DisplayObject extends EventDispatcher {
 
   /** @internal drawn by the player before children */
   _drawSelf(_ctx: CanvasRenderingContext2D, _h: DisplayHost) {}
+  /**
+   * @internal What `_drawSelf` draws, as text (the compositor's layer cache);
+   * null when unknown. A class that draws itself must describe it here, or it
+   * is not cached.
+   */
+  _renderSig(): string | null { return this._drawSelf === DisplayObject.prototype._drawSelf ? '' : null; }
 
   toString() { return `[object ${this.constructor.name || 'DisplayObject'}]`; }
 }
@@ -544,6 +593,9 @@ export class Shape extends DisplayObject {
     }
     this.graphics._draw(ctx);
   }
+  /** @internal */ _renderSig() {
+    return this._drawSelf === Shape.prototype._drawSelf ? `S${String(this._symbol)}${JSON.stringify(this.graphics._cmds)}` : null;
+  }
 }
 
 export class StaticText extends Shape {
@@ -578,6 +630,9 @@ export class Sprite extends DisplayObjectContainer {
 
   /** @internal */ _ownBounds() { return this.graphics._getBounds(); }
   /** @internal */ _drawSelf(ctx: CanvasRenderingContext2D) { this.graphics._draw(ctx); }
+  /** @internal */ _renderSig() {
+    return this._drawSelf === Sprite.prototype._drawSelf ? (this.graphics._cmds.length ? `G${JSON.stringify(this.graphics._cmds)}` : 'G') : null;
+  }
 }
 
 // --------------------------------------------------------------- MovieClip --
@@ -721,6 +776,7 @@ function reconcileTimeline(clip: Sprite, timeline: Timeline, index: number) {
     const obj = instantiateCharacter(item.characterId, {
       parent: clip, depth: item.depth, name: item.name, placedAt: item.startFrame,
       matrix: item.matrix, color: item.colorTransform, clipDepth: item.clipDepth,
+      filters: item.filters, blendMode: item.blendMode,
     });
     slots.set(item.depth, { obj, placedAt: item.startFrame, characterId: item.characterId });
     if (obj && item.name && isPlainSlot(clip, item.name)) (clip as unknown as Record<string, unknown>)[item.name] = obj;

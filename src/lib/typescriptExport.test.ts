@@ -19,6 +19,17 @@ describe('editable TypeScript export', () => {
     expect(zip.file('runtime/as2/avm1.ts')).not.toBeNull();
     expect(zip.file('runtime/as2/index.ts')).not.toBeNull();
     expect(zip.file('game/as2ts-report.md')).not.toBeNull();
+    // every relative import of the shipped runtime resolves inside the archive (runtime/shared/* included)
+    const runtimeFiles = Object.keys(zip.files).filter((f) => f.startsWith('runtime/') && f.endsWith('.ts'));
+    expect(runtimeFiles).toEqual(expect.arrayContaining(['runtime/shared/hostGuard.ts', 'runtime/shared/filters.ts', 'runtime/shared/filterModel.ts']));
+    for (const file of runtimeFiles) {
+      const src = await zip.file(file)!.async('string');
+      for (const [, spec] of src.matchAll(/^(?:import|export)[^'"\n]*from '(\.{1,2}\/[^']+)'/gm)) {
+        const parts = file.split('/').slice(0, -1);
+        for (const seg of spec.split('/')) { if (seg === '..') parts.pop(); else if (seg !== '.') parts.push(seg); }
+        expect([file, spec, zip.file(`${parts.join('/')}.ts`) != null]).toEqual([file, spec, true]);
+      }
+    }
     const config = JSON.parse(await zip.file('tsconfig.json')!.async('string'));
     expect(config.compilerOptions.paths['as2-runtime']).toEqual(['./runtime/as2/index.ts']);
     expect(await zip.file('README.md')!.async('string')).toContain('not a self-running game');

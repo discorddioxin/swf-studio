@@ -1,18 +1,18 @@
-// Missing Dependencies on the real bundled set: the main movie booted with every
+// Missing Dependencies on the real sample set (the corpus fishing SWFs): the main movie booted with every
 // SWF it loads reports none; booted with one held back, it reports exactly that SWF
 // with the API that asked and the movie that asked. Every request nothing answered
 // (no adapter here) is listed — files and service endpoints apart.
 //
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 import { parseSwfBinary } from '@/lib/swf/binary';
 import { buildAS2Program, type SourceInput } from '@/engine/as2/program';
 import { AS2Player } from '@/engine/as2/player';
 import { createExternalResolver, type ExternalSwf } from '@/engine/as2/externals';
 import { dependencyPath, isServiceEndpoint } from '@/engine/flash/dependencies';
 import { dependencyProblems } from '@/components/MissingDependencies';
-import { bundledMainName, bundledSwfFile, bundledSwfNames } from '@/lib/__tests__/bundledSet';
+import { bundledMainName, bundledSwfFile, bundledSwfNames, describeSample } from '@/lib/__tests__/bundledSet';
 
 async function load(name: string) {
   const buf = readFileSync(bundledSwfFile(name));
@@ -43,7 +43,7 @@ async function boot(withheld: string | null) {
   return { player, built, blocked, mainFile: `${main.name}.swf` };
 }
 
-describe('Missing Dependencies (AVM1, bundled SWFs)', () => {
+describeSample('Missing Dependencies (AVM1, sample SWFs)', () => {
   it('lists a SWF the movie loads that is not in the load, with its API and requester', async () => {
     const full = await boot(null);
     expect(full.player.dependencies.files().filter((d) => d.kind === 'swf' && !d.optional)).toEqual([]);

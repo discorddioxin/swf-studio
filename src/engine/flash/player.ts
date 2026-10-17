@@ -23,7 +23,8 @@ import {
   Sprite, Stage, transformRect, type DisplayHost, type SymbolRef,
 } from './display';
 import { Event, EventDispatcher, IOErrorEvent, KeyboardEvent, MouseEvent } from './events';
-import { Point, Rectangle } from './geom';
+import { Matrix, Point, Rectangle } from './geom';
+import { composite, needsComposite } from '../../lib/compositor';
 import { globalDebugger, type DebuggerStore } from '../../debug/store';
 import { findMatchingBreakpoint, flashLabelMatchesBreakpoint } from '../../debug/breakpointMatch';
 import type { AudioBackend, AudioHandle, SoundChannel } from './media';
@@ -35,6 +36,9 @@ import { URLVariables } from './misc';
 const TWIPS = 20;
 
 /** What the player needs from the asset cache (AssetCache satisfies it). */
+/** DefineButtonSound record order: the button state transition each sound belongs to. */
+const OVER_UP_TO_IDLE = 0, IDLE_TO_OVER_UP = 1, OVER_UP_TO_OVER_DOWN = 2, OVER_DOWN_TO_OVER_UP = 3;
+
 export interface AssetSource {
   get(id: number, kind: string, bounds?: Rect): LoadedAsset;
   preview(id: number, kind: string): { url: string } | undefined;
@@ -332,6 +336,28 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     void clip;
   }
 
+  /**
+   * Play a timeline button's DefineButtonSound record (enabled buttons only),
+   * honouring SOUNDINFO: SyncStop stops the sound, SyncNoMultiple skips one that
+   * is playing, LoopCount is the number of plays and InPoint (44.1 kHz samples)
+   * the start. OutPoint and the envelope have no backend support.
+   */
+  private buttonSound(button: SimpleButton, record: number) {
+    if (!button.enabled || !this.audio || typeof button._symbol !== 'number') return;
+    const sound = this.doc.characters.get(button._symbol)?.buttonSounds?.[record];
+    if (!sound) return;
+    const { soundId, info } = sound;
+    const playing = this.frameSounds.get(soundId);
+    if (info.syncStop) { playing?.stop(); this.frameSounds.delete(soundId); return; }
+    if (info.syncNoMultiple && playing) return;
+    const url = this.assets?.preview(soundId, 'sound')?.url ?? null;
+    const handle = this.audio.play(soundId, url, (info.inPoint ?? 0) / 44.1, Math.max(0, (info.loopCount ?? 1) - 1), 1);
+    if (!handle) return;
+    this.frameSounds.set(soundId, handle);
+    const prev = handle.onended;
+    handle.onended = () => { if (this.frameSounds.get(soundId) === handle) this.frameSounds.delete(soundId); prev?.(); };
+  }
+
   soundLength(id: number) {
     const ch = this.doc.characters.get(id);
     const samples = Number(ch?.attrs.soundSampleCount ?? 0);
@@ -606,7 +632,7 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
       const target = this.hitTarget(x, y);
       this.updateHover(target);
       this.pressed = target;
-      if (target instanceof SimpleButton && target.enabled) target._state = 'down';
+      if (target instanceof SimpleButton && target.enabled) { target._state = 'down'; this.buttonSound(target, OVER_UP_TO_OVER_DOWN); }
       if (target instanceof TextField && target.type === 'input') this.stage.focus = target;
       this.mouseEvent(target ?? this.stage, MouseEvent.MOUSE_DOWN);
       this.flushScripts();
@@ -618,7 +644,11 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     this.mouse.x = x; this.mouse.y = y; this.mouse.down = false;
     this.activate(() => {
       const target = this.hitTarget(x, y);
-      if (this.pressed instanceof SimpleButton) this.pressed._state = this.pressed === target ? 'over' : 'up';
+      if (this.pressed instanceof SimpleButton) {
+        const over = this.pressed === target;
+        this.pressed._state = over ? 'over' : 'up';
+        this.buttonSound(this.pressed, over ? OVER_DOWN_TO_OVER_UP : OVER_UP_TO_IDLE); // release / release outside
+      }
       this.mouseEvent(target ?? this.stage, MouseEvent.MOUSE_UP);
       if (target && target === this.pressed) this.mouseEvent(target, MouseEvent.CLICK);
       else if (this.pressed && this.pressed !== target) this.mouseEvent(this.pressed, MouseEvent.RELEASE_OUTSIDE, false);
@@ -643,8 +673,16 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     const prev = this.hover;
     if (prev === target) return;
     this.hover = target;
-    if (prev instanceof SimpleButton) prev._state = 'up';
-    if (target instanceof SimpleButton && target.enabled) target._state = this.mouse.down && this.pressed === target ? 'down' : 'over';
+    // Drag out / drag over (the pressed button, mouse still down) play no sound.
+    if (prev instanceof SimpleButton) {
+      prev._state = 'up';
+      if (!(this.mouse.down && this.pressed === prev)) this.buttonSound(prev, OVER_UP_TO_IDLE);
+    }
+    if (target instanceof SimpleButton && target.enabled) {
+      const dragOver = this.mouse.down && this.pressed === target;
+      target._state = dragOver ? 'down' : 'over';
+      if (!dragOver) this.buttonSound(target, IDLE_TO_OVER_UP);
+    }
     const chain = (o: DisplayObject | null) => { const a: DisplayObject[] = []; for (let n = o; n && !(n instanceof Stage); n = n._parent) a.push(n); return a; };
     const oldChain = chain(prev), newChain = chain(target);
     if (prev && prev.stage) this.mouseEvent(prev, MouseEvent.MOUSE_OUT, true, target);
@@ -713,7 +751,11 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
   // ----------------------------------------------------------- render --
 
   /** Paint the stage. `scale`/`offsetX`/`offsetY` map stage pixels to canvas pixels. */
+  /** device pixels per stage pixel of the current render (filter sizes are stage pixels) */
+  private renderScale = 1;
+
   render(ctx: CanvasRenderingContext2D, scale: number, offsetX: number, offsetY: number) {
+    this.renderScale = scale;
     const base = new DOMMatrixLike(scale, 0, 0, scale, offsetX, offsetY);
     ctx.save();
     ctx.setTransform(base.a, base.b, base.c, base.d, base.e, base.f);
@@ -728,6 +770,7 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
 
   /** BitmapData.draw(displayObject): render into another canvas at identity. */
   drawTo(ctx: CanvasRenderingContext2D, obj: DisplayObject) {
+    this.renderScale = 1;
     this.activate(() => this.drawObject(ctx, obj, 1, new DOMMatrixLike(1, 0, 0, 1, 0, 0), true));
   }
 
@@ -753,6 +796,53 @@ export class FlashPlayer implements PlayerContext, DisplayHost {
     const ct = obj._colorRef();
     const alpha = parentAlpha * Math.max(0, Math.min(1, ct.alphaMultiplier + ct.alphaOffset / 255));
     if (alpha <= 0) return;
+    if (needsComposite(obj._filterData, obj._blend)) {
+      // through a layer: the object at its own alpha; the parent's (ctx.globalAlpha) applies
+      // when the layer is drawn back, after the filters
+      const own = Math.max(0, Math.min(1, ct.alphaMultiplier + ct.alphaOffset / 255));
+      const local = obj._localBounds();
+      const m = ignoreOwnTransform ? new Matrix() : obj._matrix();
+      const r = local.isEmpty() && obj instanceof DisplayObjectContainer ? null : transformRect(m, local);
+      const outer = ctx.getTransform();
+      composite(ctx, {
+        filters: obj._filterData, blendMode: obj._blend, filterScale: this.renderScale,
+        bounds: r ? { xMin: r.x, yMin: r.y, xMax: r.x + r.width, yMax: r.y + r.height } : null,
+        paint: (layer) => {
+          // the layer is the target shifted: stage-space masks shift with it
+          const l = layer.getTransform();
+          const shifted = new DOMMatrixLike(base.a, base.b, base.c, base.d, base.e + l.e - outer.e, base.f + l.f - outer.f);
+          this.drawObjectContent(layer, obj, own, shifted, ignoreOwnTransform);
+        },
+        cache: this.layerKey(obj, own, ignoreOwnTransform, base, outer),
+      });
+      return;
+    }
+    this.drawObjectContent(ctx, obj, alpha, base, ignoreOwnTransform);
+  }
+
+  /** The compositor's cache entry for `obj`'s layer, or none when its drawing cannot be described. */
+  private layerKey(obj: DisplayObject, own: number, ignoreOwnTransform: boolean, base: DOMMatrixLike, outer: DOMMatrix): { owner: object; key: string } | undefined {
+    // stage-space masks inside the subtree are drawn relative to `base`
+    const out: string[] = [`${own}:${ignoreOwnTransform}:${base.a},${base.b},${base.c},${base.d},${base.e - outer.e},${base.f - outer.f}`];
+    return this.describeSubtree(obj, out, true) ? { owner: obj, key: out.join('') } : undefined;
+  }
+
+  /** Everything `obj`'s subtree draws, as text; false when that is not knowable from the tree. */
+  private describeSubtree(obj: DisplayObject, out: string[], top = false): boolean {
+    if (!top && (!obj.visible || obj._isMaskFor > 0)) { out.push('-'); return true; }
+    const self = obj._renderSig();
+    // a mask object sits elsewhere in the tree
+    if (self == null || obj.mask) return false;
+    const m = obj._matrix(), c = obj._colorRef(), r = obj.scrollRect;
+    out.push(`(${self}|${obj._depth}:${obj._clipDepth ?? ''}:${m.a},${m.b},${m.c},${m.d},${m.tx},${m.ty}|${JSON.stringify(c)}`);
+    if (r) out.push(`${r.x},${r.y},${r.width},${r.height}`);
+    if (obj._filterData?.length || obj._blend !== 'normal') out.push(JSON.stringify(obj._filterData ?? null), String(obj._blend));
+    if (obj instanceof DisplayObjectContainer) for (const k of obj._children) if (!this.describeSubtree(k, out)) return false;
+    out.push(')');
+    return true;
+  }
+
+  private drawObjectContent(ctx: CanvasRenderingContext2D, obj: DisplayObject, alpha: number, base: DOMMatrixLike, ignoreOwnTransform: boolean) {
     ctx.save();
     if (obj.mask && obj.mask.stage) {
       // Rectangular mask: clip to the mask's stage bounds.

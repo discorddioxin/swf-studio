@@ -11,13 +11,14 @@
 //
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
-import { expect, it } from 'vitest';
+import { expect } from 'vitest';
+import { itCorpus } from '@/testing/corpus';
 import { parseSwfBinary } from '@/lib/swf/binary';
 import { buildAS2Program, type SourceInput } from '@/engine/as2/program';
 import { AS2Player, type DisplayNode } from '@/engine/as2/player';
 import { createExternalResolver, type ExternalSwf } from '@/engine/as2/externals';
 import { createFishingSession, gaiaFishingAdapter } from '..';
-import { SAMPLE_GAME_SET_ID, SAMPLE_MAIN, SAMPLE_SWF_NAMES, sampleSwfPath } from '../sample';
+import { hasSample, SAMPLE_GAME_SET_ID, SAMPLE_MAIN, SAMPLE_SWF_NAMES, sampleSwfPath } from '../sample';
 import { scanStage, snapshotStage, stageRect, type InspectablePlayer } from '@/components/uiTroubleshooter/scan';
 
 const NAMES = SAMPLE_SWF_NAMES;
@@ -91,7 +92,7 @@ function hitTests(player: AS2Player, node: DisplayNode, out: { path: string; at:
   return out;
 }
 
-it('room chooser: display list, hit tests and troubleshooter findings', async () => {
+itCorpus('room chooser: display list, hit tests and troubleshooter findings', async () => {
   const { player } = await bootToChooser();
   const root: any = player.root.obj;
   expect(root.gsecs?._currentframe).toBe(45);
@@ -181,4 +182,4 @@ it('room chooser: display list, hit tests and troubleshooter findings', async ()
   // every interactive node in the chooser answers its own centre
   const misrouted = hitTests(player, chooser!).filter((h) => h.target !== h.path);
   expect(misrouted, JSON.stringify(misrouted, null, 2)).toHaveLength(0);
-}, 120000);
+}, 120000, hasSample);

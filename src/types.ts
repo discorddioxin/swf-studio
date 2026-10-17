@@ -4,6 +4,8 @@
 // and only converted to pixels at the very last moment (render / export).
 // ---------------------------------------------------------------------------
 
+import type { SwfFilter } from './runtime/shared/filterModel';
+
 export const TWIPS = 20;
 
 export interface Matrix {
@@ -52,7 +54,24 @@ export interface SwfCharacter {
   codeTable?: number[];
   /** DefineFont2/3: the glyph outlines and layout, enough to build the font itself. */
   font?: SwfFontOutline;
+  /**
+   * DefineButtonSound: the sound for each state transition, in the tag's order —
+   * [OverUpToIdle, IdleToOverUp, OverUpToOverDown, OverDownToOverUp]; null = none.
+   */
+  buttonSounds?: (ButtonSound | null)[];
 }
+
+/** SOUNDINFO (StartSound, DefineButtonSound). In/out points and envelope positions are 44.1 kHz samples. */
+export interface SoundInfo {
+  syncStop: boolean;
+  syncNoMultiple: boolean;
+  inPoint?: number;
+  outPoint?: number;
+  loopCount?: number;
+  envelope?: { pos44: number; left: number; right: number }[];
+}
+
+export interface ButtonSound { soundId: number; info: SoundInfo }
 
 /** A point of a glyph contour: on the outline, or a quadratic control point. */
 export interface GlyphPoint { x: number; y: number; on: boolean }
@@ -114,7 +133,10 @@ export interface PlaceOp {
   ratio?: number;
   name?: string;
   clipDepth?: number;
-  blendMode?: string;
+  /** PlaceObject3 BlendMode (a move without it keeps the current one). */
+  blendMode?: BlendMode;
+  /** PlaceObject3 SurfaceFilterList (a move without it keeps the current list). */
+  filters?: SwfFilter[];
   hasFilters?: boolean;
 }
 
@@ -126,12 +148,43 @@ export interface DisplayItem {
   ratio: number;
   name?: string;
   clipDepth?: number;
-  blendMode?: string;
+  blendMode?: BlendMode;
+  filters?: SwfFilter[];
   hasFilters?: boolean;
   /** frame (in this timeline) at which this instance was created — used to
    *  derive the local playhead of nested sprites deterministically. */
   startFrame: number;
 }
+
+/**
+ * Blend modes by their ActionScript names (flash.display.BlendMode). The SWF
+ * stores them as a byte: 0 and 1 normal, 2 layer, 3 multiply, 4 screen,
+ * 5 lighten, 6 darken, 7 difference, 8 add, 9 subtract, 10 invert, 11 alpha,
+ * 12 erase, 13 overlay, 14 hardlight (SWF 19, PlaceObject3).
+ */
+export type BlendMode =
+  | 'normal' | 'layer' | 'multiply' | 'screen' | 'lighten' | 'darken' | 'difference'
+  | 'add' | 'subtract' | 'invert' | 'alpha' | 'erase' | 'overlay' | 'hardlight';
+
+export const BLEND_MODES: readonly BlendMode[] = [
+  'normal', 'normal', 'layer', 'multiply', 'screen', 'lighten', 'darken', 'difference',
+  'add', 'subtract', 'invert', 'alpha', 'erase', 'overlay', 'hardlight',
+];
+
+/** A blend mode from the SWF byte or a name in any case ("Add", "HARDLIGHT"); unknown → undefined. */
+export function toBlendMode(v: string | number | null | undefined): BlendMode | undefined {
+  if (v == null || v === '') return undefined;
+  const n = typeof v === 'number' ? v : /^\d+$/.test(v) ? Number(v) : NaN;
+  if (Number.isFinite(n)) return BLEND_MODES[n];
+  const name = String(v).toLowerCase().replace(/[^a-z]/g, '');
+  return (BLEND_MODES as readonly string[]).includes(name) ? name as BlendMode : undefined;
+}
+
+// Surface filters: the model lives with the runtimes that build it (flash.filters)
+export type {
+  SwfFilter, FilterPlacement, DropShadowFilterData, BlurFilterData, GlowFilterData, BevelFilterData,
+  GradientFilterData, ConvolutionFilterData, ColorMatrixFilterData,
+} from './runtime/shared/filterModel';
 
 export interface Frame {
   index: number;
@@ -162,6 +215,15 @@ export interface SwfHeader {
   fileName: string;
   /** SetBackgroundColor, 0xRRGGBB */
   backgroundColor?: number;
+  /** What was read: SWF bytes, or an FFDec XML export of them. */
+  source?: 'swf' | 'xml';
+  /**
+   * FileAttributes (tag 69) flags; unset when the movie has no such tag (in a
+   * binary SWF that means an AVM1 movie — the tag is how a SWF asks for AVM2).
+   */
+  as3?: boolean;
+  useNetwork?: boolean;
+  hasMetadata?: boolean;
 }
 
 export interface SwfDocument {

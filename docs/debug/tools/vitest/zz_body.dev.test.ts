@@ -3,6 +3,7 @@ import { inflateSync } from 'node:zlib';
 import { existsSync } from 'node:fs';
 import { describe, it } from 'vitest';
 import { disassemble, parseAbc, type AbcFile } from '@/../transcom/decompiler/swf/abc';
+import { corpusPath } from '@/testing/corpus';
 
 function payloads(file: string): Uint8Array[] {
   const raw = readFileSync(file);
@@ -34,12 +35,12 @@ function abcOf(p: Uint8Array): AbcFile {
 }
 
 /** SWF_BODY=<body index> prints a whole method body: `SWF_FROM`/`SWF_TO` clip it. */
-const CORPUS_OK = existsSync(process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf') && !!(process.env.SWF_BODY || process.env.SWF_NAME);
+const CORPUS_OK = existsSync(process.env.SWF_FILE ?? corpusPath('pinball-swfs/game.swf')) && !!(process.env.SWF_BODY || process.env.SWF_NAME);
 
 describe.skipIf(!CORPUS_OK)('corpus harness', () => {
   it('disassembles a whole body', () => {
     // The first ABC block that holds the wanted body (SWF_NAME / SWF_BODY).
-    const all = payloads(process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf').map(abcOf);
+    const all = payloads(process.env.SWF_FILE ?? corpusPath('pinball-swfs/game.swf')).map(abcOf);
     const abc = all.find((a) => process.env.SWF_NAME
       ? a.classes.some((c) => [...c.instance.traits, ...c.traits].some((t) => new RegExp(process.env.SWF_NAME!).test(`${c.instance.name}::${t.name}`)))
       : a.bodies.some((b) => b.method === Number(process.env.SWF_BODY))) ?? all[0];

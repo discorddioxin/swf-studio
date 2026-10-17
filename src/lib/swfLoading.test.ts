@@ -2,15 +2,16 @@
 // Uploading SWFs: the raw .swf binaries (parsed by the binary parser) and the
 // JPEXS XML exports go through the same loader, and the SWF the user picked as
 // the main movie comes out first — the rest are dependencies.
+//
+// The movies are the small AS2 test movie of src/testing/movies.ts, in both of
+// its forms: loading does not depend on which game the SWFs belong to.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import JSZip from 'jszip';
-import { loadUploadedPackages } from './swfLoading';
+import { addSessionDependencies, loadUploadedPackages } from './swfLoading';
+import { DependencyFiles } from '../engine/flash/dependencies';
 import { isSwfXmlExport } from './swfSources';
-import { isAs2Bundle } from '../components/As2Execute';
-import { bundledExportDir, bundledExportedNames, bundledMainName, bundledSwfFile, bundledSwfNames } from './__tests__/bundledSet';
-
+import { chooseRuntime } from '../components/runtimeChoice';
+import { FFDEC_SAMPLE_XML, ffdecSampleSwf } from '@/testing/movies';
 
 // jsdom's Blob has no text()/arrayBuffer(); browsers do.
 beforeAll(() => {
@@ -31,19 +32,16 @@ beforeAll(() => {
   }
 });
 
+const SWF_BYTES = ffdecSampleSwf();
+
 function binarySwf(name: string, path = name): File {
-  const bytes = readFileSync(bundledSwfFile(name));
-  const file = new File(
-    [bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer],
-    `${name}.swf`,
-  );
+  const file = new File([SWF_BYTES.slice().buffer as ArrayBuffer], `${name}.swf`);
   Object.defineProperty(file, 'webkitRelativePath', { value: path, configurable: true });
   return file;
 }
 
 function xmlExport(name: string, path = `${name}/${name}.xml`): File {
-  const text = readFileSync(resolve(bundledExportDir(name), `${name}.xml`), 'utf8');
-  const file = new File([text], `${name}.xml`);
+  const file = new File([FFDEC_SAMPLE_XML], `${name}.xml`);
   Object.defineProperty(file, 'webkitRelativePath', { value: path, configurable: true });
   return file;
 }
@@ -52,7 +50,7 @@ const names = (packages: { doc: { header: { fileName: string } } }[]) => package
 
 describe('uploading SWFs', () => {
   it('parses a raw .swf into a package the workbench can open', async () => {
-    const movie = bundledSwfNames()[1];
+    const movie = 'overview';
     const [pkg] = await loadUploadedPackages([binarySwf(movie, `${movie}.swf`)]);
     expect(pkg.doc.header.fileName).toBe(`${movie}.swf`);
     expect(Number(pkg.doc.header.version)).toBeGreaterThan(0);
@@ -61,11 +59,11 @@ describe('uploading SWFs', () => {
     expect(pkg.bundle.files.some((f) => /\.as$/i.test(f.path))).toBe(true);
     expect(pkg.bundle.files.some((f) => f.category === 'other')).toBe(false);
     // …so an uploaded AS2 SWF plays on the AS2 player, dependencies and all
-    expect(isAs2Bundle(pkg.doc, pkg.bundle)).toBe(true);
+    expect(chooseRuntime(pkg.doc, pkg.bundle).runtime).toBe('as2');
   }, 30000);
 
   it('uses the picked SWF as the main movie and the others as dependencies', async () => {
-    const [first, second] = bundledSwfNames().slice(1);
+    const [first, second] = ['overview', 'scene'];
     const files = [
       binarySwf(second, `external/${second}/${second}.swf`),
       binarySwf(first, `${first}.swf`),
@@ -80,7 +78,7 @@ describe('uploading SWFs', () => {
   }, 30000);
 
   it('reads the same movie from the XML export when both forms are uploaded', async () => {
-    const scene = bundledExportedNames()[0];
+    const scene = 'scene';
     const both = [xmlExport(scene, `scene/${scene}.xml`), binarySwf(scene, `scene/${scene}.swf`)];
     const preferred = await loadUploadedPackages(both);
     expect(preferred).toHaveLength(1);
@@ -95,8 +93,8 @@ describe('uploading SWFs', () => {
 
   it('loads SWFs out of a ZIP and finds them before unpacking', async () => {
     const zip = new JSZip();
-    zip.file('game/main.swf', readFileSync(bundledSwfFile(bundledMainName())));
-    zip.file('game/external/scene/scene.swf', readFileSync(bundledSwfFile(bundledSwfNames()[1])));
+    zip.file('game/main.swf', SWF_BYTES);
+    zip.file('game/external/scene/scene.swf', SWF_BYTES);
     zip.file('game/readme.txt', 'not a swf');
     const archive = new File([await zip.generateAsync({ type: 'blob' })], 'game.zip');
 
@@ -106,7 +104,7 @@ describe('uploading SWFs', () => {
   }, 30000);
 
   it('keeps every non-SWF file of the upload for the movie to load, data XML included', async () => {
-    const main = bundledMainName();
+    const main = 'game';
     const data = (name: string, text: string, path: string) => {
       const file = new File([text], name);
       Object.defineProperty(file, 'webkitRelativePath', { value: path, configurable: true });
@@ -126,7 +124,7 @@ describe('uploading SWFs', () => {
   }, 30000);
 
   it('tells an FFDec SWF export from a data XML by its <swf> root', async () => {
-    const movie = bundledExportedNames()[0];
+    const movie = 'scene';
     expect(await isSwfXmlExport(xmlExport(movie))).toBe(true);
     expect(await isSwfXmlExport(new File(['<?xml version="1.0"?><!DOCTYPE c><c><swf/></c>'], 'c.xml'))).toBe(false);
     expect(await isSwfXmlExport(new File(['<!-- x --><swf version="8">'], 'c.xml'))).toBe(true);
@@ -142,5 +140,39 @@ describe('uploading SWFs', () => {
     const broken = new File([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])], 'broken.swf');
     Object.defineProperty(broken, 'webkitRelativePath', { value: 'broken.swf', configurable: true });
     await expect(loadUploadedPackages([broken])).rejects.toThrow();
+  });
+});
+
+// "Add Dependency" (Execute): files put into a loaded session for testing.
+describe('adding dependencies to a session', () => {
+  it('a SWF becomes a package named as the movie asks for it; other files join the session files', async () => {
+    const existing = new DependencyFiles([{ path: 'game/config.xml', file: new File(['<c/>'], 'config.xml') }]);
+    const picked = new File([SWF_BYTES.slice().buffer as ArrayBuffer], 'downloaded (1).swf');
+    const result = await addSessionDependencies([
+      { file: picked, path: 'scenes/scene2.swf' },
+      { file: new File(['<scores/>'], 'my-scores.xml'), path: 'xml/scores.xml' },
+    ], existing);
+    expect(names(result.packages)).toEqual(['scene2.swf']);
+    expect(result.packages[0].doc.timelines.size).toBeGreaterThan(0);
+    expect(result.packages[0].dependencyFiles).toBe(result.dependencyFiles);
+    expect(await result.dependencyFiles!.text('http://host/game/xml/scores.xml')).toBe('<scores/>');
+    expect(await result.dependencyFiles!.text('game/config.xml')).toBe('<c/>');
+    expect(existing.find('xml/scores.xml')).toBeUndefined();
+    expect(result.added).toEqual(['scenes/scene2.swf', 'xml/scores.xml']);
+  });
+
+  it('only SWFs: the session files are the same object (nothing to rebuild for them)', async () => {
+    const existing = new DependencyFiles();
+    const result = await addSessionDependencies([{ file: binarySwf('lib'), path: 'lib.swf' }], existing);
+    expect(result.dependencyFiles).toBe(existing);
+    expect((await addSessionDependencies([{ file: binarySwf('lib'), path: 'lib.swf' }], null)).dependencyFiles).toBeNull();
+  });
+
+  it('an unreadable SWF: nothing is added and the error names the file', async () => {
+    const broken = new File([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])], 'broken.swf');
+    await expect(addSessionDependencies([
+      { file: binarySwf('ok'), path: 'ok.swf' },
+      { file: broken, path: 'level2.swf' },
+    ], null)).rejects.toThrow(/^broken\.swf: /);
   });
 });

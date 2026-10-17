@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { it } from 'vitest';
 import { disassemble, parseAbc, type AbcFile } from '@/../transcom/decompiler/swf/abc';
+import { corpusPath } from '@/testing/corpus';
 
 function payloads(file: string): Uint8Array[] {
   const raw = readFileSync(file);
@@ -33,7 +34,7 @@ function abcOf(p: Uint8Array): AbcFile {
 }
 
 it('frame script encoding', () => {
-  const abc = abcOf(payloads('/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf')[0]);
+  const abc = abcOf(payloads(corpusPath('pinball-swfs/game.swf'))[0]);
   const withNames = abc.methods.map((m, i) => ({ i, name: m.name })).filter((m) => m.name);
   console.log(`named methods: ${withNames.length}; samples: ${withNames.slice(0, 24).map((m) => `${m.i}:${m.name}`).join(', ')}`);
   const target = abc.classes.findIndex((c) => /mcRampBank_Gate_113/.test(c.instance.name));

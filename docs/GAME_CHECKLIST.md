@@ -19,7 +19,7 @@ Each set's entry movie is booted the way the game starts:
 
 The raw numbers are one JSON line per SWF, written to `/tmp/census.jsonl`:
 
-    SWF_CORPUS=/tmp/swf-forge2/games-swfs npx vitest run docs/debug/tools/vitest/zz_census.dev.test.ts
+    SWF_CORPUS=/tmp/swf-forge2/games-swfs npm run test:debug -- zz_census
 
 ✅ works · ⚠️ works with a caveat · ❌ fails · ⬜ not reachable yet, so not tested
 
@@ -57,6 +57,15 @@ type, path, the API that asked, the movie that asked), one Problem per file, and
 troubleshooter finding. Server scripts (`gateway.php`, …) are listed apart as
 **Service endpoints**: no file can stand in for them, only a live server or a game
 adapter.
+
+**Add Dependency** puts a missing file into the current session for testing, without
+reloading the upload. The notice's button takes several files and matches each to the
+missing file of the same name; **Add…** on a row of the list takes one file and uses it
+for that request whatever it is called. Either way the file is stored under the path
+the movie asked for: a SWF joins the loaded movies (so `loadMovie` / `Loader` find it),
+anything else joins the uploaded files. The game then restarts with it. Added files are
+listed under *Added this session* and last until New folder or another load
+(`src/components/useSessionDependencies.ts`).
 
 Any non-SWF file uploaded with the SWFs (keeping its folder, or just the file name
 when that is unique) is served to those calls. An `.xml` is taken for an FFDec SWF
@@ -100,7 +109,9 @@ avatar images come from Gaia's CDN and are marked *optional live asset*.
   - no Missing Dependencies at any point
   - the test drives the player with `advanceTime()` (→ `step()`), so the movie's
     `setInterval`/`setTimeout` timers run as in the app
-- ✅ **From the SWFs alone.** The bundled set is the 8 original SWFs, nothing else.
+- ✅ **From the SWFs alone.** The set is the 8 original SWFs, nothing else. They are
+  read from the uploaded corpus (`games-swfs/fishing-swfs`, SHA-identical to the
+  SWFs that used to be committed); the repo bundles no game files.
   - The committed AS2 override of `gsecs2.9` frame 61 is gone. Six bundled SWFs had
     been rebuilt from FFDec exports; they are replaced by the uploaded originals.
     In the SWF's own chooser Join is an ordinary button, enabled before a row is
@@ -108,8 +119,9 @@ avatar images come from Gaia's CDN and are marked *optional live asset*.
     override, not from the game. The test asserts the SWF's behaviour.
   - Fonts are built from the SWF's DefineFont glyphs (59 distinct, all pass the OTS
     sanitizer); sounds are decoded from its DefineSound tags (MP3/ADPCM/PCM).
-  - The FFDec exports are kept under `fixtures/ffdec/gaia-fishing/` as test oracles
-    only; nothing in the app reads them.
+  - FFDec exports are not kept in the repo. Comparison tests use them only when
+    `SWF_FFDEC` points at a local export, and skip otherwise; nothing in the app
+    reads them.
 - ⬜ **Not tested:** hooking and reeling a fish, catch results, top-fishers list, chat
   with other players beyond the mock.
 - ⚠️ **Warnings.**

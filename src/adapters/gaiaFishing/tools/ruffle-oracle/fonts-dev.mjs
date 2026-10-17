@@ -4,12 +4,13 @@
 import fs from 'node:fs';
 import zlib from 'node:zlib';
 import { JSDOM } from 'jsdom';
-import { sampleExportDir, sampleSwfPath } from '../../sample.ts';
+import { sampleSwfPath } from '../../sample.ts';
+import { ffdecExportDir } from '../../../../testing/corpusPaths.ts';
 
 const [name, idArg] = process.argv.slice(2);
 const fontId = Number(idArg);
 
-const dom = new JSDOM(fs.readFileSync(`${sampleExportDir(name)}/${name}.xml`, 'utf8'), { contentType: 'text/xml' });
+const dom = new JSDOM(fs.readFileSync(`${ffdecExportDir(name)}/${name}.xml`, 'utf8'), { contentType: 'text/xml' });
 const doc = dom.window.document;
 const xmlFont = [...doc.querySelectorAll('item[type="DefineFont2Tag"],item[type="DefineFont3Tag"]')].find((el) => el.getAttribute('fontID') === String(fontId));
 const shapes = xmlFont.querySelector('glyphShapeTable') ? [...xmlFont.querySelector('glyphShapeTable').children] : [];

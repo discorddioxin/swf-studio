@@ -5,6 +5,7 @@ import { inflateSync } from 'node:zlib';
 import { existsSync } from 'node:fs';
 import { describe, it } from 'vitest';
 import { disassemble, parseAbc, type AbcFile } from '@/../transcom/decompiler/swf/abc';
+import { corpusPath } from '@/testing/corpus';
 
 function payloads(file: string): Uint8Array[] {
   const raw = readFileSync(file);
@@ -51,11 +52,11 @@ function owners(abc: AbcFile): Map<number, string> {
 const METHOD_FLAG: Record<string, number> = { NEED_ARGUMENTS: 1, NEED_ACTIVATION: 2, NEED_REST: 4, HAS_OPTIONAL: 8, SET_DXNS: 64, HAS_PARAM_NAMES: 128 };
 const flagText = (f: number) => Object.entries(METHOD_FLAG).filter(([, b]) => f & b).join('|') || '0';
 
-const CORPUS_OK = existsSync(process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf');
+const CORPUS_OK = existsSync(process.env.SWF_FILE ?? corpusPath('pinball-swfs/game.swf'));
 
 describe.skipIf(!CORPUS_OK)('corpus harness', () => {
   it('dumps bodies using an opcode', () => {
-  const file = process.env.SWF_FILE ?? '/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf';
+  const file = process.env.SWF_FILE ?? corpusPath('pinball-swfs/game.swf');
   const abc = abcOf(payloads(file)[0]);
   const kind = process.env.SWF_KIND ?? 'newactivation';
   const limit = Number(process.env.SWF_LIMIT ?? 2);

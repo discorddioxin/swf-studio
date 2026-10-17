@@ -1,9 +1,13 @@
 import { readFileSync } from 'node:fs';
 import zlib from 'node:zlib';
 import { JSDOM } from 'jsdom';
+import { sampleSwfPath } from '../../../src/adapters/gaiaFishing/sample.ts';
+// a .swf path, or the name of a sample movie (found in the corpus; SWF_CORPUS=… overrides)
+const swfPath = (n) => (n.endsWith('.swf') ? n : sampleSwfPath(n));
+import { ffdecExportDir } from '../../../src/testing/corpusPaths.ts'; // the movie's FFDec export (SWF_FFDEC)
 
 const name = process.argv[2];
-const xml = readFileSync(`fixtures/ffdec/gaia-fishing/${name}/${name}.xml`, 'utf8');
+const xml = readFileSync(`${ffdecExportDir(name)}/${name}.xml`, 'utf8');
 const dom = new JSDOM(xml, { contentType: 'text/xml' });
 const doc = dom.window.document;
 const tagsWrap = doc.querySelector('tags');
@@ -19,7 +23,7 @@ const list = (els, depth = 0) => els.flatMap((el) => {
 console.log(`--- XML (${rootTags.length} top-level tags) ---`);
 for (const l of list(rootTags)) console.log(l);
 
-const raw = readFileSync(`game-files/fish-full/swfs/${name}.swf`);
+const raw = readFileSync(swfPath(name));
 const body = raw[0] === 0x43 ? zlib.inflateSync(raw.subarray(8)) : raw.subarray(8);
 const names = { 1: 'ShowFrameTag', 2: 'DefineShapeTag', 9: 'SetBackgroundColorTag', 11: 'DefineTextTag', 12: 'DoActionTag', 22: 'DefineShape2Tag', 24: 'ProtectTag', 26: 'PlaceObject2Tag', 26.5: '', 28: 'RemoveObject2Tag', 32: 'DefineShape3Tag', 33: 'DefineText2Tag', 34: 'DefineButton2Tag', 35: 'DefineBitsJPEG3Tag', 36: 'DefineBitsLossless2Tag', 37: 'DefineEditTextTag', 39: 'DefineSpriteTag', 43: 'FrameLabelTag', 48: 'DefineFont2Tag', 56: 'ExportAssetsTag', 59: 'DoInitActionTag', 69: 'ScriptLimitsTag', 73: 'DefineFontAlignZonesTag', 74: 'CSMTextSettingsTag', 75: 'DefineFont3Tag', 76: 'SymbolClassTag', 83: 'DefineShape4Tag', 88: 'DefineFontNameTag', 20: 'DefineBitsLosslessTag' };
 let p = Math.ceil((5 + (body[0] >> 3) * 4) / 8) + 4;

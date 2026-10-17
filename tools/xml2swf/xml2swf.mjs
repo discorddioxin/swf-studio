@@ -84,9 +84,9 @@ const TAG_CODES = {
   EndTag: 0, ShowFrameTag: 1, DefineShapeTag: 2, RemoveObjectTag: 5,
   DefineBitsTag: 6, DefineButtonTag: 7, JPEGTablesTag: 8, SetBackgroundColorTag: 9,
   DefineFontTag: 10, DefineTextTag: 11, DoActionTag: 12, DefineSoundTag: 14,
-  StartSoundTag: 15, DefineButtonCxformTag: 17, SoundStreamHeadTag: 18,
+  StartSoundTag: 15, DefineButtonSoundTag: 17, SoundStreamHeadTag: 18,
   SoundStreamBlockTag: 19, DefineBitsLosslessTag: 20, DefineBitsJPEG2Tag: 21,
-  DefineShape2Tag: 22, ProtectTag: 24, PlaceObject2Tag: 26, RemoveObject2Tag: 28,
+  DefineShape2Tag: 22, DefineButtonCxformTag: 23, ProtectTag: 24, PlaceObject2Tag: 26, RemoveObject2Tag: 28,
   DefineShape3Tag: 32, DefineText2Tag: 33, DefineButton2Tag: 34,
   DefineBitsJPEG3Tag: 35, DefineBitsLossless2Tag: 36, DefineEditTextTag: 37,
   DefineSpriteTag: 39, FrameLabelTag: 43, SoundStreamHead2Tag: 45,
@@ -94,7 +94,7 @@ const TAG_CODES = {
   ImportAssetsTag: 57, DoInitActionTag: 59, DefineVideoStreamTag: 60,
   FileAttributesTag: 69, PlaceObject3Tag: 70, DefineFontAlignZonesTag: 73,
   CSMTextSettingsTag: 74, DefineFont3Tag: 75, SymbolClassTag: 76,
-  DoABCTag: 82, DefineShape4Tag: 83, DefineMorphShape2Tag: 84,
+  DoABCTag: 72, DoABC2Tag: 82, DefineShape4Tag: 83, DefineMorphShape2Tag: 84,
   DefineBinaryDataTag: 87, DefineFontNameTag: 88, DefineBitsJPEG4Tag: 90,
 };
 
@@ -415,6 +415,114 @@ function writePlace2(w, el) {
   if (clipActions) writeClipActions(w, clipActions);
 }
 
+/**
+ * FILTERLIST (SWF 19) from FFDec's list element (`surfaceFilterList` / `filterList`):
+ * FIXED fields 16.16, strength FIXED8, FLOAT singles; the bevel stores its highlight
+ * colour before the shadow colour.
+ */
+function writeFilterList(w, listEl) {
+  const items = listEl ? [...listEl.children] : [];
+  const ids = { DROPSHADOWFILTER: 0, BLURFILTER: 1, GLOWFILTER: 2, BEVELFILTER: 3, GRADIENTGLOWFILTER: 4, CONVOLUTIONFILTER: 5, COLORMATRIXFILTER: 6, GRADIENTBEVELFILTER: 7 };
+  w.u8(items.length);
+  for (const f of items) {
+    const type = f.getAttribute('type');
+    const id = ids[type];
+    if (id == null) throw new Error(`unsupported filter ${type}`);
+    w.u8(id);
+    const fixed = (k) => w.u32(Math.round(Number(f.getAttribute(k) ?? 0) * 65536) | 0);
+    const fixed8 = (k) => w.u16(Math.round(Number(f.getAttribute(k) ?? 0) * 256));
+    const rgba = (c) => { w.u8(num(c, 'red')); w.u8(num(c, 'green')); w.u8(num(c, 'blue')); w.u8(c && has(c, 'alpha') ? num(c, 'alpha') : 255); };
+    const bit = (k) => (BOOL(f.getAttribute(k)) ? 1 : 0);
+    const passes = () => num(f, 'passes');
+    const list = (k) => { const l = childByTag(f, k); return l ? [...l.children] : []; };
+    switch (id) {
+      case 0:
+        rgba(childByTag(f, 'dropShadowColor'));
+        fixed('blurX'); fixed('blurY'); fixed('angle'); fixed('distance'); fixed8('strength');
+        w.u8((bit('innerShadow') << 7) | (bit('knockout') << 6) | (bit('compositeSource') << 5) | (passes() & 0x1f));
+        break;
+      case 1:
+        fixed('blurX'); fixed('blurY');
+        w.u8((passes() & 0x1f) << 3);
+        break;
+      case 2:
+        rgba(childByTag(f, 'glowColor'));
+        fixed('blurX'); fixed('blurY'); fixed8('strength');
+        w.u8((bit('innerGlow') << 7) | (bit('knockout') << 6) | (bit('compositeSource') << 5) | (passes() & 0x1f));
+        break;
+      case 3:
+        rgba(childByTag(f, 'highlightColor')); rgba(childByTag(f, 'shadowColor'));
+        fixed('blurX'); fixed('blurY'); fixed('angle'); fixed('distance'); fixed8('strength');
+        w.u8((bit('innerShadow') << 7) | (bit('knockout') << 6) | (bit('compositeSource') << 5) | (bit('onTop') << 4) | (passes() & 0x0f));
+        break;
+      case 4: case 7: {
+        const colors = list('gradientColors'), ratios = list('gradientRatio');
+        w.u8(colors.length);
+        for (const c of colors) rgba(c);
+        for (const r of ratios) w.u8(Number(r.textContent) || 0);
+        fixed('blurX'); fixed('blurY'); fixed('angle'); fixed('distance'); fixed8('strength');
+        w.u8((bit('innerShadow') << 7) | (bit('knockout') << 6) | (bit('compositeSource') << 5) | (bit('onTop') << 4) | (passes() & 0x0f));
+        break;
+      }
+      case 5:
+        w.u8(num(f, 'matrixX')); w.u8(num(f, 'matrixY'));
+        w.f32(f.getAttribute('divisor')); w.f32(f.getAttribute('bias'));
+        for (const c of list('matrix')) w.f32(c.textContent);
+        rgba(childByTag(f, 'defaultColor'));
+        w.u8((bit('clamp') << 1) | bit('preserveAlpha'));
+        break;
+      case 6:
+        for (const c of list('matrix')) w.f32(c.textContent);
+        break;
+    }
+  }
+}
+
+/** Whether `c` lies in a filter record below `root` (its `matrix` list is no placement matrix). */
+function inFilter(c, root) {
+  for (let n = c.parentElement; n && n !== root; n = n.parentElement) {
+    if (/FILTER$/.test(n.getAttribute('type') ?? '') || /^(surfaceFilterList|filterList)$/.test(n.tagName)) return true;
+  }
+  return false;
+}
+
+/** PlaceObject3: the PlaceObject2 fields plus a second flags byte, ClassName, filters, blend mode, bitmap cache. */
+function writePlace3(w, el) {
+  const move = BOOL(el.getAttribute('placeFlagMove'));
+  const hasChar = BOOL(el.getAttribute('placeFlagHasCharacter'));
+  const matrix = BOOL(el.getAttribute('placeFlagHasMatrix')) ? firstData(el, (c) => (c.getAttribute('type') === 'MATRIX' || c.tagName === 'matrix') && !inFilter(c, el)) : null;
+  const ct = BOOL(el.getAttribute('placeFlagHasColorTransform')) ? firstData(el, (c) => /^CXFORM/.test(c.getAttribute('type') ?? '') || /^colorTransform/.test(c.tagName)) : null;
+  const flag = (k) => BOOL(el.getAttribute(k));
+  const clipActions = flag('placeFlagHasClipActions') ? firstData(el, (c) => c.tagName === 'clipActions' || c.getAttribute('type') === 'CLIPACTIONS') : null;
+  let f1 = 0, f2 = 0;
+  if (clipActions) f1 |= 0x80;
+  if (flag('placeFlagHasClipDepth')) f1 |= 0x40;
+  if (flag('placeFlagHasName')) f1 |= 0x20;
+  if (flag('placeFlagHasRatio')) f1 |= 0x10;
+  if (ct) f1 |= 0x08;
+  if (matrix) f1 |= 0x04;
+  if (hasChar) f1 |= 0x02;
+  if (move) f1 |= 0x01;
+  if (flag('placeFlagHasImage')) f2 |= 0x10;
+  if (flag('placeFlagHasClassName')) f2 |= 0x08;
+  if (flag('placeFlagHasCacheAsBitmap')) f2 |= 0x04;
+  if (flag('placeFlagHasBlendMode')) f2 |= 0x02;
+  if (flag('placeFlagHasFilterList')) f2 |= 0x01;
+  w.u8(f1); w.u8(f2);
+  w.u16(num(el, 'depth'));
+  if (f2 & 0x08) w.str(el.getAttribute('className') ?? '');
+  if (hasChar) w.u16(num(el, 'characterId'));
+  if (matrix) writeMatrix(w, matrix);
+  if (ct) writeCxform(w, ct, true);
+  if (f1 & 0x10) w.u16(num(el, 'ratio'));
+  if (f1 & 0x20) w.str(el.getAttribute('name') ?? '');
+  if (f1 & 0x40) w.u16(num(el, 'clipDepth'));
+  if (f2 & 0x01) writeFilterList(w, childByTag(el, 'surfaceFilterList'));
+  if (f2 & 0x02) w.u8(num(el, 'blendMode'));
+  if (f2 & 0x04) w.u8(num(el, 'bitmapCache'));
+  if (clipActions) writeClipActions(w, clipActions);
+}
+
 function clipEventMask(el) {
   if (!el) return 0;
   // CLIPEVENTFLAGS bytes in SWF stream order (little-endian u32):
@@ -650,6 +758,36 @@ function writeFontAlignZones(w, itemEl) {
   w.align();
 }
 
+/**
+ * SOUNDINFO (SWF 19): flags reserved(2) SyncStop SyncNoMultiple HasEnvelope HasLoops
+ * HasOutPoint HasInPoint, then the fields that are present. EnvPoints is a u8 count of
+ * SOUNDENVELOPE records (Pos44 u32, LeftLevel u16, RightLevel u16).
+ */
+function writeSoundInfo(w, si) {
+  const has = (k) => !!si && BOOL(si.getAttribute(k));
+  let f = 0;
+  if (has('syncStop')) f |= 0x20;
+  if (has('syncNoMultiple')) f |= 0x10;
+  if (has('hasEnvelope')) f |= 0x08;
+  if (has('hasLoops')) f |= 0x04;
+  if (has('hasOutPoint')) f |= 0x02;
+  if (has('hasInPoint')) f |= 0x01;
+  w.u8(f);
+  if (has('hasInPoint')) w.u32(num(si, 'inPoint'));
+  if (has('hasOutPoint')) w.u32(num(si, 'outPoint'));
+  if (has('hasLoops')) w.u16(num(si, 'loopCount'));
+  if (has('hasEnvelope')) {
+    const records = childByTag(si, 'envelopeRecords');
+    const items = records ? [...records.children] : [];
+    w.u8(items.length);
+    for (const e of items) {
+      w.u32(num(e, 'pos44'));
+      w.u16(num(e, 'leftLevel'));
+      w.u16(num(e, 'rightLevel'));
+    }
+  }
+}
+
 // ----------------------------------------------------------------- tags ----
 
 function writeTag(w, itemEl) {
@@ -692,6 +830,9 @@ function tagPayload(itemEl, type) {
       break;
     case 'PlaceObject2Tag':
       writePlace2(w, itemEl);
+      break;
+    case 'PlaceObject3Tag':
+      writePlace3(w, itemEl);
       break;
     case 'RemoveObject2Tag':
       writeRemove2(w, itemEl);
@@ -784,7 +925,7 @@ function tagPayload(itemEl, type) {
         const ct = firstData(r, (c) => /^CXFORM/.test(c.getAttribute('type') ?? ''));
         if (ct) writeCxform(recW, ct, true);
         else writeIdentityCxform(recW);
-        if (BOOL(r.getAttribute('buttonHasFilterList'))) throw new Error('button filter lists unsupported');
+        if (BOOL(r.getAttribute('buttonHasFilterList'))) writeFilterList(recW, childByTag(r, 'filterList'));
         if (BOOL(r.getAttribute('buttonHasBlendMode'))) recW.u8(num(r, 'blendMode'));
       }
       recW.u8(0); // terminator
@@ -882,29 +1023,17 @@ function tagPayload(itemEl, type) {
     }
     case 'StartSoundTag': {
       w.u16(num(itemEl, 'soundId'));
-      const si = firstData(itemEl, (c) => (c.getAttribute('type') ?? '') === 'SOUNDINFO' || c.tagName === 'soundInfo');
-      let f = 0;
-      if (si) {
-        if (BOOL(si.getAttribute('syncStop'))) f |= 0x20;
-        if (BOOL(si.getAttribute('syncNoMultiple'))) f |= 0x10;
-        if (BOOL(si.getAttribute('hasEnvelope'))) f |= 0x08;
-        if (BOOL(si.getAttribute('hasLoops'))) f |= 0x04;
-        if (BOOL(si.getAttribute('hasOutPoint'))) f |= 0x02;
-        if (BOOL(si.getAttribute('hasInPoint'))) f |= 0x01;
-      }
-      w.u8(f);
-      if (si && BOOL(si.getAttribute('hasInPoint'))) w.u32(num(si, 'inPoint'));
-      if (si && BOOL(si.getAttribute('hasOutPoint'))) w.u32(num(si, 'outPoint'));
-      if (si && BOOL(si.getAttribute('hasLoops'))) w.u16(num(si, 'loopCount'));
-      if (si && BOOL(si.getAttribute('hasEnvelope'))) {
-        const envs = childrenByTag(si, 'envelopes');
-        const items = envs.length ? [...envs[0].children] : [];
-        w.u16(items.length);
-        for (const e of items) {
-          w.u32(num(e, 'position44k'));
-          w.u16(num(e, 'left44k'));
-          w.u16(num(e, 'right44k'));
-        }
+      writeSoundInfo(w, firstData(itemEl, (c) => (c.getAttribute('type') ?? '') === 'SOUNDINFO' || c.tagName === 'soundInfo'));
+      break;
+    }
+    case 'DefineButtonSoundTag': {
+      // ButtonId, then OverUpToIdle, IdleToOverUp, OverUpToOverDown, OverDownToOverUp:
+      // a sound id each and, when it is nonzero, its SOUNDINFO.
+      w.u16(num(itemEl, 'buttonId'));
+      for (let i = 0; i < 4; i++) {
+        const id = num(itemEl, `buttonSoundChar${i}`);
+        w.u16(id);
+        if (id) writeSoundInfo(w, childByTag(itemEl, `buttonSoundInfo${i}`));
       }
       break;
     }

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { Breakpoint, DebuggerState, PauseReason, StackFrame, WatchExpression } from './types';
+import { evaluateInScope } from './evaluate';
 
 type DebuggerCallbacks = {
   onContinue?: () => void;
@@ -237,8 +238,7 @@ class DebuggerStore {
     if (hit && this.shouldSkipHit(hit)) return;
     if (hit?.condition) {
       try {
-        const fn = new Function(...Object.keys(scope), `return (${hit.condition});`);
-        const res = fn(...Object.values(scope));
+        const res = evaluateInScope(hit.condition, scope);
         if (!res) return;
       } catch { /* condition error -> break anyway */ }
     }
@@ -338,12 +338,7 @@ class DebuggerStore {
   evaluateWatch(expression: string, scope: Record<string, unknown>): { value: string; error?: string } {
     if (!expression.trim()) return { value: '' };
     try {
-      // create function with scope variables available
-      const keys = Object.keys(scope);
-      const vals = Object.values(scope);
-      // allow `this` as alias to scope.this if present
-      const fn = new Function(...keys, `return (${expression});`);
-      const result = fn(...vals);
+      const result = evaluateInScope(expression, scope);
       let str: string;
       if (result === undefined) str = 'undefined';
       else if (result === null) str = 'null';

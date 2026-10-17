@@ -3,6 +3,7 @@ import { inflateSync } from 'node:zlib';
 import { it } from 'vitest';
 import { disassemble, parseAbc, type AbcFile } from '@/../transcom/decompiler/swf/abc';
 import { liftMethod } from '@/../transcom/transpiler/avm2';
+import { corpusPath } from '@/testing/corpus';
 
 function payloads(file: string): Uint8Array[] {
   const raw = readFileSync(file);
@@ -36,7 +37,7 @@ function abcOf(p: Uint8Array): AbcFile {
 /** `SWF_REF=UIScrollBar::setScrollProperties` → lift that body, print diagnostic + disassembly. */
 it('explains one refusal', () => {
   const [cls, name] = (process.env.SWF_REF ?? 'UIScrollBar::setScrollProperties').split('::');
-  const abc = abcOf(payloads('/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf')[0]);
+  const abc = abcOf(payloads(corpusPath('pinball-swfs/game.swf'))[0]);
   const def = abc.classes.find((c) => c.instance.name.split('.').pop() === cls);
   if (!def) { console.log(`no class ${cls}`); return; }
   const scope = { target: 'instance' as const, memberNames: new Set<string>(), staticMembers: new Set<string>(), staticOwner: cls, globals: new Set<string>() };

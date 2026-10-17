@@ -22,13 +22,14 @@
 //
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
-import { expect, it } from 'vitest';
+import { expect } from 'vitest';
+import { itCorpus } from '@/testing/corpus';
 import { parseSwfBinary } from '@/lib/swf/binary';
 import { buildAS2Program, type SourceInput } from '@/engine/as2/program';
 import { AS2Player } from '@/engine/as2/player';
 import { createExternalResolver, type ExternalSwf } from '@/engine/as2/externals';
 import { createFishingSession, gaiaFishingAdapter } from '..';
-import { SAMPLE_GAME_SET_ID, SAMPLE_MAIN, SAMPLE_SWF_NAMES, sampleSwfPath } from '../sample';
+import { hasSample, SAMPLE_GAME_SET_ID, SAMPLE_MAIN, SAMPLE_SWF_NAMES, sampleSwfPath } from '../sample';
 
 async function load(name: string) {
   const buf = readFileSync(sampleSwfPath(name));
@@ -43,7 +44,7 @@ async function load(name: string) {
 const exportsOf = (doc: any, name: string) =>
   [...doc.characters.values()].filter((c: any) => c.exportName === name);
 
-it('resolves library symbols in the movie Flash would search, and reports the rest', async () => {
+itCorpus('resolves library symbols in the movie Flash would search, and reports the rest', async () => {
   const main = await load(SAMPLE_SWF_NAMES[0]);
   const ext = await Promise.all(SAMPLE_SWF_NAMES.slice(1).map(async (n) => ({ n, ...(await load(n)) })));
   const build = buildAS2Program(main.sources);
@@ -120,4 +121,4 @@ it('resolves library symbols in the movie Flash would search, and reports the re
     expect(scope.movie, `sprite ${id} scope belongs to gsecs2.9`).toBe(serviceMovie);
   }
   player.dispose();
-}, 120000);
+}, 120000, hasSample);

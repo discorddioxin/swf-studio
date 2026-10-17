@@ -3,6 +3,7 @@ import { inflateSync } from 'node:zlib';
 import { it } from 'vitest';
 import { disassemble, parseAbc, type AbcFile } from '@/../transcom/decompiler/swf/abc';
 import { liftMethod } from '@/../transcom/transpiler/avm2';
+import { corpusPath } from '@/testing/corpus';
 
 function payloads(file: string): Uint8Array[] {
   const raw = readFileSync(file);
@@ -34,7 +35,7 @@ function abcOf(p: Uint8Array): AbcFile {
 }
 
 it('KeyCheck.isDown bytecode vs lift', () => {
-  const abc = abcOf(payloads('/tmp/swf-forge2/games-swfs/pinball-swfs/game.swf')[0]);
+  const abc = abcOf(payloads(corpusPath('pinball-swfs/game.swf'))[0]);
   for (const cls of abc.classes) {
     if (!/BetterArray$/.test(cls.instance.name)) continue;
     for (const t of [...cls.instance.traits]) {

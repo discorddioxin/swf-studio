@@ -296,6 +296,12 @@ export class ModuleEmitter {
     }
   }
 
+  /** `flash.x.Name` when `name` was imported from the runtime's flash packages (not a project class). */
+  private runtimeImport(name: string): string | null {
+    const imp = this.imported.get(name);
+    return imp && imp.startsWith('flash.') && !this.opts.classes?.has(imp) && /^[\w.]+$/.test(imp) ? imp : null;
+  }
+
   /** Resolve a class name as written (short or qualified) to a project class. */
   private resolveClassName(name: string, pkg: string): string | null {
     const classes = this.opts.classes;
@@ -604,10 +610,12 @@ export class ModuleEmitter {
       }
       case 'func': return this.wrap(this.funcExpr(e.name, e.params, e.ret, e.body, ctx), P_PRIMARY, min);
       case 'member': return this.member(e, ctx);
-      case 'index': return `${this.expr(e.obj, ctx, P_CALL)}${this.isSafe(e.obj, ctx) ? '' : '?.'}[${this.expr(e.index, ctx, 0)}]`;
+      case 'index': return `${this.expr(e.obj, ctx, P_CALL)}${this.isSafe(e.obj, ctx) ? '' : '?.'}[${this.key(e.index, ctx)}]`;
       case 'call': return this.call(e, ctx, min);
       case 'new': {
-        const callee = this.expr(e.callee, ctx, P_CALL);
+        let callee = this.expr(e.callee, ctx, P_CALL);
+        // `new a?.b()` is a syntax error: an optional chain as the constructor goes in parentheses
+        if (callee.includes('?.') && !/^\(.*\)$/.test(callee)) callee = `(${callee})`;
         return this.wrap(`new ${callee}(${e.args.map((a) => this.expr(a, ctx, PREC['='])).join(', ')})`, P_CALL, min);
       }
       case 'unary': {
@@ -644,13 +652,16 @@ export class ModuleEmitter {
     }
   }
 
-  private member(e: Extract<Expr, { k: 'member' }>, ctx: Ctx): string {
+  private member(e: Extract<Expr, { k: 'member' }>, ctx: Ctx, asTarget = false): string {
     // fully-qualified project class reference: com.x.Foo
     const chain = memberChain(e);
     if (chain && !this.isLocal(chain.split('.')[0], ctx)) {
       const q = this.opts.classes?.has(chain) ? chain : null;
       if (q) return this.aliasFor(q);
     }
+    // A `.constructor` read is guarded: it may not hand out the host's `Function`
+    // (`runtime/shared/hostGuard.ts`). A write stays a plain write.
+    if (e.prop === 'constructor' && !asTarget) { this.useRuntime('$rt'); return `$rt.ctor(${this.expr(e.obj, ctx, 0)})`; }
     const obj = this.expr(e.obj, ctx, P_CALL);
     const q = this.isSafe(e.obj, ctx) ? '' : '?.';
     const prop = e.prop;
@@ -673,6 +684,7 @@ export class ModuleEmitter {
         const cls = ctx.cls;
         if (cls && (cls.statics.has(e.name) || cls.instance.has(e.name))) return false;
         if (this.resolveClassName(e.name, cls?.pkg ?? '')) return true;
+        if (this.runtimeImport(e.name)) return true;
         return RUNTIME_FUNCTIONS.has(e.name) || RUNTIME_CLASSES.has(e.name) || JS_GLOBALS.has(e.name);
       }
       case 'member': { const chain = memberChain(e); return !!(chain && this.opts.classes?.has(chain)); }
@@ -703,9 +715,25 @@ export class ModuleEmitter {
     }
     if (e.k === 'index' && !this.isSafe(e.obj, ctx)) {
       this.useRuntime('$rt');
-      return `(${this.expr(e.obj, ctx, PREC['?'] + 1)} ?? $rt.sink)[${this.expr(e.index, ctx, 0)}]`;
+      return `(${this.expr(e.obj, ctx, PREC['?'] + 1)} ?? $rt.sink)[${this.key(e.index, ctx)}]`;
     }
+    if (e.k === 'member') return this.member(e, ctx, true);
     return this.expr(e, ctx, P_POSTFIX);
+  }
+
+  /**
+   * A computed key. One that is plainly a number, or a string literal other than
+   * `"constructor"`, prints as itself; anything else goes through `$rt.key`, so a
+   * key built at runtime cannot reach the host's `Function`.
+   */
+  private key(index: Expr, ctx: Ctx): string {
+    const text = this.expr(index, ctx, 0);
+    if (index.k === 'num' || (index.k === 'str' && index.v !== 'constructor')) return text;
+    if (index.k === 'unary' && ['-', '~', '+'].includes(index.op.trim())) return text;
+    if (index.k === 'binary' && ['-', '*', '/', '%', '|', '&', '^', '<<', '>>', '>>>'].includes(index.op)) return text;
+    if (index.k === 'update') return text;
+    this.useRuntime('$rt');
+    return `$rt.key(${text})`;
   }
 
   private call(e: Extract<Expr, { k: 'call' }>, ctx: Ctx, min: number): string {
@@ -811,6 +839,9 @@ export class ModuleEmitter {
     // project classes (imported, same package or default package)
     const q = this.resolveClassName(name, cls?.pkg ?? '');
     if (q) return this.aliasFor(q);
+    // `import flash.filters.GlowFilter;` names a runtime class: the runtime's `flash` package object
+    const runtimeImport = this.runtimeImport(name);
+    if (runtimeImport) { this.useRuntime('flash'); return runtimeImport; }
     const lvl = /^_level(\d+)$/.exec(name);
     if (lvl) { this.useRuntime('$rt'); return `$rt.level(${lvl[1]})`; }
     if (name === '_root') {

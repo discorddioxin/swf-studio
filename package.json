@@ -10,7 +10,7 @@
     "preview:stable": "npm run build && npm run preview",
     "preview:check": "node tools/preview/check.mjs",
     "test": "vitest run",
-    "test:debug": "vitest run docs/debug/tools/vitest",
+    "test:debug": "vitest run --config vitest.debug.config.ts",
     "test:watch": "vitest",
     "as2ts": "node tools/as2ts/as2ts.mjs"
   },
@@ -24,6 +24,7 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^1.0.11",
     "@tailwindcss/vite": "4.1.17",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",

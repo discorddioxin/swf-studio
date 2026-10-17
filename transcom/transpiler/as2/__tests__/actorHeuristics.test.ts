@@ -1,20 +1,19 @@
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 import { parseSwfBinary } from '../../../../src/lib/swf/binary';
-import { sampleSwfPath, SAMPLE_LIBRARY_NAMES, SAMPLE_OVERVIEW, SAMPLE_SCENE } from '../../../../src/adapters/gaiaFishing/sample';
+import { hasSample, sampleSwfPath, SAMPLE_LIBRARY_NAMES, SAMPLE_OVERVIEW, SAMPLE_SCENE } from '../../../../src/adapters/gaiaFishing/sample';
+import { describeCorpus } from '../../../../src/testing/corpus';
 import { isLibraryMovie, proposeActors } from '../actorHeuristics';
 
-const ROOT = resolve(__dirname, '../../../..');
-
 async function docFor(name: string) {
-  const buf = readFileSync(resolve(ROOT, sampleSwfPath(name)));
+  const buf = readFileSync(sampleSwfPath(name));
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   const { doc } = await parseSwfBinary(ab, `${name}.swf`);
   return doc;
 }
 
-describe('actorHeuristics', () => {
+// Real movies: the sample set (corpus fishing SWFs); skipped without the corpus.
+describeCorpus('actorHeuristics', () => {
   it('proposes an actor for the sample overview movie', async () => {
     const doc = await docFor(SAMPLE_OVERVIEW);
     const proposals = proposeActors(doc);
@@ -47,4 +46,4 @@ describe('actorHeuristics', () => {
     expect(isLibraryMovie(renamed)).toBe(true);
     expect(proposeActors(renamed)).toEqual([]);
   });
-});
+}, hasSample);
