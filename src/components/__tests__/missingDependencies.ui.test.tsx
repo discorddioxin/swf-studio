@@ -2,9 +2,9 @@
 // The Missing Dependencies notice and list: every file type a movie asked for,
 // service endpoints apart, optional live assets marked and kept out of the notice.
 import { afterEach, expect, it } from 'vitest';
-import { act, cleanup, render, renderHook, screen, within } from '@testing-library/react';
-import { DependencyTracker } from '../../engine/flash/dependencies';
-import { MissingDependenciesBanner, MissingDependenciesPanel, useMissingDependencies } from '../MissingDependencies';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
+import { DependencyTracker, type DependencyAddition } from '../../engine/flash/dependencies';
+import { MissingDependenciesBanner, MissingDependenciesPanel, useMissingDependencies, type DependencyAdder } from '../MissingDependencies';
 
 afterEach(cleanup);
 
@@ -52,4 +52,65 @@ it('the hook follows the tracker as requests come in', async () => {
   t.record({ url: 'xml/scores.xml', api: 'URLLoader.load', requestedBy: 'game.swf' });
   await act(() => new Promise((r) => setTimeout(r, 40)));
   expect(result.current.map((d) => d.path)).toEqual(['xml/scores.xml']);
+});
+
+// "Add Dependency": picked files go to the session under the requested paths.
+function adder(fail?: string) {
+  const calls: DependencyAddition[][] = [];
+  const value: DependencyAdder = {
+    added: [],
+    add: async (additions) => { calls.push(additions); if (fail) throw new Error(fail); },
+  };
+  return { value, calls };
+}
+const pick = (input: HTMLElement, files: File[]) => fireEvent.change(input, { target: { files } });
+
+it('without an adder there is no Add button (the upload is the only way)', () => {
+  render(<MissingDependenciesBanner list={tracker().list()} />);
+  expect(screen.queryByRole('button', { name: 'Add Dependency' })).toBeNull();
+  expect(screen.getByRole('status', { name: 'Missing Dependencies' }).textContent).toContain('Add them to the upload');
+});
+
+it('the notice: Add Dependency takes several files and puts each under the path asked for', async () => {
+  const { value, calls } = adder();
+  render(<MissingDependenciesBanner list={tracker().list()} adder={value} />);
+  const banner = screen.getByRole('status', { name: 'Missing Dependencies' });
+  expect(within(banner).getByRole('button', { name: 'Add Dependency' })).toBeTruthy();
+  expect(banner.textContent).toContain('to this session for testing');
+  const input = within(banner).getByLabelText('Add Dependency file') as HTMLInputElement;
+  expect(input.multiple).toBe(true);
+  pick(input, [new File(['<c/>'], 'gameConfig.xml'), new File(['x'], 'SPLASH.mp3'), new File(['y'], 'notes.txt')]);
+  await waitFor(() => expect(calls).toHaveLength(1));
+  expect(calls[0].map((a) => [a.file.name, a.path])).toEqual([
+    ['gameConfig.xml', 'games/pinball/gameConfig.xml'],
+    ['SPLASH.mp3', 'sfx/splash.mp3'],
+    ['notes.txt', 'notes.txt'],
+  ]);
+});
+
+it('a row: Add… takes one file of that type and stores it under that path, whatever its name', async () => {
+  const { value, calls } = adder();
+  render(<MissingDependenciesPanel list={tracker().list()} adder={value} />);
+  const row = screen.getByText('navPages/phone.css').parentElement!;
+  expect(within(row).getByRole('button', { name: 'Add…' })).toBeTruthy();
+  const input = within(row).getByLabelText('Add… file') as HTMLInputElement;
+  expect(input.multiple).toBe(false);
+  expect(input.accept).toBe('.css');
+  pick(input, [new File(['a{}'], 'style-v2.css')]);
+  await waitFor(() => expect(calls).toHaveLength(1));
+  expect(calls[0].map((a) => [a.file.name, a.path])).toEqual([['style-v2.css', 'navPages/phone.css']]);
+  // service endpoints are not files: no button there
+  const service = screen.getByText('http://www.example.com/chat/gsi/gateway.php').parentElement!;
+  expect(within(service).queryByRole('button')).toBeNull();
+});
+
+it('a file that cannot be added says why; what was added this session is listed', async () => {
+  const { value } = adder('broken.swf: not a SWF');
+  render(<MissingDependenciesPanel list={tracker().list()} adder={{ ...value, added: ['xml/scores.xml', 'scene.swf'] }} />);
+  const row = screen.getByText('scene.swf', { selector: '.text-amber-300' }).parentElement!;
+  pick(within(row).getByLabelText('Add… file'), [new File(['x'], 'broken.swf')]);
+  expect((await screen.findByRole('alert')).textContent).toBe('Could not add: broken.swf: not a SWF');
+  const added = screen.getByLabelText('Added dependencies');
+  expect(within(added).getByText('xml/scores.xml')).toBeTruthy();
+  expect(within(added).getByText('scene.swf')).toBeTruthy();
 });

@@ -58,6 +58,15 @@ troubleshooter finding. Server scripts (`gateway.php`, …) are listed apart as
 **Service endpoints**: no file can stand in for them, only a live server or a game
 adapter.
 
+**Add Dependency** puts a missing file into the current session for testing, without
+reloading the upload. The notice's button takes several files and matches each to the
+missing file of the same name; **Add…** on a row of the list takes one file and uses it
+for that request whatever it is called. Either way the file is stored under the path
+the movie asked for: a SWF joins the loaded movies (so `loadMovie` / `Loader` find it),
+anything else joins the uploaded files. The game then restarts with it. Added files are
+listed under *Added this session* and last until New folder or another load
+(`src/components/useSessionDependencies.ts`).
+
 Any non-SWF file uploaded with the SWFs (keeping its folder, or just the file name
 when that is unique) is served to those calls. An `.xml` is taken for an FFDec SWF
 export only when its root element is `<swf>`; any other XML is data for the movie.

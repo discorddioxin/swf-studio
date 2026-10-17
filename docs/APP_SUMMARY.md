@@ -17,7 +17,7 @@ It then offers four workspaces:
 | **Workbench** | Browse the symbol library and the sprite tree. Scrub and play any timeline on a canvas stage. Label, tag and group characters into clips and actors. Flatten sprites to PNG frames. Export a clean JSON bundle. |
 | **Sandbox** (`GameEngine`) | An "isolated game engine". It runs the user-authored *actors* (clips + keyboard/mouse/gamepad bindings + sequences) outside the Flash timeline model. Optional multiplayer presence goes through a WebSocket room relay. |
 | **Code Editor** (`CodeWorkspace`) | Read-only IDE view of the generated TypeScript (AS2 → TS, AVM1 → TS, ABC → TS), the original ActionScript, and the engine/runtime sources the generated code runs on. |
-| **Execute** | Actually **plays the game**. AS1/AS2 movies run on the AS2 player (`src/engine/as2`). AS3 movies are lifted from their `DoABC` bytecode to TypeScript, compiled in the browser and run on the `flash.*` engine (`src/engine/flash`). It has a console, a debugger, a running-timelines sidebar, a UI troubleshooter, a missing-dependency report and per-game adapters. |
+| **Execute** | Actually **plays the game**. AS1/AS2 movies run on the AS2 player (`src/engine/as2`). AS3 movies are lifted from their `DoABC` bytecode to TypeScript, compiled in the browser and run on the `flash.*` engine (`src/engine/flash`). It has a console, a debugger, a running-timelines sidebar, a UI troubleshooter, a missing-dependency report (with **Add Dependency** to put a missing file into the session for testing) and per-game adapters. |
 
 Two product goals are stated in the docs and in the standing instructions:
 

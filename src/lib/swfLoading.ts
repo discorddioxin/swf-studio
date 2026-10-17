@@ -19,7 +19,7 @@ import { parseSwfBinary, type SwfFile } from './swf/binary';
 import { swfFilesToFiles } from './bundled';
 import { isSwfXmlExport, orderSources, swfSourcesFromFiles } from './swfSources';
 import type { SwfDocument } from '../types';
-import { DependencyFiles } from '../engine/flash/dependencies';
+import { DependencyFiles, type DependencyAddition } from '../engine/flash/dependencies';
 
 
 export interface UploadProgress {
@@ -105,4 +105,51 @@ export async function loadUploadedPackages(
     built.forEach((pkg) => pkg.cache.dispose());
     throw error;
   }
+}
+
+/** What adding dependencies to a session produced. */
+export interface SessionDependencies {
+  /** a package per added SWF, named as the movie asks for it */
+  packages: SwfPackage[];
+  /** the session's files with the added non-SWF files; the same object when none was added */
+  dependencyFiles: DependencyFiles | null;
+  /** the paths the files went under */
+  added: string[];
+}
+
+/**
+ * Add files to a loaded session (the Execute tab's "Add Dependency"). A SWF is
+ * parsed into a package under the name the movie requested — loadMovie and
+ * Loader find loaded SWFs by name — and anything else (XML, MP3, CSS, images, …)
+ * joins the session's uploaded files under the requested path. If a SWF cannot
+ * be read nothing is added, and the error names the file.
+ */
+export async function addSessionDependencies(
+  additions: readonly DependencyAddition[],
+  existing: DependencyFiles | null,
+  onChange: () => void = () => {},
+): Promise<SessionDependencies> {
+  const isSwf = (a: DependencyAddition) => /\.swf$/i.test(a.path) || /\.swf$/i.test(a.file.name);
+  const packages: SwfPackage[] = [];
+  try {
+    for (const addition of additions.filter(isSwf)) {
+      const name = addition.path.slice(addition.path.lastIndexOf('/') + 1) || addition.file.name;
+      let parsed: { doc: SwfDocument; files: SwfFile[] };
+      try {
+        parsed = await parseSwfBinary(await addition.file.arrayBuffer(), name);
+      } catch (error) {
+        throw new Error(`${addition.file.name}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      packages.push(await buildPackage(swfFilesToFiles(parsed.files, name.replace(/\.swf$/i, '')), parsed.doc, onChange));
+    }
+  } catch (error) {
+    packages.forEach((pkg) => pkg.cache.dispose());
+    throw error;
+  }
+  const others = additions.filter((a) => !isSwf(a));
+  const dependencyFiles = others.length
+    ? (existing ?? new DependencyFiles()).with(others.map((a) => ({ path: a.path, file: a.file })))
+    : existing;
+  for (const pkg of packages) pkg.dependencyFiles = dependencyFiles ?? undefined;
+  return { packages, dependencyFiles, added: additions.map((a) => a.path) };
 }

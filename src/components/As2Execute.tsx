@@ -17,7 +17,7 @@ import { createExternalResolver, swfNameOf, type ExternalSwf } from '../engine/a
 import { readAS2Text, useAS2Build } from '../engine/as2/useAS2Build';
 import { buildWorkbenchTimelineMetadata } from '../engine/as2/workbenchMetadata';
 import { _global as as2Global } from '../runtime/as2';
-import { MissingDependenciesBanner, MissingDependenciesPanel, dependencyProblems, useMissingDependencies } from './MissingDependencies';
+import { MissingDependenciesBanner, MissingDependenciesPanel, dependencyProblems, useMissingDependencies, type DependencyAdder } from './MissingDependencies';
 import type { DependencyFiles } from '../engine/flash/dependencies';
 import { AS2AudioBackend, embeddedFontFamily, registerFonts, soundFilesOf } from '../engine/as2/audio';
 import { GAME_ADAPTERS, resolveAdapter, type AdapterSwf, type GameAdapter, type GameContext } from '../adapters';
@@ -67,10 +67,12 @@ const NO_FONTS = new Set<number>(); // shared and never written to
 /** An external SWF export with its key (used for its fonts). */
 interface ExternalEntry { pkg: SwfPackage; name: string; key: string }
 
-export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNALS, adapterId = null, gameSetId = null, onAdapterChange, dependencyFiles = null, runtimeChoice }: {
+export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNALS, adapterId = null, gameSetId = null, onAdapterChange, dependencyFiles = null, dependencyAdder, runtimeChoice }: {
   doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
   /** non-SWF files uploaded with the movies, which they may request at run time */
   dependencyFiles?: DependencyFiles | null;
+  /** "Add Dependency": puts missing files into the session for testing */
+  dependencyAdder?: DependencyAdder;
   /** adapter id picked by the user ("auto"/null = detect from the loaded SWFs) */
   adapterId?: string | null;
   /** bundled game set this load came from, if any (supplies the adapter hint) */
@@ -669,7 +671,7 @@ export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNA
         </div>
       )}
 
-      <MissingDependenciesBanner list={dependencies} />
+      <MissingDependenciesBanner list={dependencies} adder={dependencyAdder} />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
       <div ref={wrapRef} className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -766,7 +768,7 @@ export function As2Execute({ doc, cache, assets, project, externals = NO_EXTERNA
                     </div>
                   );
                 })}
-                <div className="mt-3"><MissingDependenciesPanel list={dependencies} /></div>
+                <div className="mt-3"><MissingDependenciesPanel list={dependencies} adder={dependencyAdder} /></div>
                 <div className="mt-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Generated TypeScript</div>
                 <select
                   aria-label="Generated module"

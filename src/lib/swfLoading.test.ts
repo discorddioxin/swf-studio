@@ -7,7 +7,8 @@
 // its forms: loading does not depend on which game the SWFs belong to.
 import { beforeAll, describe, expect, it } from 'vitest';
 import JSZip from 'jszip';
-import { loadUploadedPackages } from './swfLoading';
+import { addSessionDependencies, loadUploadedPackages } from './swfLoading';
+import { DependencyFiles } from '../engine/flash/dependencies';
 import { isSwfXmlExport } from './swfSources';
 import { chooseRuntime } from '../components/runtimeChoice';
 import { FFDEC_SAMPLE_XML, ffdecSampleSwf } from '@/testing/movies';
@@ -139,5 +140,39 @@ describe('uploading SWFs', () => {
     const broken = new File([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])], 'broken.swf');
     Object.defineProperty(broken, 'webkitRelativePath', { value: 'broken.swf', configurable: true });
     await expect(loadUploadedPackages([broken])).rejects.toThrow();
+  });
+});
+
+// "Add Dependency" (Execute): files put into a loaded session for testing.
+describe('adding dependencies to a session', () => {
+  it('a SWF becomes a package named as the movie asks for it; other files join the session files', async () => {
+    const existing = new DependencyFiles([{ path: 'game/config.xml', file: new File(['<c/>'], 'config.xml') }]);
+    const picked = new File([SWF_BYTES.slice().buffer as ArrayBuffer], 'downloaded (1).swf');
+    const result = await addSessionDependencies([
+      { file: picked, path: 'scenes/scene2.swf' },
+      { file: new File(['<scores/>'], 'my-scores.xml'), path: 'xml/scores.xml' },
+    ], existing);
+    expect(names(result.packages)).toEqual(['scene2.swf']);
+    expect(result.packages[0].doc.timelines.size).toBeGreaterThan(0);
+    expect(result.packages[0].dependencyFiles).toBe(result.dependencyFiles);
+    expect(await result.dependencyFiles!.text('http://host/game/xml/scores.xml')).toBe('<scores/>');
+    expect(await result.dependencyFiles!.text('game/config.xml')).toBe('<c/>');
+    expect(existing.find('xml/scores.xml')).toBeUndefined();
+    expect(result.added).toEqual(['scenes/scene2.swf', 'xml/scores.xml']);
+  });
+
+  it('only SWFs: the session files are the same object (nothing to rebuild for them)', async () => {
+    const existing = new DependencyFiles();
+    const result = await addSessionDependencies([{ file: binarySwf('lib'), path: 'lib.swf' }], existing);
+    expect(result.dependencyFiles).toBe(existing);
+    expect((await addSessionDependencies([{ file: binarySwf('lib'), path: 'lib.swf' }], null)).dependencyFiles).toBeNull();
+  });
+
+  it('an unreadable SWF: nothing is added and the error names the file', async () => {
+    const broken = new File([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])], 'broken.swf');
+    await expect(addSessionDependencies([
+      { file: binarySwf('ok'), path: 'ok.swf' },
+      { file: broken, path: 'level2.swf' },
+    ], null)).rejects.toThrow(/^broken\.swf: /);
   });
 });

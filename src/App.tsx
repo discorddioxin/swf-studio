@@ -12,6 +12,7 @@ import { GameEngine } from './components/GameEngine';
 import { Button } from './components/ui';
 import type { AssetCache, SwfPackage } from './lib/assets';
 import { buildPackage as buildPackageIn, loadUploadedPackages } from './lib/swfLoading';
+import { useSessionDependencies } from './components/useSessionDependencies';
 import { fetchBundledSwf, fetchGameIndex, loadGameIndex, type GameSet } from './lib/bundled';
 import { useProject } from './lib/project';
 import type { AssetBundle, FlattenedSprite, SwfDocument } from './types';
@@ -70,7 +71,15 @@ export default function App() {
   /** every loaded FFDec export (index = loadedDocs index); [0] is the main movie */
   const [packages, setPackages] = useState<SwfPackage[]>([]);
   const externalPackages = useMemo(() => packages.filter((_, i) => i !== activeSwfIndex), [packages, activeSwfIndex]);
-  useEffect(() => () => { packages.forEach((p) => p.cache.dispose()); }, [packages]);
+  // A cache is disposed when its package leaves the session — not whenever the
+  // list changes: an added dependency SWF joins a session whose caches are in use.
+  const liveCachesRef = useRef(new Set<AssetCache>());
+  useEffect(() => {
+    const now = new Set(packages.map((p) => p.cache));
+    for (const cache of liveCachesRef.current) if (!now.has(cache)) cache.dispose();
+    liveCachesRef.current = now;
+  }, [packages]);
+  useEffect(() => () => { for (const cache of liveCachesRef.current) cache.dispose(); }, []);
 
   const [timelineId, setTimelineId] = useState('root');
   const [frame, setFrame] = useState(0);
@@ -114,6 +123,17 @@ export default function App() {
   }, []);
 
   const api = useProject(doc?.header.fileName ?? '');
+
+  // The session's run-time files (the upload's non-SWF files) and the Execute
+  // tab's "Add Dependency": an added SWF joins the loaded movies.
+  const { files: sessionFiles, adder: dependencyAdder, reset: resetDependencies } = useSessionDependencies({
+    generation: () => cacheGenerationRef.current,
+    onPackages: (added) => {
+      setPackages((current) => [...current, ...added]);
+      setLoadedDocs((current) => [...current, ...added.map((p) => p.doc)]);
+    },
+    onChange: () => setTick((t) => t + 1),
+  });
 
   /** bundle + cache one parsed document into a SwfPackage (shared by uploads and bundled SWFs) */
   const buildPackage = useCallback(
@@ -159,6 +179,7 @@ export default function App() {
     setGameSetId(setId);
     cacheGenerationRef.current++;
     setPackages(loaded);
+    resetDependencies(loaded[0].dependencyFiles ?? null);
     cacheRef.current = loaded[0].cache;
     setAssets(loaded[0].bundle);
     setLoadedDocs(loaded.map((p) => p.doc));
@@ -166,7 +187,7 @@ export default function App() {
     setDoc(parsed);
     setFps(parsed.header.frameRate);
     setBusy(null);
-  }, [resetSession]);
+  }, [resetSession, resetDependencies]);
 
   /** Names already loaded (basename of the document, without .xml/.swf). */
   const packageLabels = useCallback((loaded: SwfPackage[]) => new Set(
@@ -521,6 +542,8 @@ export default function App() {
           )}
           <Button variant="ghost" className="px-2 py-1 text-[10px]" onClick={() => {
             packages.forEach((p) => p.cache.dispose()); setPackages([]); cacheRef.current = null;
+            cacheGenerationRef.current++;
+            resetDependencies(null);
             resetSession();
             setLoadedDocs([]); setActiveSwfIndex(0); setDoc(null); setAssets(null);
           }}>
@@ -537,7 +560,8 @@ export default function App() {
           assets={assets}
           project={api.project}
           externals={externalPackages}
-          dependencyFiles={packages[0]?.dependencyFiles ?? null}
+          dependencyFiles={sessionFiles}
+          dependencyAdder={dependencyAdder}
           gameSetId={gameSetId}
           adapterId={adapterId}
           onAdapterChange={setAdapterId}

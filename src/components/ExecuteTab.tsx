@@ -20,7 +20,7 @@ import type { AudioBackend } from '../engine/flash/media';
 import { MovieClip } from '../engine/flash/display';
 import { As2Execute } from './As2Execute';
 import { chooseRuntime, runtimeLogMessage, type RuntimeChoice } from './runtimeChoice';
-import { MissingDependenciesBanner, MissingDependenciesPanel, dependencyProblems, useMissingDependencies } from './MissingDependencies';
+import { MissingDependenciesBanner, MissingDependenciesPanel, dependencyProblems, useMissingDependencies, type DependencyAdder } from './MissingDependencies';
 import type { DependencyFiles } from '../engine/flash/dependencies';
 import { useDebugger, useDebuggerState } from '../debug/store';
 import { DebugPanel } from '../debug/DebugPanel';
@@ -42,10 +42,12 @@ type CodeState =
 
 const MAX_LOG = 500;
 
-export function ExecuteTab({ externals, project, gameSetId, adapterId, onAdapterChange, dependencyFiles, ...props }: {
+export function ExecuteTab({ externals, project, gameSetId, adapterId, onAdapterChange, dependencyFiles, dependencyAdder, ...props }: {
   doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
   /** non-SWF files uploaded with the movies (XML, CSS, MP3, …), which they may request at run time */
   dependencyFiles?: DependencyFiles | null;
+  /** "Add Dependency": puts missing files into the session for testing */
+  dependencyAdder?: DependencyAdder;
   /** bundled game set the session came from, if any (the adapter hint) */
   gameSetId?: string | null;
   /** game adapter pick: 'auto' (detect) or an id from src/adapters */
@@ -54,13 +56,14 @@ export function ExecuteTab({ externals, project, gameSetId, adapterId, onAdapter
 }) {
   const choice = useMemo(() => chooseRuntime(props.doc, props.assets), [props.doc, props.assets]);
   return choice.runtime === 'as2'
-    ? <As2Execute {...props} project={project} externals={externals} gameSetId={gameSetId} adapterId={adapterId} onAdapterChange={onAdapterChange} dependencyFiles={dependencyFiles} runtimeChoice={choice} />
-    : <As3Execute {...props} project={project} externals={externals} uploadedFiles={dependencyFiles ?? null} runtimeChoice={choice} />;
+    ? <As2Execute {...props} project={project} externals={externals} gameSetId={gameSetId} adapterId={adapterId} onAdapterChange={onAdapterChange} dependencyFiles={dependencyFiles} dependencyAdder={dependencyAdder} runtimeChoice={choice} />
+    : <As3Execute {...props} project={project} externals={externals} uploadedFiles={dependencyFiles ?? null} dependencyAdder={dependencyAdder} runtimeChoice={choice} />;
 }
 
-function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles = null, runtimeChoice }: {
+function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles = null, dependencyAdder, runtimeChoice }: {
   doc: SwfDocument; cache: AssetCache; assets: AssetBundle | null; project?: Project; externals?: SwfPackage[];
   uploadedFiles?: DependencyFiles | null;
+  dependencyAdder?: DependencyAdder;
   /** why this movie runs on AVM2 (logged when the player starts) */
   runtimeChoice: RuntimeChoice;
 }) {
@@ -419,7 +422,7 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
         </div>
       )}
 
-      <MissingDependenciesBanner list={dependencies} />
+      <MissingDependenciesBanner list={dependencies} adder={dependencyAdder} />
 
       {dbgState.paused && (
         <div className="flex shrink-0 items-center gap-2 border-b border-amber-900/40 bg-amber-950/30 px-3 py-1.5 text-xs text-amber-200">
@@ -520,7 +523,7 @@ function As3Execute({ doc, cache, assets, project, externals = [], uploadedFiles
                     ))}
                   </tbody>
                 </table>
-                <div className="mt-3"><MissingDependenciesPanel list={dependencies} /></div>
+                <div className="mt-3"><MissingDependenciesPanel list={dependencies} adder={dependencyAdder} /></div>
               </div>
             </div>
           )}
